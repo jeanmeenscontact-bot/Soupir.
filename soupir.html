@@ -1,0 +1,2912 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="mobile-web-app-capable" content="yes"/>
+  <meta name="theme-color" content="#F2F0EB"/>
+  <link rel="manifest" href="manifest.json"/>
+  <link rel="apple-touch-icon" href="icon-192.png"/>
+  <title>Soupir.</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+    *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+    html,body{height:100%;overflow:hidden;}
+    body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','Inter',system-ui,sans-serif;background:#F2F0EB;color:#1C1C1E;overscroll-behavior:none;user-select:none;-webkit-user-select:none;}
+    body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:1000;opacity:0.10;
+      background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='0.4'/%3E%3C/svg%3E");}
+    ::-webkit-scrollbar{width:3px;}::-webkit-scrollbar-track{background:transparent;}::-webkit-scrollbar-thumb{background:#C5BFB6;border-radius:2px;}
+    .app-screen{height:100vh;height:100svh;}
+    input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;}
+    input,textarea{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Inter',system-ui,sans-serif;-webkit-user-select:text;user-select:text;}
+    @media(hover:hover){
+      .pill-btn:hover:not(.active-pill){background:#E4DED5 !important;}
+      .icon-btn:hover{background:#D8D2C8 !important;}
+      .lib-row:hover{background:#E5E0D8 !important;}
+      .barline-hit:hover{opacity:0.4;}
+      .chord-tap:hover{background:rgba(26,26,26,0.07) !important;}
+      .num-tap:hover{color:#8A847C !important;}
+      .pref-btn:hover{background:#E8E2D8 !important;}
+      .cell-text:hover{background:rgba(122,80,48,0.12) !important;}
+    }
+    .chord-tap:active{background:rgba(26,26,26,0.12) !important;transform:scale(0.94);}
+    .pill-btn:active{transform:scale(0.97);}
+    .cell-text:active{background:rgba(122,80,48,0.18) !important;}
+    @keyframes slideUp{from{transform:translateY(110%);}to{transform:translateY(0);}}
+    @keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
+    @keyframes floatIn{from{opacity:0;transform:translateY(16px);}to{opacity:1;transform:translateY(0);}}
+    .sheet-bg{animation:fadeIn 0.16s ease;}
+    .sheet-panel{animation:slideUp 0.28s cubic-bezier(0.32,0.72,0,1);}
+    .home-btn{animation:floatIn 0.38s ease both;}
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script type="text/babel">
+const{useState,useEffect,useRef}=React;
+
+// ─── MUSIC ENGINE ─────────────────────────────────────────────────────────────
+const SHARP=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+const FLAT=['C','Db','D','Eb','E','F','Gb','G','Ab','A','Bb','B'];
+const FLAT_KEYS=['F','Bb','Eb','Ab','Db','Gb'];
+const MAJOR_IV=[0,2,4,5,7,9,11];
+const DEG_LBL=['I','II','III','IV','V','VI','VII'];
+const DEG_QUAL=['maj7','m7','m7','maj7','7','m7','m7b5'];
+const ALL_KEYS=['C','Db','D','Eb','E','F','Gb','G','Ab','A','Bb','B'];
+const LETTERS=['C','D','E','F','G','A','B'];
+const MINOR_IV=[0,2,3,5,7,8,10];
+const MINOR_DEG_QUAL=['m7','m7b5','maj7','m7','m7','maj7','7'];
+const MINOR_DEG_LBL=['i','ii°','III','iv','v','VI','VII'];
+
+const QUALITIES=[
+  {id:'maj',suffix:'',group:'Triades'},{id:'min',suffix:'m',group:'Triades'},
+  {id:'dim',suffix:'dim',group:'Triades'},{id:'aug',suffix:'aug',group:'Triades'},
+  {id:'sus4',suffix:'sus4',group:'Triades'},{id:'sus2',suffix:'sus2',group:'Triades'},
+  {id:'dom7',suffix:'7',group:'Septièmes'},{id:'maj7',suffix:'maj7',group:'Septièmes'},
+  {id:'min7',suffix:'m7',group:'Septièmes'},{id:'mMaj7',suffix:'mMaj7',group:'Septièmes'},
+  {id:'hdim',suffix:'m7b5',group:'Septièmes'},{id:'dim7',suffix:'dim7',group:'Septièmes'},
+  {id:'maj6',suffix:'6',group:'Autres'},{id:'min6',suffix:'m6',group:'Autres'},
+  {id:'5',suffix:'5',group:'Autres'},
+];
+const EXTENSIONS=[
+  {id:'n9',label:'9',suffix:'9'},{id:'b9',label:'♭9',suffix:'b9'},
+  {id:'s9',label:'♯9',suffix:'#9'},{id:'n11',label:'11',suffix:'11'},
+  {id:'s11',label:'♯11',suffix:'#11'},{id:'n13',label:'13',suffix:'13'},
+  {id:'b13',label:'♭13',suffix:'b13'},{id:'b5',label:'♭5',suffix:'b5'},
+  {id:'s5',label:'♯5',suffix:'#5'},{id:'add9',label:'add9',suffix:'add9'},
+];
+
+function noteIdx(n){let i=SHARP.indexOf(n);return i!==-1?i:FLAT.indexOf(n);}
+function transNote(n,s,f){const i=noteIdx(n);if(i===-1)return n;const ni=((i+s)%12+12)%12;return f?FLAT[ni]:SHARP[ni];}
+function parseRoot(c){const m=c&&c.match(/^([A-G][b#]?)/);return m?m[1]:null;}
+function transChord(c,s,f){if(!c||c==='—'||c==='%'||c==='/')return c;const r=parseRoot(c);if(!r)return c;return transNote(r,s,f)+c.slice(r.length);}
+function buildScale(key,mode='maj'){const f=FLAT_KEYS.includes(key);const ivs=mode==='min'?MINOR_IV:MAJOR_IV;const quals=mode==='min'?MINOR_DEG_QUAL:DEG_QUAL;const lbls=mode==='min'?MINOR_DEG_LBL:DEG_LBL;return ivs.map((iv,i)=>{const ni=((noteIdx(key)+iv)%12+12)%12;const note=f?FLAT[ni]:SHARP[ni];return{degree:lbls[i],note,quality:quals[i]};});}
+function chordToDeg(chord,key){const r=parseRoot(chord);if(!r)return null;const ci=noteIdx(r),ki=noteIdx(key);if(ci===-1||ki===-1)return null;const iv=((ci-ki)%12+12)%12;const di=MAJOR_IV.indexOf(iv);return di===-1?null:DEG_LBL[di]+chord.slice(r.length);}
+function parseChordFull(chord){
+  if(!chord)return{root:'',qualityId:'maj',extensions:[],bass:''};
+  // Basse seule : "/G" → root='', bass='G'
+  if(chord.startsWith('/')){return{root:'',qualityId:'maj',extensions:[],bass:chord.slice(1)};}
+  // Extraire la note de basse (ex: "G/B" → main="G", bass="B")
+  const si=chord.lastIndexOf('/');let bass='',main=chord;
+  if(si>0){bass=chord.slice(si+1);main=chord.slice(0,si);}
+  const r=parseRoot(main);if(!r)return{root:'',qualityId:'maj',extensions:[],bass};
+  const rest=main.slice(r.length);
+  const sorted=[...QUALITIES].sort((a,b)=>b.suffix.length-a.suffix.length);
+  let qualityId='maj',extStr=rest;
+  for(const q of sorted){if(rest.startsWith(q.suffix)&&(q.suffix!==''||rest==='')){qualityId=q.id;extStr=rest.slice(q.suffix.length);break;}}
+  return{root:r,qualityId,extensions:EXTENSIONS.filter(e=>extStr.includes(e.suffix)).map(e=>e.id),bass};
+}
+function buildChordStr(root,qualityId,extensions,bass=''){
+  // Basse seule
+  if(!root)return bass?'/'+bass:'';
+  const q=QUALITIES.find(q=>q.id===qualityId);
+  const base=root+(q?q.suffix:'')+EXTENSIONS.filter(e=>extensions.includes(e.id)).map(e=>e.suffix).join('');
+  return bass?base+'/'+bass:base;
+}
+function rootToLetterAcc(root){
+  // root vide → lettre vide (basse seule, pas de fondamentale)
+  if(!root||root.length===0)return{letter:'',acc:''};
+  return{letter:root[0],acc:root.length>1?root[1]:''};
+}
+
+// Retourne l'altération correcte ('' | '#' | 'b') pour une lettre dans la gamme courante
+// Ex : scaleAccForLetter('B','F','maj') → 'b'  (Fa majeur = Sib)
+function scaleAccForLetter(letter,key,mode='maj'){
+  const scale=buildScale(key,mode);
+  const tone=scale.find(s=>s.note[0]===letter);
+  if(!tone)return '';
+  return tone.note.length>1?tone.note[1]:'';
+}
+
+function autoHarmonizeTriad(letter,acc,key,mode='maj'){
+  const noteStr=letter+(acc==='#'?'#':acc==='b'?'b':'');
+  const ni=noteIdx(noteStr);
+  const ki=noteIdx(key);
+  if(ni===-1||ki===-1)return{qualityId:'maj',extensions:[]};
+  const semis=((ni-ki)%12+12)%12;
+  const DIA_MAJ={0:'maj',2:'min',4:'min',5:'maj',7:'maj',9:'min',11:'dim'};
+  const DIA_MIN={0:'min',2:'dim',3:'maj',5:'min',7:'min',8:'maj',10:'maj'};
+  const map=mode==='min'?DIA_MIN:DIA_MAJ;
+  return{qualityId:map[semis]||'maj',extensions:[]};
+}
+
+// ─── PREFS SYSTEM ─────────────────────────────────────────────────────────────
+const DEFAULT_PREFS={minor:'m',dim:'°',aug:'+',maj7:'maj7',hdim:'ø',accentColor:'black',autoHarmonize:true};
+function loadPrefs(){try{const s=localStorage.getItem('soupir_prefs');return s?{...DEFAULT_PREFS,...JSON.parse(s)}:DEFAULT_PREFS;}catch{return DEFAULT_PREFS;}}
+function savePrefs(p){try{localStorage.setItem('soupir_prefs',JSON.stringify(p));}catch{}}
+function applyPrefs(chord,prefs){
+  if(!chord||chord==='%'||chord==='/'||chord==='—')return chord;
+  // Extraire la note de basse avant d'appliquer les préférences
+  const si=chord.lastIndexOf('/');let bassStr='',main=chord;
+  if(si>0){bassStr='/'+chord.slice(si+1);main=chord.slice(0,si);}
+  const root=parseRoot(main);if(!root)return chord;
+  const p=prefs||DEFAULT_PREFS;
+  let rest=main.slice(root.length);
+  if(rest.startsWith('m7b5')){rest=(p.hdim==='ø'?'ø':'m7b5')+rest.slice(4);}
+  else if(rest.startsWith('mMaj7')){/* keep */}
+  else if(rest.startsWith('maj7')){rest=(p.maj7==='Δ'?'Δ':'maj7')+rest.slice(4);}
+  else if(rest.startsWith('dim7')){rest=(p.dim==='°'?'°7':'dim7')+rest.slice(4);}
+  else if(rest.startsWith('dim')){rest=(p.dim==='°'?'°':'dim')+rest.slice(3);}
+  else if(rest.startsWith('aug')){rest=(p.aug==='+'?'+':'aug')+rest.slice(3);}
+  else if(rest.startsWith('m')&&!rest.startsWith('maj')){rest=(p.minor==='-'?'-':'m')+rest.slice(1);}
+  return root+rest+bassStr;
+}
+
+// ─── VERSION ──────────────────────────────────────────────────────────────────
+const APP_VERSION='v26';
+
+// ─── CONSTANTS ────────────────────────────────────────────────────────────────
+const BAR_TYPES=[
+  {id:'none',label:'□',hint:'Pas de barre (grande mesure)'},
+  {id:'normal',label:'|',hint:'Barre simple'},
+  {id:'double',label:'||',hint:'Double barre'},
+  {id:'repeat-start',label:'|:',hint:'Début de reprise'},
+  {id:'repeat-end',label:':|',hint:'Fin de reprise'},
+  {id:'repeat-end-start',label:':|:',hint:'Reprise enchaînée'},
+  {id:'final',label:'|]',hint:'Fin de morceau'},
+];
+const SIGN_TYPES=[
+  {id:'coda',   sym:'⊕',    label:'⊕ Coda'},
+  {id:'segno',  sym:'𝄋',   label:'𝄋 Segno'},
+  {id:'toCoda', sym:'To ⊕', label:'To ⊕'},
+  {id:'dc',     sym:'D.C.', label:'D.C.'},
+  {id:'ds',     sym:'D.S.', label:'D.S.'},
+  {id:'fine',   sym:'Fine', label:'Fine'},
+];
+const TEXT_SUGG=['D.S. al Coda','D.S. al Fine','Fine','D.C. al Coda','D.C. al Fine'];
+const TIME_SIGS=['2/4','3/4','4/4','5/4','6/8','7/8','12/8'];
+function getBeatsInEighths(ts){const m={'2/4':4,'3/4':6,'4/4':8,'5/4':10,'6/8':6,'7/8':7,'12/8':12};return m[ts]||8;}
+const KEY_SIG={'C':{t:'s',n:0},'G':{t:'s',n:1},'D':{t:'s',n:2},'A':{t:'s',n:3},
+  'E':{t:'s',n:4},'B':{t:'s',n:5},'F#':{t:'s',n:6},'C#':{t:'s',n:7},
+  'F':{t:'f',n:1},'Bb':{t:'f',n:2},'Eb':{t:'f',n:3},'Ab':{t:'f',n:4},'Db':{t:'f',n:5},'Gb':{t:'f',n:6}};
+const SHP_Y=[30,45,25,40,55,35,50],FLT_Y=[50,35,55,40,60,45,65];
+
+// ─── DATA ─────────────────────────────────────────────────────────────────────
+const mkSplit2=(chords,signs=[],volta=null,text='')=>({chords,signs,volta:volta||null,text:text||''});
+const mk=(chords,barAfter='normal',signs=[],volta=null,text='',split2=null)=>
+  ({chords,barAfter,signs,volta:volta||null,text:text||'',split2:split2||null});
+
+// ─── MODÈLE BEATS (v22) ───────────────────────────────────────────────────────
+// Un "beat" = un temps de la mesure : {c: accord, s: signes[], v: volta, t: texte}
+const mkBeat=(c='',s=[],v=null,t='')=>({c,s:[...s],v:v||null,t:t||''});
+// Retourne les 4 beats d'une mesure (migration auto depuis l'ancien format)
+function getBeats(mm){
+  if(!mm)return[mkBeat(),mkBeat(),mkBeat(),mkBeat()];
+  if(mm.beats)return mm.beats.map(b=>b?{c:b.c||'',s:b.s||[],v:b.v||null,t:b.t||''}:mkBeat());
+  // Migration : ancien format {chords:[], signs:[], volta, text}
+  const b=[mkBeat(),mkBeat(),mkBeat(),mkBeat()];
+  const old=mm.chords||[''];const n=Math.min(old.length,4);
+  const pos=({1:[0],2:[0,2],3:[0,1,2],4:[0,1,2,3]})[n]||[0];
+  pos.forEach((bi,i)=>{if(i<n)b[bi].c=old[i]||'';});
+  const fi=pos[0];b[fi].s=mm.signs||[];b[fi].v=mm.volta||null;b[fi].t=mm.text||'';
+  return b;
+}
+
+// ─── STAFF SECTION FACTORIES ──────────────────────────────────────────────────
+const NOTE_BEATS_G={whole:8,half:4,quarter:2,eighth:1};
+function staffNextBeat(notes){return notes.reduce((s,n)=>s+(NOTE_BEATS_G[n.value]||2),0);}
+function staffIsFull(notes,ts){return staffNextBeat(notes)>=getBeatsInEighths(ts||'4/4');}
+function staffRemBeats(notes,ts){return getBeatsInEighths(ts||'4/4')-staffNextBeat(notes);}
+const mkStaffMeasure=()=>({notes:[],annotations:[]});
+const mkStaffSection=(name='Portée',timeSig='4/4',clef='treble',key='C')=>({
+  type:'staff',name,timeSig,clef,key,
+  measures:Array.from({length:4},()=>mkStaffMeasure()),
+});
+
+// ─── TAB SECTION FACTORIES ────────────────────────────────────────────────────
+const TAB_STR={guitar:['e','B','G','D','A','E'],bass:['G','D','A','E']};
+const mkTabBeat=(n)=>({strings:Array(n).fill(null),duration:'quarter',dotted:false});
+const mkTabMeasure=(n)=>({beats:Array.from({length:4},()=>mkTabBeat(n)),barAfter:'normal'});
+const mkTabSection=(name='Tablature',instrument='guitar')=>{
+  const n=instrument==='bass'?4:6;
+  return{type:'tab',name,instrument,measures:Array.from({length:4},()=>mkTabMeasure(n))};
+};
+
+const LIBRARY_INIT=[
+  {id:1,title:'Autumn Leaves',key:'Bb',bpm:112,style:'Jazz standard',timeSig:'4/4',sections:[
+    {name:'A',startBar:'repeat-start',measures:[
+      mk(['Cm7','F7']),mk(['Bbmaj7']),mk(['Ebmaj7']),mk(['Am7b5','D7']),
+      mk(['Gm7']),mk(['Gm7']),mk(['Am7b5','D7'],'normal',['toCoda'],'1'),mk(['Gm7'],'repeat-end'),
+    ]},
+    {name:'B',startBar:'normal',measures:[
+      mk(['Am7b5','D7'],'normal',['coda'],'2'),mk(['Gm7']),mk(['Gm7','C7']),mk(['Fmaj7']),
+      mk(['Fm7','Bb7']),mk(['Ebmaj7']),mk(['Am7b5','D7']),mk(['Gm7'],'final',['fine']),
+    ]},
+  ]},
+  {id:2,title:'Misty',key:'Eb',bpm:88,style:'Jazz ballad',timeSig:'4/4',sections:[
+    {name:'A',startBar:'normal',measures:[
+      mk(['Ebmaj7']),mk(['Bbm7','Eb7']),mk(['Abmaj7']),mk(['Abm7','Db7']),
+      mk(['Ebmaj7','Cm7']),mk(['Fm7','Bb7']),mk(['Ebmaj7']),mk(['Ebmaj7'],'final'),
+    ]},
+  ]},
+  {id:3,title:'So What',key:'D',bpm:136,style:'Modal jazz',timeSig:'4/4',sections:[
+    {name:'A',startBar:'repeat-start',measures:[
+      mk(['Dm7']),mk(['Dm7']),mk(['Dm7']),mk(['Dm7']),
+      mk(['Dm7']),mk(['Dm7']),mk(['Dm7']),mk(['Dm7'],'repeat-end'),
+    ]},
+    {name:'B',startBar:'repeat-start',measures:[
+      mk(['Ebm7']),mk(['Ebm7']),mk(['Ebm7']),mk(['Ebm7']),
+      mk(['Dm7']),mk(['Dm7']),mk(['Dm7']),mk(['Dm7'],'repeat-end'),
+    ]},
+  ]},
+  {id:4,title:'All The Things You Are',key:'Ab',bpm:104,style:'Jazz standard',timeSig:'4/4',sections:[
+    {name:'A',startBar:'normal',measures:[
+      mk(['Fm7']),mk(['Bbm7']),mk(['Eb7']),mk(['Abmaj7']),
+      mk(['Dbmaj7']),mk(['Dm7b5','G7']),mk(['Cmaj7']),mk(['Cmaj7']),
+    ]},
+    {name:'B',startBar:'normal',measures:[
+      mk(['Cm7']),mk(['Fm7']),mk(['Bb7']),mk(['Ebmaj7']),
+      mk(['Abmaj7']),mk(['Dm7b5','G7']),mk(['Cmaj7']),mk(['Cmaj7'],'final'),
+    ]},
+  ]},
+  {id:5,title:'Take Five',key:'Eb',bpm:174,style:'Cool jazz',timeSig:'5/4',sections:[
+    {name:'A',startBar:'repeat-start',measures:[
+      mk(['Ebm7']),mk(['Bbm7']),mk(['Ebm7']),mk(['Bbm7']),
+      mk(['Ebm7']),mk(['Bbm7']),mk(['Ebm7']),mk(['Bbm7'],'repeat-end'),
+    ]},
+    {name:'B',startBar:'repeat-start',measures:[
+      mk(['Bbm7','Eb7']),mk(['Abmaj7']),mk(['Bbm7','Eb7']),mk(['Abmaj7']),
+      mk(['Bbm7','Eb7']),mk(['Abmaj7']),mk(['Bbm7']),mk(['Bbm7'],'repeat-end'),
+    ]},
+  ]},
+];
+
+// ─── LOGO ─────────────────────────────────────────────────────────────────────
+function SoupirLogo({size=90,color='#1A1A1A'}){
+  return(<svg width={size} height={size*1.6} viewBox="0 0 80 128" fill="none">
+    <path d="M52 6 C64 12 58 26 46 32 C32 38 28 52 46 60 C62 68 60 86 46 96 C38 102 26 108 20 120"
+      stroke={color} strokeWidth="5.5" strokeLinecap="round" fill="none"/>
+    <path d="M46 96 C40 102 30 106 24 100 C20 96 22 90 28 88"
+      stroke={color} strokeWidth="5" strokeLinecap="round" fill="none"/>
+    <circle cx="52" cy="6" r="5" fill={color}/>
+  </svg>);
+}
+
+// ─── BARLINE ─────────────────────────────────────────────────────────────────
+function Barline({type='normal',onClick,minH=106,accentColor='#1A1A1A'}){
+  // type 'none' → largeur 0 (grande mesure = fusionner avec la suivante)
+  const BW=type==='none'?0:28;
+  const isRepeat=['repeat-start','repeat-end','repeat-end-start'].includes(type);
+  const INK=isRepeat?accentColor:'#1A1A1A';
+  const thin={width:1.5,alignSelf:'stretch',background:INK,flexShrink:0};
+  const thick={width:3.5,alignSelf:'stretch',background:INK,flexShrink:0};
+  const sp=(w)=>({width:w,flexShrink:0});
+  const dots=(
+    <div style={{display:'flex',flexDirection:'column',justifyContent:'center',
+      gap:5,alignSelf:'center',width:4,flexShrink:0}}>
+      <div style={{width:4,height:4,borderRadius:'50%',background:INK}}/>
+      <div style={{width:4,height:4,borderRadius:'50%',background:INK}}/>
+    </div>);
+  if(type==='none'){
+    // Toujours rendu (28px) pour maintenir l'alignement — invisible en lecture, discret en édition
+    return(<div className={onClick?'barline-hit':''} onClick={onClick}
+      style={{width:28,flexShrink:0,alignSelf:'stretch',minHeight:minH,
+        display:'flex',alignItems:'center',justifyContent:'center',
+        cursor:onClick?'pointer':'default'}}>
+      {/* En mode édition : petit indicateur | centré verticalement */}
+      {onClick&&(<div style={{width:2,height:24,background:'#D0CAC0',borderRadius:1,opacity:0.8}}/>)}
+    </div>);
+  }
+  let inner=null;
+  switch(type){
+    case 'normal':           inner=<div style={thin}/>;break;
+    case 'double':           inner=<><div style={thin}/><div style={sp(2)}/><div style={thin}/></>;break;
+    // repeat-start : |: — barre fine à gauche, épaisse+points contenus à droite
+    case 'repeat-start':     inner=<><div style={thin}/><div style={sp(2)}/><div style={thick}/><div style={sp(3)}/>{dots}</>;break;
+    // repeat-end : :| — points+épaisse à gauche, barre fine à droite
+    case 'repeat-end':       inner=<>{dots}<div style={sp(3)}/><div style={thick}/><div style={sp(2)}/><div style={thin}/></>;break;
+    case 'repeat-end-start': inner=<>{dots}<div style={sp(2)}/><div style={thick}/><div style={sp(1)}/><div style={thick}/><div style={sp(2)}/>{dots}</>;break;
+    case 'final':            inner=<><div style={thin}/><div style={sp(2)}/><div style={{...thick,width:5}}/></>;break;
+    default:                 inner=<div style={thin}/>;
+  }
+  return(
+    <div className={onClick?'barline-hit':''}
+      onClick={onClick}
+      style={{width:BW,flexShrink:0,alignSelf:'stretch',minHeight:minH,overflow:'hidden',
+        display:'flex',alignItems:'stretch',justifyContent:'center',
+        cursor:onClick?'pointer':'default',transition:'opacity 0.1s'}}>
+      <div style={{display:'flex',alignItems:'stretch'}}>{inner}</div>
+    </div>);
+}
+
+// ─── SHEET WRAPPER ────────────────────────────────────────────────────────────
+function Sheet({onClose,children}){
+  return(<div className="sheet-bg"
+    style={{position:'fixed',inset:0,background:'rgba(20,18,15,0.5)',zIndex:400,display:'flex',alignItems:'flex-end'}}
+    onClick={onClose}>
+    <div className="sheet-panel"
+      style={{width:'100%',background:'#EDE8E0',borderRadius:'20px 20px 0 0',
+        maxHeight:'90vh',display:'flex',flexDirection:'column',boxShadow:'0 -4px 40px rgba(0,0,0,0.2)'}}
+      onClick={e=>e.stopPropagation()}>
+      <div style={{display:'flex',justifyContent:'center',padding:'10px 0 0'}}>
+        <div style={{width:36,height:4,background:'#C0BAB0',borderRadius:2}}/>
+      </div>
+      {children}
+    </div>
+  </div>);
+}
+
+// Accord spécial (répétition / silence) — utilisé dans ChordPicker et EditorScreen
+const isSpec=(c)=>c==='/'||c==='—';
+
+// ─── CHORD PICKER — 4 beats + basse + signes + volta + annotation ─────────────
+function ChordPicker({picker,onChange,onConfirm,onCancel,onStructure,sectionName,onRenameSection,prefs,displayKey,displayMode='maj',autoHarmonize}){
+  const isGrande=!!picker.isGrande;
+  const nSlots=isGrande?8:4;
+  const localBeats=picker.localBeats||Array.from({length:nSlots},()=>mkBeat());
+  const selectedBeat=picker.selectedBeat??0;
+  const selBeat=localBeats[selectedBeat]||mkBeat();
+  const isSelSpec=isSpec(selBeat.c)||selBeat.c==='%';
+
+  const root=picker.letter+(picker.acc==='#'?'#':picker.acc==='b'?'b':'');
+  const bassStr=(picker.bass||'')+((picker.bass&&picker.bassAcc)?picker.bassAcc:'');
+  const canonical=buildChordStr(root,picker.qualityId,picker.extensions,bassStr);
+  const chord=applyPrefs(canonical,prefs);
+
+  // Métadonnées du beat sélectionné
+  const mText=selBeat.t||'';
+  const signs=selBeat.s||[];
+  const volta=selBeat.v;
+  const isCustomVolta=volta!==null&&!['1','2','3'].includes(volta);
+  const hasSign=signs.length>0;
+  const hasVolta=volta!==null;
+  const [subPanel,setSubPanel]=useState(null);
+  const toggleSub=p=>setSubPanel(sp=>sp===p?null:p);
+
+  // ── Actions sur les beats ────────────────────────────────────────────────────
+  const selectBeat=(bi)=>{
+    const b=localBeats[bi]||mkBeat();
+    if(!b.c||isSpec(b.c)||b.c==='%'){
+      onChange({...picker,selectedBeat:bi,letter:'C',acc:'',qualityId:'maj7',extensions:[],bass:'',bassAcc:''});
+      return;
+    }
+    const parsed=parseChordFull(b.c);
+    const{letter,acc}=rootToLetterAcc(parsed.root);
+    const bR=parsed.bass||'';
+    const{letter:bL,acc:bA}=bR?rootToLetterAcc(bR):{letter:'',acc:''};
+    onChange({...picker,selectedBeat:bi,letter,acc,qualityId:parsed.qualityId,extensions:parsed.extensions,bass:bL,bassAcc:bA});
+  };
+  const deleteBeat=()=>{
+    const nb=localBeats.map((b,i)=>i===selectedBeat?mkBeat():b);
+    onChange({...picker,localBeats:nb,letter:'C',acc:'',qualityId:'maj7',extensions:[],bass:'',bassAcc:''});
+  };
+  // Met à jour les métadonnées du beat sélectionné
+  const updBeat=(partial)=>onChange({...picker,localBeats:localBeats.map((b,i)=>i===selectedBeat?{...b,...partial}:b)});
+
+  const pill=(active,col='#1A1A1A')=>({
+    background:active?col:'transparent',color:active?'#F2EDE4':'#1A1A1A',
+    border:`1.5px solid ${active?col:'#C0BAB0'}`,borderRadius:100,
+    padding:'10px 0',fontWeight:700,fontSize:15,cursor:'pointer',
+    transition:'all 0.1s',lineHeight:1,fontFamily:'inherit',textAlign:'center',
+  });
+  const smPill=(active,col='#1A1A1A')=>({
+    background:active?col:'transparent',color:active?'#F2EDE4':'#1A1A1A',
+    border:`1.5px solid ${active?col:'#C0BAB0'}`,borderRadius:100,
+    padding:'8px 12px',fontWeight:700,fontSize:13,cursor:'pointer',
+    transition:'all 0.1s',lineHeight:1,fontFamily:'inherit',
+  });
+  const secLbl=(t)=>(
+    <div style={{fontSize:10,fontWeight:700,color:'#8A847C',textTransform:'uppercase',
+      letterSpacing:1.4,marginBottom:8,marginTop:4}}>{t}</div>
+  );
+
+  // Rendu d'une rangée de slots (start..end exclu)
+  const renderBeatRow=(from,to,rowLabel)=>(
+    <div>
+      {isGrande&&<div style={{fontSize:9,fontWeight:700,color:'#8A847C',letterSpacing:0.8,
+        marginBottom:4,textTransform:'uppercase'}}>{rowLabel}</div>}
+      <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:6}}>
+        {localBeats.slice(from,to).map((beat,idx)=>{
+          const bi=from+idx;
+          const hasChord=!!beat.c;
+          const isSel=bi===selectedBeat;
+          const disp=beat.c?applyPrefs(beat.c,prefs)||'—':'';
+          return(
+            <div key={bi} style={{position:'relative',paddingTop:11}}>
+              <span style={{position:'absolute',top:0,left:'50%',transform:'translateX(-50%)',
+                fontSize:8,fontWeight:800,color:isSel?'#1A1A1A':'#B8B2A8',lineHeight:1,userSelect:'none'}}>
+                {bi+1}
+              </span>
+              <button onClick={()=>selectBeat(bi)}
+                style={{width:'100%',
+                  background:isSel?'#1A1A1A':(hasChord?'#EDE8E0':'transparent'),
+                  color:isSel?'#F2EDE4':(hasChord?'#1A1A1A':'#C0BAB0'),
+                  border:`2px solid ${isSel?'#1A1A1A':(hasChord?'#C8C2B8':'#D8D4CE')}`,
+                  borderRadius:14,padding:'7px 2px',
+                  fontSize:hasChord?13:20,fontWeight:hasChord?900:300,
+                  cursor:'pointer',fontFamily:'inherit',lineHeight:1,
+                  minHeight:38,transition:'all 0.1s',
+                  overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+                {hasChord?disp:'+'}
+              </button>
+              {isSel&&hasChord&&(
+                <button onClick={deleteBeat}
+                  style={{position:'absolute',top:3,right:-5,width:17,height:17,
+                    background:'#C0392B',border:'2px solid #EDE8E0',borderRadius:'50%',
+                    color:'white',fontSize:10,fontWeight:900,cursor:'pointer',
+                    display:'flex',alignItems:'center',justifyContent:'center',
+                    lineHeight:1,fontFamily:'inherit',padding:0}}>×</button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+
+  return(<Sheet onClose={onCancel}>
+    {/* ── Header : slots de temps (4 ou 8 pour grande mesure) ── */}
+    <div style={{padding:'12px 18px 10px',borderBottom:'1px solid #D6D0C8'}}>
+      {isGrande?(
+        <div style={{display:'flex',flexDirection:'column',gap:8,marginBottom:10}}>
+          {renderBeatRow(0,4,'Mesure principale')}
+          <div style={{height:1,background:'#E8E2D8'}}/>
+          {renderBeatRow(4,8,'Suite')}
+        </div>
+      ):(
+        <div style={{marginBottom:10}}>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:6}}>
+            {localBeats.map((beat,bi)=>{
+              const hasChord=!!beat.c;
+              const isSel=bi===selectedBeat;
+              const disp=beat.c?applyPrefs(beat.c,prefs)||'—':'';
+              return(
+                <div key={bi} style={{position:'relative',paddingTop:11}}>
+                  <span style={{position:'absolute',top:0,left:'50%',transform:'translateX(-50%)',
+                    fontSize:8,fontWeight:800,color:isSel?'#1A1A1A':'#B8B2A8',lineHeight:1,userSelect:'none'}}>
+                    {bi+1}
+                  </span>
+                  <button onClick={()=>selectBeat(bi)}
+                style={{width:'100%',
+                  background:isSel?'#1A1A1A':(hasChord?'#EDE8E0':'transparent'),
+                  color:isSel?'#F2EDE4':(hasChord?'#1A1A1A':'#C0BAB0'),
+                  border:`2px solid ${isSel?'#1A1A1A':(hasChord?'#C8C2B8':'#D8D4CE')}`,
+                  borderRadius:14,padding:'7px 2px',
+                  fontSize:hasChord?13:20,fontWeight:hasChord?900:300,
+                  cursor:'pointer',fontFamily:'inherit',lineHeight:1,
+                  minHeight:38,transition:'all 0.1s',
+                  overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+                {hasChord?disp:'+'}
+              </button>
+                  {isSel&&hasChord&&(
+                    <button onClick={deleteBeat}
+                      style={{position:'absolute',top:3,right:-5,width:17,height:17,
+                        background:'#C0392B',border:'2px solid #EDE8E0',borderRadius:'50%',
+                        color:'white',fontSize:10,fontWeight:900,cursor:'pointer',
+                        display:'flex',alignItems:'center',justifyContent:'center',
+                        lineHeight:1,padding:0,zIndex:10}}>×</button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+      {/* Accord sélectionné */}
+      <div style={{display:'flex',alignItems:'baseline',gap:8,minHeight:28}}>
+        <span style={{fontSize:10,color:'#8A847C',fontWeight:700,textTransform:'uppercase',letterSpacing:0.8}}>
+          {isSelSpec?'Accord spécial':`Temps ${selectedBeat+1}`}
+        </span>
+        {!isSelSpec&&selBeat.c&&(
+          <span style={{fontSize:26,fontWeight:900,letterSpacing:'-0.5px',lineHeight:1,color:'#1A1A1A'}}>
+            {chord}
+          </span>
+        )}
+        {!selBeat.c&&(
+          <span style={{fontSize:12,color:'#B0AA9F',fontStyle:'italic'}}>— vide, choisir une note —</span>
+        )}
+      </div>
+    </div>
+
+    {isSelSpec&&<div style={{flex:1}}/>}
+    {!isSelSpec&&<div style={{overflowY:'auto',flex:1,padding:'14px 20px 6px'}}>
+      {secLbl('Fondamentale')}
+      <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:6,marginBottom:10}}>
+        {LETTERS.map(l=>(
+          <button key={l} className="pill-btn" style={pill(picker.letter===l)}
+            onClick={()=>{
+              if(picker.letter===l){
+                // Désélectionner la fondamentale : garder la basse si présente
+                const bassStr=(picker.bass||'')+((picker.bass&&picker.bassAcc)?picker.bassAcc:'');
+                const newC=bassStr?'/'+bassStr:'';
+                const nb=(picker.localBeats||[]).map((b,i)=>i===selectedBeat?{...b,c:newC}:b);
+                // bass/bassAcc restent inchangés dans le picker
+                onChange({...picker,letter:'',acc:'',qualityId:'maj7',extensions:[],localBeats:nb});
+              } else {
+                const newAcc=autoHarmonize?scaleAccForLetter(l,displayKey,displayMode):'';
+                onChange({...picker,letter:l,acc:newAcc,...(autoHarmonize?autoHarmonizeTriad(l,newAcc,displayKey,displayMode):{})});
+              }
+            }}>{l}</button>
+        ))}
+      </div>
+
+      <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:6,marginBottom:14}}>
+        {[{v:'',l:'♮ naturel'},{v:'#',l:'♯ dièse'},{v:'b',l:'♭ bémol'}].map(a=>(
+          <button key={a.v} className={`pill-btn${picker.acc===a.v?' active-pill':''}`}
+            style={{...pill(picker.acc===a.v,'#4A3F2F'),padding:'8px 0',fontSize:13}}
+            onClick={()=>onChange({...picker,acc:a.v,...(autoHarmonize?autoHarmonizeTriad(picker.letter,a.v,displayKey,displayMode):{})})}  >{a.l}</button>
+        ))}
+      </div>
+
+      {secLbl('Qualité')}
+      {['Triades','Septièmes','Autres'].map(g=>{
+        const qs=QUALITIES.filter(q=>q.group===g);
+        const labels={'maj':'Maj','min':prefs?.minor==='-'?'−':'m','dim':prefs?.dim==='°'?'°':'dim',
+          'aug':prefs?.aug==='+'?'+':'aug','sus4':'sus4','sus2':'sus2','dom7':'7',
+          'maj7':prefs?.maj7==='Δ'?'Δ':'maj7','min7':prefs?.minor==='-'?'−7':'m7',
+          'mMaj7':'mMaj7','hdim':prefs?.hdim==='ø'?'ø':'m7b5',
+          'dim7':prefs?.dim==='°'?'°7':'dim7','maj6':'6','min6':prefs?.minor==='-'?'−6':'m6','5':'5'};
+        return(<div key={g} style={{marginBottom:10}}>
+          <div style={{fontSize:9,color:'#B0AA9F',letterSpacing:0.8,marginBottom:6,fontWeight:600}}>{g.toUpperCase()}</div>
+          <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+            {qs.map(q=>(
+              <button key={q.id} className={`pill-btn${picker.qualityId===q.id?' active-pill':''}`}
+                style={{...smPill(picker.qualityId===q.id)}}
+                onClick={()=>onChange({...picker,qualityId:q.id})}>
+                {labels[q.id]||q.suffix||'Maj'}
+              </button>
+            ))}
+          </div>
+        </div>);
+      })}
+
+      {secLbl('Extensions & altérations')}
+      <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:6}}>
+        {EXTENSIONS.map(e=>{
+          const active=picker.extensions.includes(e.id);
+          return(<button key={e.id} className={`pill-btn${active?' active-pill':''}`}
+            style={{...smPill(active,'#4A3F2F')}}
+            onClick={()=>onChange({...picker,extensions:active
+              ?picker.extensions.filter(x=>x!==e.id):[...picker.extensions,e.id]})}>
+            {e.label}
+          </button>);
+        })}
+      </div>
+      {picker.extensions.length>0&&(
+        <button onClick={()=>onChange({...picker,extensions:[]})}
+          style={{background:'transparent',border:'none',color:'#8A847C',fontSize:12,
+            cursor:'pointer',textDecoration:'underline',fontFamily:'inherit',marginBottom:10,display:'block'}}>
+          Effacer les extensions
+        </button>
+      )}
+
+      {secLbl('Basse (facultatif — recliquer pour effacer)')}
+      <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:6,marginBottom:6}}>
+        {LETTERS.map(l=>(
+          <button key={l} className="pill-btn" style={pill(picker.bass===l)}
+            onClick={()=>{
+              if(picker.bass===l){
+                // Désélectionner la basse
+                onChange({...picker,bass:'',bassAcc:''});
+              } else {
+                const newBassAcc=autoHarmonize?scaleAccForLetter(l,displayKey,displayMode):'';
+                onChange({...picker,bass:l,bassAcc:newBassAcc});
+              }
+            }}>{l}</button>
+        ))}
+      </div>
+      {picker.bass&&(
+        <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:6,marginBottom:10}}>
+          {[{v:'',l:'♮ naturel'},{v:'#',l:'♯ dièse'},{v:'b',l:'♭ bémol'}].map(a=>(
+            <button key={a.v} className={`pill-btn${picker.bassAcc===a.v?' active-pill':''}`}
+              style={{...pill(picker.bassAcc===a.v,'#4A3F2F'),padding:'8px 0',fontSize:13}}
+              onClick={()=>onChange({...picker,bassAcc:a.v})}>{a.l}</button>
+          ))}
+        </div>
+      )}
+
+      {/* ── Navigation compacte : Signes · Crochet · Annotation · Section ── */}
+      <div style={{borderTop:'1px solid #E8E2D8',paddingTop:10,marginTop:6,paddingBottom:4}}>
+        {/* 4 boutons de statut */}
+        <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:5}}>
+
+          {/* Signes */}
+          <button onClick={()=>toggleSub('signs')}
+            style={{background:subPanel==='signs'?'#1A1A1A':'#F5F2EC',
+              border:`1.5px solid ${subPanel==='signs'?'#1A1A1A':'#D0CAC0'}`,
+              borderRadius:10,padding:'7px 4px',cursor:'pointer',fontFamily:'inherit',
+              display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',
+              gap:0,transition:'all 0.1s',minWidth:0,minHeight:46}}>
+            <span style={{fontSize:10,fontWeight:800,lineHeight:1.3,textAlign:'center',
+              color:subPanel==='signs'?'#F2EDE4':'#A09A90',
+              overflow:'hidden',maxWidth:'100%',letterSpacing:0.3}}>
+              {hasSign?signs.map(s=>SIGN_TYPES.find(x=>x.id===s)?.sym).join(' '):'⊕ 𝄋 D.C.'}
+            </span>
+          </button>
+
+          {/* Crochet de volta */}
+          <button onClick={()=>toggleSub('volta')}
+            style={{background:subPanel==='volta'?'#1A1A1A':'#F5F2EC',
+              border:`1.5px solid ${subPanel==='volta'?'#1A1A1A':'#D0CAC0'}`,
+              borderRadius:10,padding:'7px 4px',cursor:'pointer',fontFamily:'inherit',
+              display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',
+              gap:0,transition:'all 0.1s',minWidth:0,minHeight:46}}>
+            <span style={{display:'inline-flex',alignItems:'flex-start',
+              borderLeft:`2px solid ${subPanel==='volta'?'#F2EDE4':'#B0AAA0'}`,
+              borderTop:`2px solid ${subPanel==='volta'?'#F2EDE4':'#B0AAA0'}`,
+              padding:'2px 6px',lineHeight:1,fontSize:10,fontWeight:900,
+              color:subPanel==='volta'?'#F2EDE4':'#A09A90'}}>
+              {hasVolta?`${volta}.`:'  '}
+            </span>
+          </button>
+
+          {/* Annotation */}
+          <button onClick={()=>toggleSub('annotation')}
+            style={{background:subPanel==='annotation'?'#1A1A1A':'#F5F2EC',
+              border:`1.5px solid ${subPanel==='annotation'?'#1A1A1A':'#D0CAC0'}`,
+              borderRadius:10,padding:'7px 4px',cursor:'pointer',fontFamily:'inherit',
+              display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',
+              gap:0,transition:'all 0.1s',minWidth:0,minHeight:46}}>
+            <span style={{fontSize:9,fontStyle:'italic',fontWeight:700,lineHeight:1.2,
+              textAlign:'center',
+              color:subPanel==='annotation'?'#F2EDE4':'#A09A90',
+              overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:'100%'}}>
+              {mText||'Solo Intro…'}
+            </span>
+          </button>
+
+          {/* Nom de section */}
+          {onRenameSection?(
+            <button onClick={()=>toggleSub('section')}
+              style={{background:subPanel==='section'?'#1A1A1A':'#F5F2EC',
+                border:`1.5px solid ${subPanel==='section'?'#1A1A1A':'#D0CAC0'}`,
+                borderRadius:10,padding:'7px 4px',cursor:'pointer',fontFamily:'inherit',
+                display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',
+                gap:0,transition:'all 0.1s',minWidth:0,minHeight:46}}>
+              <span style={{fontSize:9,fontWeight:700,lineHeight:1.2,
+                textAlign:'center',
+                color:subPanel==='section'?'#F2EDE4':'#A09A90',
+                overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:'100%'}}>
+                {sectionName||'Intro A B…'}
+              </span>
+            </button>
+          ):(
+            <div style={{background:'#F5F2EC',border:'1.5px solid #D0CAC0',borderRadius:10,padding:'7px 4px',
+              display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',
+              gap:0,opacity:0.35,minHeight:46}}>
+              <span style={{fontSize:9,fontWeight:700,color:'#A09A90',lineHeight:1.2,textAlign:'center'}}>
+                Intro A B…
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* ── Sous-panneau Signes (pour le temps sélectionné) ── */}
+        {subPanel==='signs'&&(
+          <div style={{marginTop:8,padding:'10px 12px',background:'rgba(42,90,42,0.05)',
+            borderRadius:10,border:'1.5px solid rgba(42,90,42,0.18)'}}>
+            <div style={{fontSize:9,color:'#5A7A5A',fontWeight:700,marginBottom:6,letterSpacing:0.5}}>
+              Au-dessus du temps {selectedBeat+1}
+            </div>
+            <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+              {SIGN_TYPES.map(st=>{
+                const active=signs.includes(st.id);
+                return(<button key={st.id}
+                  style={{...smPill(active,'#2A5A2A'),border:`1.5px solid ${active?'#2A5A2A':'#C0BAB0'}`}}
+                  onClick={()=>updBeat({s:active?signs.filter(x=>x!==st.id):[...signs,st.id]})}>
+                  {st.sym}
+                </button>);
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* ── Sous-panneau Crochet de volta (pour le temps sélectionné) ── */}
+        {subPanel==='volta'&&(
+          <div style={{marginTop:8,padding:'10px 12px',background:'rgba(0,0,0,0.04)',
+            borderRadius:10,border:'1.5px solid #D0CAC0'}}>
+            <div style={{fontSize:9,color:'#7A7070',fontWeight:700,marginBottom:6,letterSpacing:0.5}}>
+              Crochet au-dessus du temps {selectedBeat+1}
+            </div>
+            <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:isCustomVolta?8:0}}>
+              <button style={smPill(volta===null)}
+                onClick={()=>updBeat({v:null})}>Aucun</button>
+              {['1','2','3'].map(v=>(
+                <button key={v} style={{...smPill(volta===v&&!isCustomVolta),
+                  display:'flex',alignItems:'center',justifyContent:'center'}}
+                  onClick={()=>updBeat({v})}>
+                  <span style={{display:'inline-flex',alignItems:'flex-start',
+                    borderLeft:`2px solid ${volta===v&&!isCustomVolta?'#F2EDE4':'#1A1A1A'}`,
+                    borderTop:`2px solid ${volta===v&&!isCustomVolta?'#F2EDE4':'#1A1A1A'}`,
+                    padding:'2px 5px',lineHeight:1,fontSize:12,fontWeight:900}}>
+                    {v}.
+                  </span>
+                </button>
+              ))}
+              <button style={smPill(isCustomVolta)}
+                onClick={()=>{if(!isCustomVolta)updBeat({v:''});}}>Perso.</button>
+            </div>
+            {isCustomVolta&&(
+              <div style={{display:'flex',alignItems:'center',gap:10}}>
+                <div style={{display:'inline-flex',alignItems:'center',
+                  borderLeft:'2.5px solid #1A1A1A',borderTop:'2.5px solid #1A1A1A',
+                  padding:'3px 8px',fontSize:13,fontWeight:800,color:'#1A1A1A',flexShrink:0}}>
+                  {volta||'?'}.
+                </div>
+                <input value={volta||''} onChange={e=>updBeat({v:e.target.value})}
+                  placeholder="Ex : A, Bis, Trio…"
+                  style={{flex:1,background:'#FAF8F4',border:'1.5px solid #D0CAC0',
+                    borderRadius:8,padding:'8px 12px',fontSize:12,color:'#1A1A1A',outline:'none'}}/>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Sous-panneau Annotation (pour le temps sélectionné) ── */}
+        {subPanel==='annotation'&&(
+          <div style={{marginTop:8,padding:'10px 12px',background:'rgba(122,80,48,0.04)',
+            borderRadius:10,border:'1.5px solid #D8C8B0'}}>
+            <div style={{fontSize:9,color:'#7A5030',fontWeight:700,marginBottom:6,letterSpacing:0.5}}>
+              Annotation au-dessus du temps {selectedBeat+1}
+            </div>
+            <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:8}}>
+              {TEXT_SUGG.map(s=>(
+                <button key={s} onClick={()=>updBeat({t:s})}
+                  style={{background:mText===s?'#1A1A1A':'transparent',
+                    color:mText===s?'#F2EDE4':'#7A5030',
+                    border:`1.5px solid ${mText===s?'#1A1A1A':'#C4A882'}`,
+                    borderRadius:100,padding:'6px 10px',fontWeight:700,fontSize:11,
+                    cursor:'pointer',fontFamily:'inherit',fontStyle:'italic'}}>{s}</button>
+              ))}
+              {mText&&(
+                <button onClick={()=>updBeat({t:''})}
+                  style={{background:'transparent',border:'none',color:'#8A847C',fontSize:11,
+                    cursor:'pointer',textDecoration:'underline',fontFamily:'inherit'}}>Effacer</button>
+              )}
+            </div>
+            <input value={mText} onChange={e=>updBeat({t:e.target.value})}
+              placeholder="Ex : Solo, Intro…"
+              style={{width:'100%',background:'#FAF8F4',border:'1.5px solid #D0CAC0',
+                borderRadius:8,padding:'8px 12px',fontSize:12,color:'#1A1A1A',outline:'none'}}/>
+          </div>
+        )}
+
+        {/* ── Sous-panneau Nom de section ── */}
+        {subPanel==='section'&&onRenameSection&&(
+          <div style={{marginTop:8,padding:'10px 12px',background:'rgba(0,0,0,0.04)',
+            borderRadius:10,border:'1.5px solid #D0CAC0'}}>
+            <div style={{display:'flex',gap:5,flexWrap:'wrap',marginBottom:8}}>
+              {['A','B','C','D','E','F','G','V','Intro','Outro','Bridge','Coda'].map(n=>(
+                <button key={n} onClick={()=>onRenameSection(n)}
+                  style={{...smPill(sectionName===n),padding:'6px 11px',fontSize:12}}>{n}</button>
+              ))}
+            </div>
+            <input defaultValue={sectionName} key={sectionName}
+              onBlur={e=>{if(e.target.value.trim()&&e.target.value.trim()!==sectionName)onRenameSection(e.target.value.trim());}}
+              onKeyDown={e=>{if(e.key==='Enter'&&e.target.value.trim())onRenameSection(e.target.value.trim());}}
+              placeholder="Nom libre…"
+              style={{width:'100%',background:'#FAF8F4',border:'1.5px solid #D0CAC0',
+                borderRadius:8,padding:'8px 12px',fontSize:12,color:'#1A1A1A',outline:'none',
+                boxSizing:'border-box'}}/>
+          </div>
+        )}
+      </div>
+    </div>}
+
+    <div style={{display:'flex',gap:8,padding:'12px 16px 28px',borderTop:'1px solid #D6D0C8'}}>
+      <button onClick={onCancel}
+        style={{flex:1,background:'transparent',border:'1.5px solid #C0BAB0',color:'#8A847C',
+          padding:'13px',borderRadius:100,fontSize:14,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>
+        Annuler
+      </button>
+      {onStructure&&(
+        <button onClick={onStructure}
+          style={{flex:1,background:'transparent',border:'1.5px solid #C0BAB0',color:'#6B6560',
+            padding:'13px',borderRadius:100,fontSize:13,fontWeight:700,cursor:'pointer',fontFamily:'inherit'}}>
+          ≡ Mesure
+        </button>
+      )}
+      <button onClick={onConfirm}
+        style={{flex:2,background:'#1A1A1A',border:'none',color:'#F2EDE4',
+          padding:'13px',borderRadius:100,fontSize:15,fontWeight:700,cursor:'pointer',fontFamily:'inherit'}}>
+        Enregistrer
+      </button>
+    </div>
+  </Sheet>);
+}
+
+// ─── BARLINE PICKER ───────────────────────────────────────────────────────────
+function BarlinePicker({current,onSelect,onClose}){
+  return(<Sheet onClose={onClose}>
+    <div style={{padding:'14px 22px 10px',borderBottom:'1px solid #D6D0C8'}}>
+      <div style={{fontSize:10,fontWeight:700,color:'#8A847C',textTransform:'uppercase',letterSpacing:1.4}}>
+        Type de barre de mesure
+      </div>
+    </div>
+    <div style={{padding:'12px 18px 28px',display:'flex',flexDirection:'column',gap:7,overflowY:'auto'}}>
+      {BAR_TYPES.map(bt=>(
+        <button key={bt.id} onClick={()=>onSelect(bt.id)}
+          style={{display:'flex',alignItems:'center',gap:14,
+            background:bt.id===current?'#1A1A1A':'transparent',
+            border:`1.5px solid ${bt.id===current?'#1A1A1A':'#C0BAB0'}`,
+            borderRadius:12,padding:'13px 18px',cursor:'pointer',fontFamily:'inherit',transition:'all 0.12s'}}>
+          <span style={{fontSize:17,fontWeight:900,color:bt.id===current?'#F2EDE4':'#1A1A1A',
+            fontFamily:'monospace',minWidth:38,textAlign:'center'}}>{bt.label}</span>
+          <span style={{fontSize:13,color:bt.id===current?'#D0C8BC':'#6B6560',fontWeight:500}}>{bt.hint}</span>
+        </button>
+      ))}
+    </div>
+  </Sheet>);
+}
+
+// ─── TIME SIG PICKER ──────────────────────────────────────────────────────────
+function TimeSigPicker({current,onSelect,onClose}){
+  return(<Sheet onClose={onClose}>
+    <div style={{padding:'14px 22px 10px',borderBottom:'1px solid #D6D0C8'}}>
+      <div style={{fontSize:10,fontWeight:700,color:'#8A847C',textTransform:'uppercase',letterSpacing:1.4}}>Signature rythmique</div>
+    </div>
+    <div style={{padding:'20px',display:'flex',gap:10,flexWrap:'wrap',paddingBottom:32}}>
+      {TIME_SIGS.map(ts=>(
+        <button key={ts} onClick={()=>onSelect(ts)}
+          style={{background:ts===current?'#1A1A1A':'transparent',color:ts===current?'#F2EDE4':'#1A1A1A',
+            border:`1.5px solid ${ts===current?'#1A1A1A':'#C0BAB0'}`,borderRadius:100,
+            padding:'14px 22px',fontWeight:800,fontSize:20,cursor:'pointer',fontFamily:'inherit'}}>
+          {ts}
+        </button>
+      ))}
+    </div>
+  </Sheet>);
+}
+
+// ─── MEASURE SHEET — actions structurelles uniquement ─────────────────────────
+function MeasureSheet({si,mi,measure,onAction,onClose,prefs,sectionName,onRenameSection}){
+  const [customName,setCustomName]=useState('');
+  const beats=getBeats(measure);
+  const chordDisplay=beats.filter(b=>b.c).map(b=>applyPrefs(b.c,prefs)).join('  ');
+  const isSplit=!!measure.split2;
+  const nMChords=beats.filter(b=>b.c).length;
+  const addLabel='Ajouter un accord';
+  const SECTION_NAMES=['A','B','C','D','E','F','G','V','Intro','Outro','Bridge','Coda'];
+  const actions=[
+    ...(isSplit?[]:[
+      ...(nMChords<4?[{icon:'+♩',l:addLabel,a:'addChord'}]:[]),
+      ...(nMChords>1?[{icon:'−♩',l:'Retirer le dernier accord',a:'removeChord'}]:[]),
+    ]),
+    isSplit
+      ?{icon:'⟺', l:'Réunir les 2 demi-mesures',  a:'unsplit'}
+      :{icon:'⟨⟩',l:'Diviser en 2 demi-mesures',   a:'split'},
+    {icon:'+',  l:'Insérer une mesure après',       a:'addMeasure'},
+    {icon:'×',  l:'Supprimer cette mesure',         a:'deleteMeasure',danger:true},
+  ];
+  return(<Sheet onClose={onClose}>
+    <div style={{padding:'12px 22px 14px',borderBottom:'1px solid #D6D0C8',display:'flex',alignItems:'baseline',gap:10}}>
+      <span style={{fontSize:11,color:'#8A847C',fontWeight:600}}>Mesure {mi+1}</span>
+      <span style={{fontSize:26,fontWeight:900,letterSpacing:'-0.8px'}}>{chordDisplay}</span>
+      {isSplit&&<span style={{fontSize:11,color:'#8A847C',fontWeight:600,marginLeft:4}}>/ {measure.split2.chords.join(' ')}</span>}
+    </div>
+    {/* Nom de section */}
+    <div style={{padding:'10px 22px 12px',borderBottom:'1px solid #D6D0C8'}}>
+      <div style={{fontSize:9,fontWeight:700,color:'#8A847C',textTransform:'uppercase',letterSpacing:1.2,marginBottom:8}}>
+        Section — <span style={{color:'#1A1A1A'}}>{sectionName}</span>
+      </div>
+      <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:8}}>
+        {SECTION_NAMES.map(n=>(
+          <button key={n} onClick={()=>onRenameSection(n)}
+            style={{background:sectionName===n?'#1A1A1A':'transparent',
+              color:sectionName===n?'#F2EDE4':'#1A1A1A',
+              border:`1.5px solid ${sectionName===n?'#1A1A1A':'#C0BAB0'}`,
+              borderRadius:100,padding:'5px 12px',fontSize:12,fontWeight:700,
+              cursor:'pointer',fontFamily:'inherit'}}>
+            {n}
+          </button>
+        ))}
+      </div>
+      <div style={{display:'flex',gap:6,alignItems:'center'}}>
+        <input value={customName} onChange={e=>setCustomName(e.target.value)}
+          placeholder="Nom personnalisé…"
+          style={{flex:1,padding:'7px 12px',border:'1.5px solid #D0CAC0',borderRadius:10,
+            fontSize:13,fontWeight:600,background:'#FAF8F4',fontFamily:'inherit',outline:'none'}}/>
+        <button onClick={()=>{if(customName.trim())onRenameSection(customName.trim());}}
+          style={{background:'#1A1A1A',border:'none',color:'#F2EDE4',borderRadius:10,
+            padding:'7px 14px',fontSize:12,fontWeight:700,cursor:'pointer',fontFamily:'inherit'}}>
+          OK
+        </button>
+      </div>
+    </div>
+    <div style={{display:'flex',flexDirection:'column',paddingBottom:24,overflowY:'auto'}}>
+      {actions.map(item=>(
+        <button key={item.a} onClick={()=>onAction(item.a)}
+          style={{display:'flex',alignItems:'center',gap:16,padding:'15px 22px',
+            background:'transparent',border:'none',borderBottom:'1px solid #EAE4DC',
+            cursor:'pointer',fontFamily:'inherit',color:item.danger?'#C0392B':'#1A1A1A',textAlign:'left'}}>
+          <span style={{width:22,textAlign:'center',fontSize:15,flexShrink:0}}>{item.icon}</span>
+          <span style={{fontSize:15,fontWeight:600}}>{item.l}</span>
+        </button>
+      ))}
+    </div>
+  </Sheet>);
+}
+
+// ─── CHORD TEXT — typographie iReal Pro (racine grande, altération + qualité petites) ──
+function ChordText({chord,fs=30,color='#1C1C1E',weight=900}){
+  if(!chord)return null;
+  // Basse seule : chord commence par '/'
+  if(chord.startsWith('/')){
+    const bassOnly=chord.slice(1);
+    const bR=parseRoot(bassOnly);
+    const bL=bR?bR[0]:(bassOnly[0]||'');
+    const bAcc=(bR&&bR.length>1)?bR.slice(1):'';
+    const bAccDisp=bAcc==='b'?'♭':bAcc==='#'?'♯':'';
+    const bFs=Math.round(fs*0.72);
+    return(
+      <span style={{display:'inline-flex',alignItems:'flex-start',gap:0,lineHeight:1,color}}>
+        <span style={{fontSize:Math.round(bFs*0.72),fontWeight:600,lineHeight:1,color:color==='#1C1C1E'?'#8A8A8A':color}}>/</span>
+        <span style={{fontSize:bFs,fontWeight:weight,lineHeight:1}}>{bL}</span>
+        {bAccDisp&&<span style={{fontSize:Math.round(bFs*0.56),fontWeight:weight,lineHeight:1,paddingTop:2}}>{bAccDisp}</span>}
+      </span>
+    );
+  }
+  // Extraire la note de basse
+  const si=chord.lastIndexOf('/');
+  const bassStr=si>0?chord.slice(si+1):'';
+  const mainChord=si>0?chord.slice(0,si):chord;
+  const root=parseRoot(mainChord);
+  const accFs=Math.round(fs*0.52);
+  const sfxFs=Math.round(fs*0.44);
+  const sfxTop=Math.round(fs*0.20);
+  const renderMain=root?(()=>{
+    const letter=root[0];
+    const rawAcc=root.slice(1);
+    const acc=rawAcc==='b'?'♭':rawAcc==='#'?'♯':'';
+    const suffix=mainChord.slice(root.length);
+    return(
+      <span style={{display:'inline-flex',alignItems:'flex-start',gap:0,lineHeight:1}}>
+        <span style={{fontSize:fs,fontWeight:weight,lineHeight:1,letterSpacing:'-0.5px'}}>{letter}</span>
+        {(acc||suffix)&&(
+          <span style={{display:'flex',flexDirection:'column',alignItems:'flex-start',lineHeight:1,gap:1,
+            paddingLeft:1,paddingTop:acc?0:sfxTop}}>
+            {acc&&<span style={{fontSize:accFs,fontWeight:weight,lineHeight:1}}>{acc}</span>}
+            {suffix&&<span style={{fontSize:sfxFs,fontWeight:600,lineHeight:1,
+              color:color==='#1C1C1E'?'#525252':color,paddingTop:acc?1:0}}>{suffix}</span>}
+          </span>
+        )}
+      </span>
+    );
+  })():(<span style={{fontSize:fs,fontWeight:weight,lineHeight:1,letterSpacing:'-0.5px'}}>{mainChord}</span>);
+  if(!bassStr)return(
+    <span style={{display:'inline-flex',alignItems:'flex-start',gap:0,lineHeight:1,color}}>{renderMain}</span>
+  );
+  // Avec basse : accord principal à gauche, /B plus petit aligné en bas à droite (iReal Pro)
+  const bassRoot=parseRoot(bassStr);
+  const bassLetter=bassRoot?bassRoot[0]:(bassStr[0]||'');
+  const bassRawAcc=bassRoot?bassRoot.slice(1):'';
+  const bassAccDisp=bassRawAcc==='b'?'♭':bassRawAcc==='#'?'♯':'';
+  const bassFs=Math.round(fs*0.46);
+  const bassShift=Math.round(fs*0.18);
+  return(
+    <span style={{display:'inline-flex',alignItems:'flex-end',gap:1,lineHeight:1,color}}>
+      <span style={{display:'inline-flex',alignItems:'flex-start',gap:0,lineHeight:1}}>{renderMain}</span>
+      <span style={{display:'inline-flex',alignItems:'baseline',gap:0,lineHeight:1,
+        position:'relative',top:bassShift}}>
+        <span style={{fontSize:Math.round(bassFs*0.75),fontWeight:600,lineHeight:1,color:color==='#1C1C1E'?'#8A8A8A':color}}>/</span>
+        <span style={{fontSize:bassFs,fontWeight:weight,lineHeight:1,color:color==='#1C1C1E'?'#525252':color}}>{bassLetter}{bassAccDisp}</span>
+      </span>
+    </span>
+  );
+}
+
+
+// ─── DEGREE TEXT — même typographie que ChordText pour le mode degrés ─────────
+function DegreeText({deg,fs=30,color='#1C1C1E',weight=900}){
+  if(!deg)return null;
+  // Parse : altération optionnelle + chiffre romain + qualité
+  const m=deg.match(/^([b#]?)(I{1,3}|IV|VI{0,3}|VII?)(.*)/);
+  if(!m)return<span style={{fontSize:fs,fontWeight:weight,color,letterSpacing:'-0.3px'}}>{deg}</span>;
+  const acc=m[1]==='b'?'♭':m[1]==='#'?'♯':'';
+  const numeral=m[2];
+  const suffix=m[3];
+  const accFs=Math.round(fs*0.52);
+  const sfxFs=Math.round(fs*0.44);
+  const sfxTop=Math.round(fs*0.20);
+  return(
+    <span style={{display:'inline-flex',alignItems:'flex-start',gap:0,lineHeight:1,color}}>
+      {acc&&<span style={{fontSize:accFs,fontWeight:weight,lineHeight:1,paddingTop:1}}>{acc}</span>}
+      <span style={{fontSize:fs,fontWeight:weight,lineHeight:1,letterSpacing:'-0.3px'}}>{numeral}</span>
+      {suffix&&(
+        <span style={{display:'flex',flexDirection:'column',alignItems:'flex-start',lineHeight:1,
+          paddingLeft:1,paddingTop:sfxTop}}>
+          <span style={{fontSize:sfxFs,fontWeight:700,lineHeight:1,
+            color:color==='#1C1C1E'?'#3A3530':color}}>{suffix}</span>
+        </span>
+      )}
+    </span>
+  );
+}
+// ─── STAFF EDITOR — portée personnalisable ────────────────────────────────────
+// Positions verticales : pos=0 → ligne médiane (Si3), chaque demi-ton = 5px
+// Portée : 5 lignes à y=30,40,50,60,70 (top→bas) → pos 8,6,4,2,0 sur lignes
+const STAFF_H=100;
+const STAFF_LINES=[30,40,50,60,70]; // y de haut en bas
+// pos relatif : 0=C4(Do4), 1=D4, 2=E4, 3=F4, 4=G4(ligne médiane portée sol), etc.
+// y = 70 - pos*5  (pos augmente vers le haut)
+const sY=(pos)=>70-pos*5;
+const yToPos=(y)=>Math.round((70-y)/5);
+
+
+// ─── INSERT SECTION SHEET ─────────────────────────────────────────────────────
+function InsertSectionSheet({onInsert,onClose}){
+  const [type,setType]=useState('grid');
+  const [name,setName]=useState('');
+  const pill=(active)=>({
+    flex:1,background:active?'#1A1A1A':'transparent',color:active?'#F2EDE4':'#1A1A1A',
+    border:`1.5px solid ${active?'#1A1A1A':'#C0BAB0'}`,borderRadius:12,
+    padding:'18px 12px',cursor:'pointer',fontFamily:'inherit',
+    display:'flex',flexDirection:'column',alignItems:'center',gap:6,transition:'all 0.12s'
+  });
+  return(<Sheet onClose={onClose}>
+    <div style={{padding:'14px 20px 36px'}}>
+      <div style={{fontSize:10,fontWeight:700,color:'#8A847C',textTransform:'uppercase',
+        letterSpacing:1.4,marginBottom:16}}>Insérer une section</div>
+      <div style={{display:'flex',gap:8,marginBottom:20}}>
+        <button style={pill(type==='grid')} onClick={()=>setType('grid')}>
+          <span style={{fontSize:26,lineHeight:1}}>𝄈</span>
+          <span style={{fontSize:13,fontWeight:700}}>Grille</span>
+          <span style={{fontSize:10,color:type==='grid'?'#A09A90':'#8A847C'}}>Accords, mesures</span>
+        </button>
+        <button style={pill(type==='staff')} onClick={()=>setType('staff')}>
+          <span style={{fontSize:26,fontFamily:'serif',lineHeight:1}}>𝄞</span>
+          <span style={{fontSize:13,fontWeight:700}}>Portée libre</span>
+          <span style={{fontSize:10,color:type==='staff'?'#A09A90':'#8A847C'}}>Notes, dessin</span>
+        </button>
+        <button style={pill(type==='tab')} onClick={()=>setType('tab')}>
+          <span style={{fontSize:20,fontWeight:900,letterSpacing:'-1px',lineHeight:1.2}}>TAB</span>
+          <span style={{fontSize:13,fontWeight:700}}>Tablature</span>
+          <span style={{fontSize:10,color:type==='tab'?'#A09A90':'#8A847C'}}>Guitare, basse</span>
+        </button>
+      </div>
+      <div style={{marginBottom:16}}>
+        <div style={{fontSize:10,fontWeight:700,color:'#8A847C',textTransform:'uppercase',
+          letterSpacing:1.2,marginBottom:8}}>Nom de la section</div>
+        <input value={name} onChange={e=>setName(e.target.value)}
+          placeholder="A, B, Intro, Bridge…"
+          style={{width:'100%',padding:'12px 14px',border:'1.5px solid #D0CAC0',borderRadius:12,
+            fontSize:16,fontWeight:600,background:'#FAF8F4',fontFamily:'inherit',outline:'none',
+            boxSizing:'border-box'}}/>
+      </div>
+      <button onClick={()=>{onInsert(type,name.trim()||'Section');onClose();}}
+        style={{width:'100%',background:'#1A1A1A',color:'#F2EDE4',border:'none',
+          borderRadius:14,padding:'16px',fontSize:15,fontWeight:700,cursor:'pointer',fontFamily:'inherit'}}>
+        Insérer
+      </button>
+    </div>
+  </Sheet>);
+}
+
+// ─── STAFF SECTION VIEW ────────────────────────────────────────────────────────
+function StaffSectionView({section,onUpdate,onDelete,editMode=true}){
+  const [showSettings,setShowSettings]=useState(false);
+  const [drawing,setDrawing]=useState(false);
+  const [activeMi,setActiveMi]=useState(null); // mesure en cours de dessin
+  const [currentPath,setCurrentPath]=useState([]);
+  const [strokeColor,setStrokeColor]=useState('#1C1C1E');
+  const [strokeWidth,setStrokeWidth]=useState(2);
+  const svgRefs=useRef({});
+  const undoHistory=useRef([]);
+
+  const timeSig   = section.timeSig   || '4/4';
+  const clef      = section.clef      || 'treble';
+  const staffKey  = section.key       || 'C';
+  const showTimeSig = section.showTimeSig !== false;
+  const showKey     = section.showKey   !== false;
+
+  const COLS=4;
+  const ks=KEY_SIG[staffKey]||{t:'s',n:0};
+  const totalBeats=getBeatsInEighths(timeSig);
+  const SLOT_W=22;
+  const MWD=totalBeats*SLOT_W;
+  const CLEF_W=clef!=='none'?38:0;
+  const ACC_W=showKey&&clef!=='none'?Math.max(ks.n*10+6,4):0;
+  const TSW=showTimeSig?28:0;
+  const PREF_W=CLEF_W+ACC_W+TSW;
+  const INK='#1A1A1A';
+  const SHP_Y_S=[35,50,30,45,60,40,55];  // targets[30,45,25,40,55,35,50] + 5px baseline offset pour fontSize 15
+  const FLT_Y_S=[55,40,60,45,65,50,70];  // targets[50,35,55,40,60,45,65] + 5px baseline offset pour fontSize 15
+
+  function updateSection(patch){onUpdate({...section,...patch});}
+
+  function getSVGPt(e,svgEl){
+    const r=svgEl.getBoundingClientRect();
+    const scaleX=parseFloat(svgEl.getAttribute('width'))/r.width;
+    const scaleY=parseFloat(svgEl.getAttribute('height'))/r.height;
+    const src=e.touches?e.touches[0]:e;
+    return{x:(src.clientX-r.left)*scaleX,y:(src.clientY-r.top)*scaleY};
+  }
+
+  function pointsToPath(pts){
+    if(pts.length<2)return'';
+    return pts.map((p,i)=>(i===0?`M${p.x.toFixed(1)},${p.y.toFixed(1)}`:`L${p.x.toFixed(1)},${p.y.toFixed(1)}`)).join(' ');
+  }
+
+  function commitPath(mi){
+    if(currentPath.length<2){setDrawing(false);setCurrentPath([]);setActiveMi(null);return;}
+    undoHistory.current.push(section.measures.map(mm=>({...mm,annotations:[...(mm.annotations||[])]})));
+    const pd=pointsToPath(currentPath);
+    onUpdate({...section,measures:section.measures.map((mm,i)=>
+      i!==mi?mm:{...mm,annotations:[...(mm.annotations||[]),{path:pd,color:strokeColor,width:strokeWidth}]}
+    )});
+    setDrawing(false);setCurrentPath([]);setActiveMi(null);
+  }
+
+  function undoStroke(){
+    if(undoHistory.current.length===0)return;
+    const prev=undoHistory.current.pop();
+    onUpdate({...section,measures:prev});
+  }
+
+  function deleteMeasure(mi){
+    if(section.measures.length<=1)return;
+    undoHistory.current=[];
+    onUpdate({...section,measures:section.measures.filter((_,i)=>i!==mi)});
+  }
+
+  function clearAnnotations(mi){
+    onUpdate({...section,measures:section.measures.map((mm,i)=>
+      i!==mi?mm:{...mm,annotations:[]}
+    )});
+  }
+
+  function clearAll(){
+    onUpdate({...section,measures:section.measures.map(mm=>({...mm,annotations:[]}))});
+  }
+
+  function addMeasure(){
+    onUpdate({...section,measures:[...section.measures,mkStaffMeasure()]});
+  }
+
+  function renderPrefix(){
+    return(<g>
+      {clef==='treble'&&<text x={2} y={69} fontSize="56" fontFamily="serif" fill={INK}>𝄞</text>}
+      {clef==='bass'  &&<text x={2} y={63} fontSize="38" fontFamily="serif" fill={INK}>𝄢</text>}
+      {showKey&&clef!=='none'&&ks.t==='s'&&Array.from({length:ks.n}).map((_,i)=>(
+        <text key={i} x={CLEF_W+i*10} y={SHP_Y_S[i]} fontSize="15" fontFamily="serif" fill={INK}>♯</text>
+      ))}
+      {showKey&&clef!=='none'&&ks.t==='f'&&Array.from({length:ks.n}).map((_,i)=>(
+        <text key={i} x={CLEF_W+i*10} y={FLT_Y_S[i]} fontSize="15" fontFamily="serif" fill={INK}>♭</text>
+      ))}
+      {showTimeSig&&(<>
+        <text x={CLEF_W+ACC_W+TSW/2} y={47} fontSize="18" fontWeight="bold" fontFamily="serif" fill={INK} textAnchor="middle">
+          {timeSig.split('/')[0]}
+        </text>
+        <text x={CLEF_W+ACC_W+TSW/2} y={67} fontSize="18" fontWeight="bold" fontFamily="serif" fill={INK} textAnchor="middle">
+          {timeSig.split('/')[1]}
+        </text>
+      </>)}
+    </g>);
+  }
+
+  function renderMeasureSVG(mi,isFirst,interactive=true){
+    const m=section.measures[mi];
+    const annotations=(m?.annotations)||[];
+    const svgW=(isFirst?PREF_W:0)+MWD+1;
+    const handlers=interactive?{
+      onPointerDown:e=>{
+        e.preventDefault();
+        const svgEl=svgRefs.current[mi];if(!svgEl)return;
+        svgEl.setPointerCapture(e.pointerId);
+        setDrawing(true);setActiveMi(mi);
+        setCurrentPath([getSVGPt(e,svgEl)]);
+      },
+      onPointerMove:e=>{
+        if(!drawing||activeMi!==mi)return;
+        e.preventDefault();
+        const svgEl=svgRefs.current[mi];if(!svgEl)return;
+        setCurrentPath(p=>[...p,getSVGPt(e,svgEl)]);
+      },
+      onPointerUp:e=>{if(activeMi===mi)commitPath(mi);},
+      onPointerCancel:()=>{setDrawing(false);setCurrentPath([]);setActiveMi(null);},
+    }:{};
+
+    return(
+      <svg key={mi}
+        ref={interactive?(el=>{if(el)svgRefs.current[mi]=el;}):undefined}
+        width={svgW} height={STAFF_H}
+        style={{flexShrink:0,overflow:'visible',
+          cursor:interactive?'crosshair':'default',
+          touchAction:interactive?'none':'auto',userSelect:'none'}}
+        {...handlers}>
+
+        {/* Lignes de portée */}
+        {STAFF_LINES.map(ly=>(
+          <line key={ly} x1={0} x2={svgW} y1={ly} y2={ly} stroke={INK} strokeWidth="1" opacity="0.6"/>
+        ))}
+
+        {/* Préfixe (clef + armure + chiffrage) — 1ère mesure seulement */}
+        {isFirst&&renderPrefix()}
+
+        {/* Barre de fin de mesure */}
+        <line x1={svgW-1} y1={STAFF_LINES[0]} x2={svgW-1} y2={STAFF_LINES[4]}
+          stroke={INK} strokeWidth="1.3"/>
+
+        {/* Annotations sauvegardées */}
+        {annotations.map((ann,ai)=>(
+          <path key={ai} d={ann.path} fill="none" stroke={ann.color||'#1C1C1E'}
+            strokeWidth={ann.width||2} strokeLinecap="round" strokeLinejoin="round"/>
+        ))}
+
+        {/* Tracé en cours (mode édition seulement) */}
+        {interactive&&drawing&&activeMi===mi&&currentPath.length>1&&(
+          <path d={pointsToPath(currentPath)} fill="none" stroke={strokeColor}
+            strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round"/>
+        )}
+      </svg>
+    );
+  }
+
+  const rows=[];
+  for(let i=0;i<section.measures.length;i+=COLS)
+    rows.push(section.measures.slice(i,i+COLS).map((_,j)=>i+j));
+
+  const pill=(active,col='#1A1A1A')=>({
+    background:active?col:'transparent',color:active?'#F2EDE4':col==='#1A1A1A'?'#1A1A1A':'#555',
+    border:`1.5px solid ${active?col:'#D0CAC0'}`,borderRadius:100,
+    padding:'6px 10px',fontSize:12,fontWeight:700,cursor:'pointer',fontFamily:'inherit',transition:'all 0.1s'
+  });
+
+  // ── MODE LECTURE ──
+  if(!editMode){
+    return(
+      <div style={{background:'#FAFAF8',overflow:'hidden',display:'flex',flexDirection:'column'}}>
+        {/* Ligne nom + chiffrage */}
+        <div style={{display:'flex',alignItems:'center',gap:6,padding:'3px 10px',
+          background:'rgba(255,255,255,0.9)',borderBottom:'0.5px solid rgba(0,0,0,0.07)',flexShrink:0}}>
+          <span style={{fontSize:10,fontWeight:700,color:'#1C1C1E',flex:1}}>{section.name}</span>
+          {showTimeSig&&<span style={{fontSize:9,color:'#8A847C',fontWeight:600}}>{timeSig}</span>}
+        </div>
+        {/* Portée compacte sur une ligne horizontale */}
+        <div style={{overflowX:'auto',padding:'4px 4px 4px',background:'#FAFAF8',flexShrink:0}}>
+          <div style={{display:'flex',alignItems:'flex-start',minWidth:'fit-content'}}>
+            {section.measures.map((m,mi)=>renderMeasureSVG(mi,mi===0,false))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── MODE ÉDITION ──
+  return(
+    <div style={{background:'#FFFFFF',overflow:'visible',
+      borderTop:'0.5px solid rgba(0,0,0,0.08)',borderBottom:'0.5px solid rgba(0,0,0,0.08)'}}>
+
+      {/* ── En-tête ── */}
+      <div style={{display:'flex',alignItems:'center',gap:8,padding:'8px 14px',
+        borderBottom:'0.5px solid rgba(0,0,0,0.07)'}}>
+        <span style={{fontSize:12,fontWeight:700,flex:1,color:'#1C1C1E'}}>{section.name}</span>
+        {showTimeSig&&<span style={{fontSize:11,color:'#8A847C',fontWeight:600}}>{timeSig}</span>}
+        <button onClick={()=>setShowSettings(true)}
+          style={{background:'transparent',border:'1.5px solid #D0CAC0',
+            borderRadius:100,padding:'3px 10px',fontSize:11,cursor:'pointer',
+            fontFamily:'inherit',color:'#6B6560',fontWeight:600}}>
+          Modifier
+        </button>
+        <button onClick={clearAll}
+          style={{background:'transparent',border:'1px solid #FFBBBB',borderRadius:100,
+            padding:'3px 10px',fontSize:11,cursor:'pointer',fontFamily:'inherit',color:'#C0392B',fontWeight:600}}>
+          Effacer
+        </button>
+        {onDelete&&(
+          <button onClick={onDelete}
+            style={{background:'transparent',border:'1px solid #FFBBBB',borderRadius:100,
+              padding:'3px 10px',fontSize:11,cursor:'pointer',fontFamily:'inherit',color:'#C0392B',fontWeight:600}}>
+            × Section
+          </button>
+        )}
+      </div>
+
+      {/* ── Panneau volant de personnalisation (flottant, non-bloquant) ── */}
+      {showSettings&&(
+        <div style={{position:'fixed',bottom:56,left:10,right:10,maxWidth:460,margin:'0 auto',
+          background:'rgba(240,236,228,0.97)',backdropFilter:'blur(18px)',WebkitBackdropFilter:'blur(18px)',
+          borderRadius:18,padding:'14px 18px 20px',
+          boxShadow:'0 8px 40px rgba(0,0,0,0.22),0 2px 8px rgba(0,0,0,0.10)',
+          zIndex:350,maxHeight:'54vh',overflowY:'auto'}}
+          onClick={e=>e.stopPropagation()}>
+
+          {/* En-tête panneau */}
+          <div style={{display:'flex',alignItems:'center',marginBottom:14}}>
+            <span style={{fontSize:11,fontWeight:700,color:'#8A847C',textTransform:'uppercase',
+              letterSpacing:1.2,flex:1}}>Portée — {section.name}</span>
+            <button onClick={()=>setShowSettings(false)}
+              style={{background:'rgba(0,0,0,0.07)',border:'none',borderRadius:'50%',
+                width:26,height:26,display:'flex',alignItems:'center',justifyContent:'center',
+                cursor:'pointer',color:'#6B6560',fontSize:16,fontWeight:700,fontFamily:'inherit'}}>×</button>
+          </div>
+
+          {/* Clef */}
+          <div style={{marginBottom:14}}>
+            <div style={{fontSize:9,fontWeight:700,color:'#8A847C',textTransform:'uppercase',
+              letterSpacing:1.2,marginBottom:7}}>Clef</div>
+            <div style={{display:'flex',gap:6}}>
+              {[{v:'treble',l:'𝄞 Sol'},{v:'bass',l:'𝄢 Fa'},{v:'none',l:'— Aucune'}].map(opt=>(
+                <button key={opt.v} style={pill(clef===opt.v)}
+                  onClick={()=>updateSection({clef:opt.v})}>{opt.l}</button>
+              ))}
+            </div>
+          </div>
+
+          {/* Armure */}
+          {clef!=='none'&&(
+            <div style={{marginBottom:14}}>
+              <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:7}}>
+                <div style={{fontSize:9,fontWeight:700,color:'#8A847C',textTransform:'uppercase',letterSpacing:1.2}}>
+                  Armure
+                </div>
+                <button onClick={()=>updateSection({showKey:!showKey})}
+                  style={{fontSize:10,color:showKey?'#007AFF':'#8A847C',background:'none',border:'none',
+                    cursor:'pointer',fontFamily:'inherit',fontWeight:600}}>
+                  {showKey?'Affichée':'Masquée'}
+                </button>
+              </div>
+              {showKey&&(
+                <div style={{display:'flex',gap:5,flexWrap:'wrap'}}>
+                  {ALL_KEYS.map(k=>(
+                    <button key={k} style={{...pill(staffKey===k),padding:'5px 9px',fontSize:12}}
+                      onClick={()=>updateSection({key:k})}>{k}</button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Chiffrage */}
+          <div style={{marginBottom:14}}>
+            <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:7}}>
+              <div style={{fontSize:9,fontWeight:700,color:'#8A847C',textTransform:'uppercase',letterSpacing:1.2}}>
+                Chiffrage
+              </div>
+              <button onClick={()=>updateSection({showTimeSig:!showTimeSig})}
+                style={{fontSize:10,color:showTimeSig?'#007AFF':'#8A847C',background:'none',border:'none',
+                  cursor:'pointer',fontFamily:'inherit',fontWeight:600}}>
+                {showTimeSig?'Affiché':'Masqué'}
+              </button>
+            </div>
+            {showTimeSig&&(
+              <div style={{display:'flex',gap:5,flexWrap:'wrap'}}>
+                {TIME_SIGS.map(ts=>(
+                  <button key={ts} style={{...pill(timeSig===ts),padding:'5px 10px',fontSize:12}}
+                    onClick={()=>updateSection({timeSig:ts})}>{ts}</button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Traits de dessin */}
+          <div style={{paddingTop:12,borderTop:'0.5px solid rgba(0,0,0,0.1)'}}>
+            <div style={{fontSize:9,fontWeight:700,color:'#8A847C',textTransform:'uppercase',
+              letterSpacing:1.2,marginBottom:8}}>Traits</div>
+            <div style={{display:'flex',gap:6,marginBottom:10}}>
+              {[{v:1,l:'Fine'},{v:2,l:'Moyen'},{v:4,l:'Épais'}].map(opt=>(
+                <button key={opt.v}
+                  style={{background:strokeWidth===opt.v?'#1A1A1A':'transparent',
+                    color:strokeWidth===opt.v?'#F2EDE4':'#6B6560',
+                    border:`1.5px solid ${strokeWidth===opt.v?'#1A1A1A':'#D0CAC0'}`,
+                    borderRadius:100,padding:'5px 11px',fontSize:11,fontWeight:600,
+                    cursor:'pointer',fontFamily:'inherit'}}
+                  onClick={()=>setStrokeWidth(opt.v)}>{opt.l}</button>
+              ))}
+            </div>
+            <div style={{display:'flex',gap:8,alignItems:'center'}}>
+              {['#1C1C1E','#C0392B','#1A6BBF','#2E7D32'].map(col=>(
+                <button key={col} onClick={()=>setStrokeColor(col)}
+                  style={{width:26,height:26,borderRadius:'50%',background:col,border:'none',cursor:'pointer',
+                    flexShrink:0,
+                    boxShadow:strokeColor===col?`0 0 0 2.5px #FFF, 0 0 0 4.5px ${col}`:'none',
+                    transition:'box-shadow 0.12s'}}/>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Portée ── */}
+      <div style={{overflowX:'auto',padding:'8px 4px 4px',background:'#FAFAF8'}}>
+        {rows.map((rowMis,ri)=>(
+          <div key={ri} style={{display:'flex',alignItems:'flex-start',marginBottom:4,minWidth:'fit-content'}}>
+            {ri>0&&<div style={{width:PREF_W,flexShrink:0}}/>}
+            {rowMis.map((mi,rmi)=>(
+              <div key={mi} style={{position:'relative',flexShrink:0}}>
+                {section.measures.length>1&&(
+                  <button onClick={()=>deleteMeasure(mi)}
+                    style={{position:'absolute',top:3,right:3,zIndex:10,
+                      background:'rgba(200,57,45,0.12)',border:'none',borderRadius:'50%',
+                      width:18,height:18,fontSize:11,cursor:'pointer',color:'#C0392B',
+                      display:'flex',alignItems:'center',justifyContent:'center',lineHeight:1,
+                      fontWeight:700,padding:0}}>×</button>
+                )}
+                {renderMeasureSVG(mi,ri===0&&rmi===0)}
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+
+      {/* ── Contrôles de dessin ── */}
+      <div style={{borderTop:'0.5px solid rgba(0,0,0,0.07)',padding:'10px 14px',
+        background:'rgba(0,0,0,0.01)',display:'flex',alignItems:'center',gap:10,flexWrap:'wrap'}}>
+
+        {/* Épaisseur */}
+        <div style={{display:'flex',gap:5,alignItems:'center'}}>
+          {[{v:1,l:'Fine'},{v:2,l:'Moyen'},{v:4,l:'Épais'}].map(opt=>(
+            <button key={opt.v}
+              style={{background:strokeWidth===opt.v?'#1A1A1A':'transparent',
+                color:strokeWidth===opt.v?'#F2EDE4':'#6B6560',
+                border:`1.5px solid ${strokeWidth===opt.v?'#1A1A1A':'#D0CAC0'}`,
+                borderRadius:100,padding:'3px 10px',fontSize:11,fontWeight:600,
+                cursor:'pointer',fontFamily:'inherit'}}
+              onClick={()=>setStrokeWidth(opt.v)}>{opt.l}</button>
+          ))}
+        </div>
+
+        {/* Couleur */}
+        <div style={{display:'flex',gap:6,alignItems:'center'}}>
+          {['#1C1C1E','#C0392B','#1A6BBF','#2E7D32'].map(col=>(
+            <button key={col} onClick={()=>setStrokeColor(col)}
+              style={{width:22,height:22,borderRadius:'50%',background:col,border:'none',cursor:'pointer',
+                boxShadow:strokeColor===col?`0 0 0 2px #FFF, 0 0 0 4px ${col}`:'none',
+                transition:'box-shadow 0.12s'}}/>
+          ))}
+        </div>
+
+        <div style={{marginLeft:'auto',display:'flex',gap:6}}>
+          <button onClick={undoStroke}
+            style={{background:'transparent',border:'1px solid #D0CAC0',
+              borderRadius:100,padding:'4px 12px',fontSize:11,cursor:'pointer',
+              fontFamily:'inherit',color:'#6B6560',fontWeight:600}}>
+            ↩ Annuler
+          </button>
+          <button onClick={addMeasure}
+            style={{background:'transparent',border:'1px solid #D0CAC0',
+              borderRadius:100,padding:'4px 12px',fontSize:11,cursor:'pointer',
+              fontFamily:'inherit',color:'#6B6560',fontWeight:600}}>
+            + Mesure
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+// ─── HOME SCREEN ─────────────────────────────────────────────────────────────
+function HomeScreen({onNavigate}){
+  const items=[{l:'Mes morceaux',k:'library'},{l:'Préférences',k:'prefs'}];
+  return(<div style={{height:'100vh',display:'flex',flexDirection:'column',alignItems:'center',
+    justifyContent:'center',padding:'40px 40px 60px',background:'#F2F0EB'}}>
+    <div style={{display:'flex',flexDirection:'column',gap:12,width:'100%',maxWidth:340,marginBottom:50}}>
+      {items.map((item,i)=>(
+        <button key={item.k}
+          style={{background:'transparent',border:'2px solid #1A1A1A',color:'#1A1A1A',
+            padding:'17px 32px',borderRadius:100,fontSize:17,fontWeight:700,cursor:'pointer',
+            fontFamily:'inherit',textAlign:'center',width:'100%',transition:'all 0.15s'}}
+          onClick={()=>onNavigate(item.k)}>
+          {item.l}
+        </button>
+      ))}
+    </div>
+    <div style={{display:'flex',flexDirection:'column',alignItems:'center',opacity:0.85}}>
+      <SoupirLogo size={68}/>
+      <span style={{marginTop:10,fontSize:11,fontWeight:700,letterSpacing:'0.08em',
+        color:'#8A847C',fontFamily:'inherit'}}>{APP_VERSION}</span>
+    </div>
+  </div>);
+}
+
+// ─── LIBRARY SCREEN ───────────────────────────────────────────────────────────
+function LibraryScreen({library,activePieceId,onSelect,onBack,onCreate}){
+  return(<div style={{height:'100vh',display:'flex',flexDirection:'column',background:'#F2F0EB'}}>
+    <div style={{padding:'18px 24px 14px',borderBottom:'1px solid #D0CAC0',
+      display:'flex',alignItems:'center',gap:14,background:'rgba(255,255,255,0.9)'}}>
+      <button onClick={onBack}
+        style={{background:'transparent',border:'none',color:'#1A1A1A',fontSize:20,
+          cursor:'pointer',padding:'4px',fontFamily:'inherit'}}>←</button>
+      <span style={{fontSize:18,fontWeight:800,letterSpacing:'-0.4px'}}>Mes morceaux</span>
+    </div>
+    <div style={{flex:1,overflowY:'auto',padding:'12px 20px'}}>
+      {library.map(p=>(
+        <div key={p.id} onClick={()=>onSelect(p)}
+          style={{display:'flex',alignItems:'center',justifyContent:'space-between',
+            padding:'16px 18px',borderRadius:14,marginBottom:6,cursor:'pointer',
+            background:p.id===activePieceId?'#1A1A1A':'#FFFFFF',
+            border:`1.5px solid ${p.id===activePieceId?'#1A1A1A':'#D0CAC0'}`,transition:'all 0.12s'}}>
+          <div>
+            <div style={{fontSize:16,fontWeight:700,color:p.id===activePieceId?'#F2EDE4':'#1A1A1A'}}>{p.title}</div>
+            <div style={{fontSize:12,color:p.id===activePieceId?'#A09A90':'#8A847C',marginTop:3}}>
+              {p.key} · {p.bpm} BPM · {p.timeSig||'4/4'}
+            </div>
+          </div>
+          <span style={{fontSize:18,color:p.id===activePieceId?'#F2EDE4':'#C0BAB0'}}>→</span>
+        </div>
+      ))}
+      <div onClick={onCreate}
+        style={{padding:'16px 18px',borderRadius:14,border:'1.5px dashed #C0BAB0',
+          display:'flex',alignItems:'center',gap:10,cursor:'pointer',marginTop:4,
+          background:'transparent'}}>
+        <span style={{fontSize:22,color:'#C0BAB0'}}>+</span>
+        <span style={{fontSize:15,color:'#8A847C',fontWeight:500}}>Nouveau morceau</span>
+      </div>
+    </div>
+  </div>);
+}
+
+// ─── PREFERENCES SCREEN ───────────────────────────────────────────────────────
+function PreferencesScreen({prefs,onUpdate,onBack}){
+  const rows=[
+    {key:'minor',label:'Accord mineur',opts:[['m','Cm'],['−','C−']],desc:'Préfixe pour les accords mineurs'},
+    {key:'dim',label:'Accord diminué',opts:[['°','C°'],['dim','Cdim']],desc:'Notation des accords diminués'},
+    {key:'maj7',label:'Septième majeure',opts:[['maj7','Cmaj7'],['Δ','CΔ']],desc:'Notation de la 7ème majeure'},
+    {key:'hdim',label:'Demi-diminué',opts:[['ø','Cø'],['m7b5','Cm7b5']],desc:'Notation demi-diminué'},
+    {key:'aug',label:'Augmenté',opts:[['+','C+'],['aug','Caug']],desc:'Notation augmenté'},
+    {key:'autoHarmonize',label:'Auto-harmonisation',opts:[['true','Activée'],['false','Désactivée']],desc:'Qualité automatique selon la gamme'},
+    {key:'accentColor',label:'Couleur des signes',opts:[['black','Noir'],['red','Rouge']],desc:'Couleur des reprises et coda'},
+  ];
+  return(<div style={{height:'100vh',display:'flex',flexDirection:'column',background:'#F2F0EB'}}>
+    <div style={{padding:'18px 24px 14px',borderBottom:'1px solid #D0CAC0',
+      display:'flex',alignItems:'center',gap:14,background:'rgba(255,255,255,0.9)'}}>
+      <button onClick={onBack}
+        style={{background:'transparent',border:'none',color:'#1A1A1A',fontSize:20,
+          cursor:'pointer',padding:'4px',fontFamily:'inherit'}}>←</button>
+      <span style={{fontSize:18,fontWeight:800,letterSpacing:'-0.4px'}}>Préférences</span>
+    </div>
+    <div style={{flex:1,overflowY:'auto',padding:'20px'}}>
+      {rows.map(row=>(
+        <div key={row.key} style={{marginBottom:24}}>
+          <div style={{fontSize:14,fontWeight:700,marginBottom:3}}>{row.label}</div>
+          <div style={{fontSize:11,color:'#8A847C',marginBottom:10}}>{row.desc}</div>
+          <div style={{display:'flex',gap:10}}>
+            {row.opts.map(([val,example])=>(
+              <button key={val} onClick={()=>onUpdate({...prefs,[row.key]:row.key==='autoHarmonize'?val==='true':val})}
+                style={{flex:1,background:String(prefs[row.key])===val?'#1A1A1A':'#FFFFFF',
+                  color:String(prefs[row.key])===val?'#F2EDE4':'#1A1A1A',
+                  border:`1.5px solid ${String(prefs[row.key])===val?'#1A1A1A':'#D0CAC0'}`,
+                  borderRadius:12,padding:'14px 12px',cursor:'pointer',fontFamily:'inherit',
+                  display:'flex',flexDirection:'column',alignItems:'center',gap:5,transition:'all 0.12s'}}>
+                <span style={{fontSize:18,fontWeight:900}}>{example}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>);
+}
+
+// ─── FRET PICKER ──────────────────────────────────────────────────────────────
+function FretPicker({strings,si,current,onConfirm,onClose}){
+  const [val,setVal]=useState(current!==null&&current!==undefined?String(current):'');
+  function confirm(v){
+    if(v===''||v===null){onConfirm(null);}
+    else if(v==='x'){onConfirm('x');}
+    else{const n=parseInt(v,10);if(!isNaN(n)&&n>=0&&n<=24)onConfirm(n);else onConfirm(null);}
+  }
+  return(<Sheet onClose={onClose}>
+    <div style={{padding:'14px 20px 36px'}}>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:14}}>
+        <div style={{display:'flex',alignItems:'baseline',gap:10}}>
+          <span style={{fontSize:11,color:'#8A847C',fontWeight:600}}>Frette — corde {strings[si]}</span>
+          <span style={{fontSize:36,fontWeight:900,letterSpacing:'-1px',minWidth:60,lineHeight:1}}>
+            {val||<span style={{color:'#C0BAB0'}}>—</span>}
+          </span>
+        </div>
+        <button onClick={onClose} style={{background:'transparent',border:'none',color:'#8A847C',fontSize:24,cursor:'pointer',fontFamily:'inherit'}}>×</button>
+      </div>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:6,marginBottom:14}}>
+        {[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24].map(n=>(
+          <button key={n} onClick={()=>setVal(String(n))}
+            style={{background:val===String(n)?'#1A1A1A':'transparent',
+              color:val===String(n)?'#F2EDE4':'#1A1A1A',
+              border:`1.5px solid ${val===String(n)?'#1A1A1A':'#C0BAB0'}`,
+              borderRadius:8,padding:'9px 4px',fontSize:12,fontWeight:700,
+              cursor:'pointer',fontFamily:'inherit'}}>{n}</button>
+        ))}
+        <button onClick={()=>setVal('x')}
+          style={{background:val==='x'?'#C0392B':'transparent',
+            color:val==='x'?'#FFFFFF':'#C0392B',
+            border:`1.5px solid ${val==='x'?'#C0392B':'#FFBBBB'}`,
+            borderRadius:8,padding:'9px 4px',fontSize:12,fontWeight:700,
+            cursor:'pointer',fontFamily:'inherit'}}>✕</button>
+      </div>
+      <div style={{display:'flex',gap:10}}>
+        <button onClick={()=>confirm('')}
+          style={{flex:1,background:'transparent',border:'1.5px solid #D0CAC0',borderRadius:100,
+            padding:'11px 0',fontSize:13,fontWeight:700,cursor:'pointer',fontFamily:'inherit',color:'#8A847C'}}>
+          Effacer
+        </button>
+        <button onClick={()=>confirm(val)}
+          style={{flex:2,background:'#1A1A1A',border:'none',borderRadius:100,
+            padding:'11px 0',fontSize:14,fontWeight:700,cursor:'pointer',fontFamily:'inherit',color:'#F2EDE4'}}>
+          OK
+        </button>
+      </div>
+    </div>
+  </Sheet>);
+}
+
+// ─── TAB SECTION VIEW (composants rythmiques réservés pour une prochaine version)
+
+// ─── TAB SECTION VIEW ─────────────────────────────────────────────────────────
+function TabSectionView({section,onUpdate,onDelete,editMode=true}){
+  const [selCell,setSelCell]=useState(null);
+  const [showSettings,setShowSettings]=useState(false);
+  const instrument=section.instrument||'guitar';
+  const strings=TAB_STR[instrument]||TAB_STR.guitar;
+  const nStrings=strings.length;
+
+  function updateSection(patch){onUpdate({...section,...patch});}
+  function setBeatFret(mi,bi,si,fret){
+    onUpdate({...section,measures:section.measures.map((m,mIdx)=>mIdx!==mi?m:{
+      ...m,beats:m.beats.map((b,bIdx)=>bIdx!==bi?b:{
+        ...b,strings:b.strings.map((v,sIdx)=>sIdx!==si?v:fret)
+      })
+    })});
+  }
+  function addBeat(mi){
+    onUpdate({...section,measures:section.measures.map((m,mIdx)=>mIdx!==mi?m:{
+      ...m,beats:[...m.beats,mkTabBeat(nStrings)]
+    })});
+  }
+  function removeMeasure(mi){
+    if(section.measures.length<=1)return;
+    onUpdate({...section,measures:section.measures.filter((_,mIdx)=>mIdx!==mi)});
+  }
+  function addMeasure(){
+    onUpdate({...section,measures:[...section.measures,mkTabMeasure(nStrings)]});
+  }
+  function renderTabSVG(){
+    const SH=13,BW=30,LP=26,TP=5,BOT=20,BARW=10;
+    const INK='#1A1A1A';
+    const W=LP+section.measures.reduce((s,m)=>s+m.beats.length*BW+BARW,0)+BARW+4;
+    const H=TP+(nStrings-1)*SH+BOT;
+    const els=[];
+    strings.forEach((s,si)=>{
+      els.push(<text key={`lbl${si}`} x={LP-5} y={TP+si*SH+4} fontSize={9} textAnchor="end" fill="#8A847C" fontWeight="600">{s}</text>);
+    });
+    els.push(<line key="bar0" x1={LP} y1={TP} x2={LP} y2={TP+(nStrings-1)*SH} stroke={INK} strokeWidth={1.5}/>);
+    let xc=LP;
+    section.measures.forEach((m,mi)=>{
+      const mW=m.beats.length*BW+BARW;
+      strings.forEach((_,si)=>{
+        els.push(<line key={`str${mi}${si}`} x1={xc} y1={TP+si*SH} x2={xc+mW} y2={TP+si*SH} stroke="#D0CAC0" strokeWidth={0.8}/>);
+      });
+      const bXs=m.beats.map((_,bi)=>xc+bi*BW+BW/2);
+      m.beats.forEach((beat,bi)=>{
+        const cx=bXs[bi];
+        beat.strings.forEach((fret,si)=>{
+          if(fret===null)return;
+          const txt=fret==='x'?'×':String(fret);
+          const tw=txt.length>1?14:9;
+          els.push(<rect key={`bg${mi}${bi}${si}`} x={cx-tw/2} y={TP+si*SH-6} width={tw} height={12} fill="#FAFAF8"/>);
+          els.push(<text key={`fr${mi}${bi}${si}`} x={cx} y={TP+si*SH+4} fontSize={10} textAnchor="middle"
+            fill={fret==='x'?'#C0392B':INK} fontWeight="700">{txt}</text>);
+        });
+        els.push(<text key={`bn${mi}${bi}`} x={cx} y={TP+(nStrings-1)*SH+13} fontSize={8} textAnchor="middle"
+          fill="#C0BAB0" fontWeight="600">{bi+1}</text>);
+      });
+      xc+=m.beats.length*BW;
+      if(m.barAfter==='final'){
+        els.push(<line key={`bf${mi}a`} x1={xc} y1={TP} x2={xc} y2={TP+(nStrings-1)*SH} stroke={INK} strokeWidth={1.5}/>);
+        els.push(<line key={`bf${mi}b`} x1={xc+3} y1={TP} x2={xc+3} y2={TP+(nStrings-1)*SH} stroke={INK} strokeWidth={4}/>);
+      }else{
+        els.push(<line key={`bar${mi}`} x1={xc} y1={TP} x2={xc} y2={TP+(nStrings-1)*SH} stroke={INK} strokeWidth={1.5}/>);
+      }
+      xc+=BARW;
+    });
+    return(<svg width={W} height={H} style={{display:'block'}}>{els}</svg>);
+  }
+
+  const pill=(active,col='#1A1A1A')=>({
+    background:active?col:'transparent',color:active?'#F2EDE4':'#1A1A1A',
+    border:`1.5px solid ${active?col:'#C0BAB0'}`,borderRadius:100,
+    padding:'8px 16px',fontWeight:700,fontSize:13,cursor:'pointer',
+    transition:'all 0.1s',fontFamily:'inherit',
+  });
+
+  if(!editMode){
+    return(
+      <div style={{background:'#FAFAF8',overflow:'hidden',display:'flex',flexDirection:'column'}}>
+        <div style={{display:'flex',alignItems:'center',gap:6,padding:'3px 10px',
+          background:'rgba(255,255,255,0.9)',borderBottom:'0.5px solid rgba(0,0,0,0.07)',flexShrink:0}}>
+          <span style={{fontSize:10,fontWeight:700,color:'#1C1C1E',flex:1}}>{section.name}</span>
+          <span style={{fontSize:9,color:'#8A847C',fontWeight:600,textTransform:'uppercase',letterSpacing:0.5}}>Tab · {instrument==='bass'?'Basse':'Guitare'}</span>
+        </div>
+        <div style={{overflowX:'auto',padding:'6px 8px 8px',background:'#FAFAF8',flexShrink:0}}>
+          {renderTabSVG()}
+        </div>
+      </div>
+    );
+  }
+
+  const SH=24,BW=36;
+  return(
+    <div style={{background:'#FFFFFF',overflow:'visible',
+      borderTop:'0.5px solid rgba(0,0,0,0.08)',borderBottom:'0.5px solid rgba(0,0,0,0.08)'}}>
+      <div style={{display:'flex',alignItems:'center',gap:8,padding:'8px 14px',
+        borderBottom:'0.5px solid rgba(0,0,0,0.07)'}}>
+        <span style={{fontSize:12,fontWeight:700,flex:1,color:'#1C1C1E'}}>{section.name}</span>
+        <span style={{fontSize:10,color:'#8A847C',fontWeight:700,textTransform:'uppercase',letterSpacing:0.5}}>
+          Tab · {instrument==='bass'?'Basse':'Guitare'}
+        </span>
+        <button onClick={()=>setShowSettings(true)}
+          style={{background:'transparent',border:'1.5px solid #D0CAC0',
+            borderRadius:100,padding:'3px 10px',fontSize:11,cursor:'pointer',
+            fontFamily:'inherit',color:'#6B6560',fontWeight:600}}>Modifier</button>
+        {onDelete&&(
+          <button onClick={onDelete}
+            style={{background:'transparent',border:'1px solid #FFBBBB',borderRadius:100,
+              padding:'3px 10px',fontSize:11,cursor:'pointer',fontFamily:'inherit',color:'#C0392B',fontWeight:600}}>
+            × Section</button>
+        )}
+      </div>
+
+      {showSettings&&(
+        <div style={{position:'fixed',bottom:56,left:10,right:10,maxWidth:460,margin:'0 auto',
+          background:'rgba(240,236,228,0.97)',backdropFilter:'blur(18px)',WebkitBackdropFilter:'blur(18px)',
+          borderRadius:18,padding:'14px 18px 20px',
+          boxShadow:'0 8px 40px rgba(0,0,0,0.22),0 2px 8px rgba(0,0,0,0.10)',zIndex:350}}
+          onClick={e=>e.stopPropagation()}>
+          <div style={{display:'flex',alignItems:'center',marginBottom:14}}>
+            <span style={{fontSize:11,fontWeight:700,color:'#8A847C',textTransform:'uppercase',
+              letterSpacing:1.2,flex:1}}>Tablature — {section.name}</span>
+            <button onClick={()=>setShowSettings(false)}
+              style={{background:'rgba(0,0,0,0.07)',border:'none',borderRadius:'50%',
+                width:26,height:26,display:'flex',alignItems:'center',justifyContent:'center',
+                cursor:'pointer',color:'#6B6560',fontSize:16,fontWeight:700,fontFamily:'inherit'}}>×</button>
+          </div>
+          <div style={{fontSize:9,fontWeight:700,color:'#8A847C',textTransform:'uppercase',letterSpacing:1.2,marginBottom:8}}>Instrument</div>
+          <div style={{display:'flex',gap:8,marginBottom:16}}>
+            {[{v:'guitar',l:'🎸 Guitare (6)'},{v:'bass',l:'🎸 Basse (4)'}].map(opt=>(
+              <button key={opt.v} style={pill(instrument===opt.v)}
+                onClick={()=>{
+                  const newN=opt.v==='bass'?4:6;
+                  updateSection({instrument:opt.v,measures:section.measures.map(m=>({
+                    ...m,beats:m.beats.map(b=>({...b,strings:Array(newN).fill(null)}))
+                  }))});
+                  setShowSettings(false);
+                }}>{opt.l}</button>
+            ))}
+          </div>
+          <div style={{fontSize:9,fontWeight:700,color:'#8A847C',textTransform:'uppercase',letterSpacing:1.2,marginBottom:8}}>Mesures</div>
+          <button onClick={()=>{addMeasure();setShowSettings(false);}} style={pill(false)}>+ Mesure</button>
+        </div>
+      )}
+
+      <div style={{overflowX:'auto',padding:'10px 8px 14px',background:'#FAFAF8'}}>
+        <div style={{display:'flex',alignItems:'flex-start',minWidth:'fit-content'}}>
+          <div style={{display:'flex',flexDirection:'column',paddingRight:4,flexShrink:0}}>
+            {strings.map((s,si)=>(
+              <div key={si} style={{height:SH,display:'flex',alignItems:'center',
+                fontSize:10,fontWeight:700,color:'#8A847C',width:18,justifyContent:'flex-end'}}>{s}</div>
+            ))}
+            <div style={{height:18}}/>
+          </div>
+          <div style={{width:2,background:'#1A1A1A',alignSelf:'stretch',flexShrink:0,marginBottom:18,borderRadius:1}}/>
+          {section.measures.map((m,mi)=>(
+            <React.Fragment key={mi}>
+              <div style={{display:'flex',flexDirection:'column',position:'relative'}}>
+                {section.measures.length>1&&(
+                  <button onClick={()=>removeMeasure(mi)}
+                    style={{position:'absolute',top:-8,left:'50%',transform:'translateX(-50%)',
+                      zIndex:10,background:'rgba(200,57,45,0.12)',border:'none',borderRadius:'50%',
+                      width:16,height:16,fontSize:10,cursor:'pointer',color:'#C0392B',
+                      display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700,padding:0}}>×</button>
+                )}
+                <div style={{display:'flex'}}>
+                  {m.beats.map((beat,bi)=>(
+                    <div key={bi} style={{display:'flex',flexDirection:'column'}}>
+                      {strings.map((_s,si)=>{
+                        const isSel=selCell&&selCell.mi===mi&&selCell.bi===bi&&selCell.si===si;
+                        const fret=beat.strings[si];
+                        const disp=fret===null?'':(fret==='x'?'×':String(fret));
+                        return(
+                          <div key={si} onClick={()=>setSelCell({mi,bi,si})}
+                            style={{width:BW,height:SH,display:'flex',alignItems:'center',justifyContent:'center',
+                              position:'relative',cursor:'pointer',
+                              background:isSel?'rgba(0,122,255,0.08)':'transparent',borderRadius:4}}>
+                            <div style={{position:'absolute',left:0,right:0,top:'50%',transform:'translateY(-50%)',
+                              height:1,background:'#D0CAC0',zIndex:0}}/>
+                            {disp?(
+                              <div style={{position:'relative',zIndex:1,background:'#FFFFFF',
+                                borderRadius:3,padding:'0 3px',fontSize:11,fontWeight:700,
+                                color:fret==='x'?'#C0392B':'#1A1A1A',minWidth:14,textAlign:'center',lineHeight:'16px'}}>
+                                {disp}
+                              </div>
+                            ):isSel?(
+                              <div style={{position:'relative',zIndex:1,width:6,height:6,borderRadius:'50%',background:'#007AFF'}}/>
+                            ):null}
+                          </div>
+                        );
+                      })}
+                      <div style={{height:18,display:'flex',alignItems:'center',justifyContent:'center',
+                        fontSize:8,color:'#C0BAB0',fontWeight:600}}>{bi+1}</div>
+                    </div>
+                  ))}
+                  <div style={{display:'flex',flexDirection:'column'}}>
+                    {strings.map((_s,si)=>(
+                      <div key={si} style={{width:22,height:SH,position:'relative'}}>
+                        <div style={{position:'absolute',left:0,right:0,top:'50%',transform:'translateY(-50%)',height:1,background:'#EDE8E0'}}/>
+                      </div>
+                    ))}
+                    <div style={{height:18,display:'flex',alignItems:'center',justifyContent:'center'}}>
+                      <button onClick={()=>addBeat(mi)}
+                        style={{background:'rgba(0,0,0,0.06)',border:'none',borderRadius:'50%',
+                          width:14,height:14,fontSize:10,cursor:'pointer',color:'#8A847C',
+                          display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700,padding:0}}>+</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div style={{width:2,background:'#1A1A1A',alignSelf:'stretch',flexShrink:0,
+                marginBottom:18,
+                boxShadow:m.barAfter==='final'?'3px 0 0 #1A1A1A':'none',borderRadius:1}}/>
+            </React.Fragment>
+          ))}
+        </div>
+      </div>
+      {selCell&&(
+        <FretPicker strings={strings} si={selCell.si}
+          current={section.measures[selCell.mi]?.beats[selCell.bi]?.strings[selCell.si]}
+          onConfirm={(fret)=>{setBeatFret(selCell.mi,selCell.bi,selCell.si,fret);setSelCell(null);}}
+          onClose={()=>setSelCell(null)}/>
+      )}
+    </div>
+  );
+}
+
+// ─── EDITOR SCREEN ────────────────────────────────────────────────────────────
+const GCOLS=4;
+const CHORD_FS=34;      // taille accords — dominant
+const MEASURE_MIN_H=136; // cellules généreuses
+
+function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,displayMode='maj',setDisplayMode,onBack,prefs}){
+  const [degreeMode,setDegreeMode]=useState(false);
+  const [showDegrees,setShowDegrees]=useState(false);
+  const [showKeyPicker,setShowKeyPicker]=useState(false);
+  const [showTimeSig,setShowTimeSig]=useState(false);
+  const [bpm,setBpm]=useState(piece.bpm);
+  const [metroOn,setMetroOn]=useState(false);
+  const [beat,setBeat]=useState(0);
+
+  // picker : 4 ou 8 beats (grande mesure) avec accord + métadonnées par temps
+  const [picker,setPicker]=useState({
+    visible:false,si:0,mi:0,half:'a',
+    isGrande:false,cSi:null,cMi:null,
+    letter:'C',acc:'',qualityId:'maj7',extensions:[],
+    bass:'',bassAcc:'',
+    localBeats:[mkBeat(),mkBeat(),mkBeat(),mkBeat()],selectedBeat:0,
+  });
+  const [measureSheet,setMeasureSheet]=useState(null); // {si, mi} — structurel uniquement
+  const [barlinePick,setBarlinePick]=useState(null);   // {si, mi, side}
+  const [insertSheet,setInsertSheet]=useState(null);
+  const [currentPage,setCurrentPage]=useState(0);
+  const [editMode,setEditMode]=useState(true); // true = édition, false = lecture
+  const [sectionRenameOverlay,setSectionRenameOverlay]=useState(null); // {si, name}
+  const metroRef=useRef(null),beatRef=useRef(0);
+  const undoStack=useRef([]);
+
+  const cur=library.find(p=>p.id===piece.id)||piece;
+  const timeSig=cur.timeSig||'4/4';
+  const scale=buildScale(displayKey,displayMode);
+
+  // Couleur d'accentuation (signes, reprises, volta)
+  const INK_ACCENT=prefs?.accentColor==='red'?'#C0392B':'#1A1A1A';
+  const SIGN_COLOR=prefs?.accentColor==='red'?'#C0392B':'#2A5A2A';
+
+  useEffect(()=>{
+    if(metroOn){const ms=60000/bpm;metroRef.current=setInterval(()=>{beatRef.current=(beatRef.current+1)%4;setBeat(beatRef.current);},ms);}
+    else{clearInterval(metroRef.current);setBeat(0);beatRef.current=0;}
+    return()=>clearInterval(metroRef.current);
+  },[metroOn,bpm]);
+
+  function handleKeyChange(newKey){
+    const semi=((noteIdx(newKey)-noteIdx(cur.key))%12+12)%12;
+    const flat=FLAT_KEYS.includes(newKey);
+    setLibrary(lib=>lib.map(p=>p.id!==piece.id?p:{...p,key:newKey,
+      sections:p.sections.map(s=>(s.type==='staff'||s.type==='tab')?s:({...s,measures:s.measures.map(mm=>{
+        const transBeats=(src)=>getBeats(src).map(b=>b.c?{...b,c:transChord(b.c,semi,flat)}:b);
+        const newBeats=transBeats(mm);
+        const newChords=newBeats.map(b=>b.c).filter(c=>c);
+        const newSplit2=mm.split2?{...mm.split2,beats:transBeats(mm.split2),chords:transBeats(mm.split2).map(b=>b.c).filter(c=>c)}:null;
+        return{...mm,beats:newBeats,chords:newChords.length?newChords:mm.chords||['C'],split2:newSplit2};
+      })}))
+    }));
+    setDisplayKey(newKey);setShowKeyPicker(false);
+  }
+
+  function saveUndo(){
+    const snapshot=JSON.parse(JSON.stringify(cur));
+    undoStack.current=[...undoStack.current.slice(-19),snapshot];
+  }
+  function undo(){
+    if(undoStack.current.length===0)return;
+    const prev=undoStack.current[undoStack.current.length-1];
+    undoStack.current=undoStack.current.slice(0,-1);
+    setLibrary(lib=>lib.map(p=>p.id!==piece.id?p:prev));
+  }
+
+  function updateStaffSection(si,newSection){
+    saveUndo();
+    setLibrary(lib=>lib.map(p=>p.id!==piece.id?p:{...p,
+      sections:p.sections.map((s,i)=>i!==si?s:newSection)
+    }));
+  }
+  function updateTabSection(si,newSection){
+    saveUndo();
+    setLibrary(lib=>lib.map(p=>p.id!==piece.id?p:{...p,
+      sections:p.sections.map((s,i)=>i!==si?s:newSection)
+    }));
+  }
+  function deleteSection(si){
+    saveUndo();
+    setLibrary(lib=>lib.map(p=>p.id!==piece.id?p:{...p,
+      sections:p.sections.filter((_,i)=>i!==si)
+    }));
+  }
+
+  function insertSection(insertAt,type,name){
+    saveUndo();
+    setLibrary(lib=>lib.map(p=>{
+      if(p.id!==piece.id)return p;
+      const secs=[...p.sections];
+      const newSec=type==='staff'
+        ?mkStaffSection(name,p.timeSig||'4/4','treble',p.key||'C')
+        :type==='tab'
+          ?mkTabSection(name,'guitar')
+          :{name,type:'grid',startBar:'normal',measures:[mk(['C']),mk(['C']),mk(['C']),mk(['C'])]};
+      secs.splice(insertAt,0,newSec);
+      return{...p,sections:secs};
+    }));
+  }
+  // ── Layout pages ────────────────────────────────────────────────────────────
+  const rowsPerPage=cur.rowsPerPage||10;
+  function computeRows(sections){
+    const rows=[];let row=[];let mCount=0;
+    sections.forEach((section,si)=>{
+      if(section.type==='staff'){
+        if(row.length>0){rows.push({cells:row,rowType:'measures'});row=[];}
+        rows.push({cells:[{type:'staff',si,section}],rowType:'staff'});
+      }else if(section.type==='tab'){
+        if(row.length>0){rows.push({cells:row,rowType:'measures'});row=[];}
+        rows.push({cells:[{type:'tab',si,section}],rowType:'tab'});
+      }else{
+        let lastMasterMi=0;
+        section.measures.forEach((measure,mi)=>{
+          const prevM=mi>0?section.measures[mi-1]:null;
+          const isContinuation=!!(prevM&&prevM.barAfter==='none');
+          if(!isContinuation){mCount++;lastMasterMi=mi;}
+          row.push({type:'measure',si,mi,measure,section,sectionStart:mi===0,sectionName:section.name,num:isContinuation?null:mCount,isContinuation,masterMi:isContinuation?lastMasterMi:mi});
+          if(row.length===GCOLS){rows.push({cells:row,rowType:'measures'});row=[];}
+        });
+      }
+    });
+    if(row.length>0)rows.push({cells:row,rowType:'measures'});
+    return rows;
+  }
+  const allRows=computeRows(cur.sections);
+  const totalPages=Math.max(1,Math.ceil(allRows.length/rowsPerPage));
+  const safePage=Math.min(currentPage,totalPages-1);
+  const pageRows=allRows.slice(safePage*rowsPerPage,(safePage+1)*rowsPerPage);
+  const TOPBAR_H=52,BOTTOMBAR_H=44,INFO_H=36;
+  const availH=(typeof window!=='undefined'?window.innerHeight:900)-TOPBAR_H-BOTTOMBAR_H-INFO_H;
+  const rowH=Math.max(56,Math.floor(availH/rowsPerPage));
+  const chordFsBase=Math.max(13,Math.round(34*rowH/136));
+
+  // Ouvre le ChordPicker pour une GRANDE MESURE — 8 beats (master 0-3 + suite 4-7)
+  function openGrandeMeasurePicker(si,mi,cSi,cMi,e,initialBeat=null){
+    if(e)e.stopPropagation();
+    const mm=cur.sections[si]?.measures[mi];
+    const cMm=cur.sections[cSi]?.measures[cMi];
+    if(!mm||!cMm)return;
+    const localBeats=[...getBeats(mm),...getBeats(cMm)];
+    let selectedBeat=0;
+    if(initialBeat!==null&&initialBeat>=0&&initialBeat<8){
+      selectedBeat=initialBeat;
+    } else {
+      const ff=localBeats.find(b=>b.c&&!isSpec(b.c)&&b.c!=='%');
+      selectedBeat=ff?localBeats.indexOf(ff):0;
+    }
+    const initChord=localBeats[selectedBeat]?.c||'';
+    const firstChord=(initChord&&!isSpec(initChord)&&initChord!=='%')?initChord:'C';
+    const parsed=parseChordFull(firstChord);
+    const{letter,acc}=rootToLetterAcc(parsed.root);
+    const bR=parsed.bass||'';
+    const{letter:bL,acc:bA}=bR?rootToLetterAcc(bR):{letter:'',acc:''};
+    setPicker({visible:true,si,mi,half:'a',isGrande:true,cSi,cMi,
+      letter,acc,qualityId:parsed.qualityId,extensions:parsed.extensions,
+      bass:bL,bassAcc:bA,localBeats,selectedBeat});
+  }
+
+  // Ouvre le ChordPicker pour UNE MESURE ENTIÈRE — 4 beats chargés en local
+  function openMeasurePicker(si,mi,half='a',e,initialBeat=null){
+    if(e)e.stopPropagation();
+    const mm=cur.sections[si]?.measures[mi];
+    if(!mm)return;
+    const measureData=(half==='b'&&mm.split2)?mm.split2:mm;
+    const localBeats=getBeats(measureData);
+    // Choisir le beat initial : celui cliqué, ou le premier non-vide non-spécial
+    let selectedBeat=0;
+    if(initialBeat!==null&&initialBeat>=0&&initialBeat<4){
+      selectedBeat=initialBeat;
+    } else {
+      const firstFilled=localBeats.find(b=>b.c&&!isSpec(b.c)&&b.c!=='%');
+      selectedBeat=firstFilled?localBeats.indexOf(firstFilled):0;
+    }
+    const initChord=localBeats[selectedBeat]?.c||'';
+    const firstChord=(initChord&&!isSpec(initChord)&&initChord!=='%')?initChord:'C';
+    const parsed=parseChordFull(firstChord);
+    const{letter,acc}=rootToLetterAcc(parsed.root);
+    const bR=parsed.bass||'';
+    const{letter:bL,acc:bA}=bR?rootToLetterAcc(bR):{letter:'',acc:''};
+    setPicker({visible:true,si,mi,half,
+      letter,acc,qualityId:parsed.qualityId,extensions:parsed.extensions,
+      bass:bL,bassAcc:bA,
+      localBeats,selectedBeat});
+  }
+
+  // Sauvegarde les 4 beats (accord + métadonnées) de la mesure en une seule opération
+  function confirmMeasure(){
+    saveUndo();
+    const{si,mi,half,localBeats,isGrande,cSi,cMi}=picker;
+    const clean=bs=>bs.map(b=>({c:b.c||'',s:b.s||[],v:b.v||null,t:b.t||''}));
+    const safeC=bs=>{const c=bs.map(b=>b.c).filter(c=>c);return c.length?c:[''];};
+    if(isGrande){
+      const mb=clean((localBeats||[]).slice(0,4));
+      const cb=clean((localBeats||[]).slice(4,8));
+      setLibrary(lib=>lib.map(p=>{
+        if(p.id!==piece.id)return p;
+        return{...p,sections:p.sections.map((s,sI)=>{
+          if(sI!==si)return s;
+          return{...s,measures:s.measures.map((mm,mI)=>{
+            if(mI===mi)return{...mm,beats:mb,chords:safeC(mb)};
+            if(mI===cMi)return{...mm,beats:cb,chords:safeC(cb)};
+            return mm;
+          })};
+        })};
+      }));
+      setPicker(pk=>({...pk,visible:false}));
+      return;
+    }
+    const cleanBeats=clean(localBeats||[mkBeat(),mkBeat(),mkBeat(),mkBeat()]);
+    const safeChords=safeC(cleanBeats);
+    setLibrary(lib=>lib.map(p=>{
+      if(p.id!==piece.id)return p;
+      return{...p,sections:p.sections.map((s,sI)=>{
+        if(sI!==si)return s;
+        return{...s,measures:s.measures.map((mm,mI)=>{
+          if(mI!==mi)return mm;
+          if(half==='b'&&mm.split2){
+            return{...mm,split2:{...mm.split2,beats:cleanBeats,chords:safeChords}};
+          }
+          return{...mm,beats:cleanBeats,chords:safeChords};
+        })};
+      })};
+    }));
+    setPicker(pk=>({...pk,visible:false}));
+  }
+
+  function renameSectionAtPicker(name){
+    saveUndo();
+    const{si}=picker;
+    setLibrary(lib=>lib.map(p=>p.id!==piece.id?p:{...p,
+      sections:p.sections.map((s,sI)=>sI!==si?s:{...s,name})
+    }));
+  }
+
+  function renameSectionDirect(si, name){
+    saveUndo();
+    setLibrary(lib=>lib.map(p=>p.id!==piece.id?p:{...p,
+      sections:p.sections.map((s,sI)=>sI!==si?s:{...s,name})
+    }));
+    setSectionRenameOverlay(null);
+  }
+
+
+  function updateBarline(si,mi,side,type){
+    saveUndo();
+    setLibrary(lib=>lib.map(p=>p.id!==piece.id?p:{...p,
+      sections:p.sections.map((s,sI)=>{
+        if(sI!==si)return s;
+        if(side==='right')return{...s,measures:s.measures.map((mm,mI)=>mI!==mi?mm:{...mm,barAfter:type})};
+        if(mi===0)return{...s,startBar:type};
+        return{...s,measures:s.measures.map((mm,mI)=>mI!==(mi-1)?mm:{...mm,barAfter:type})};
+      })
+    }));
+    setBarlinePick(null);
+  }
+
+  function handleMeasureAction(si,mi,action){
+    saveUndo();
+    setMeasureSheet(null);
+    if(action==='addChord'){
+      const mm0=cur.sections[si].measures[mi];
+      const beats0=getBeats(mm0);
+      const firstEmpty=beats0.findIndex(b=>!b.c);
+      if(firstEmpty===-1)return; // tous les temps remplis
+      const lastFilled=[...beats0].reverse().find(b=>b.c);
+      const srcChord=lastFilled?.c||'C';
+      const nb=beats0.map((b,i)=>i===firstEmpty?{...b,c:srcChord}:b);
+      setLibrary(lib=>lib.map(p=>p.id!==piece.id?p:{...p,
+        sections:p.sections.map((s,sI)=>sI!==si?s:{...s,
+          measures:s.measures.map((mm,mI)=>mI!==mi?mm:{...mm,beats:nb,chords:nb.map(b=>b.c).filter(c=>c)})
+        })
+      }));
+    }
+    else if(action==='removeChord'){
+      const mm0=cur.sections[si].measures[mi];
+      const beats0=getBeats(mm0);
+      const filledIdxs=beats0.map((b,i)=>b.c?i:-1).filter(i=>i>=0);
+      if(filledIdxs.length<=1)return;
+      const lastIdx=filledIdxs[filledIdxs.length-1];
+      const nb=beats0.map((b,i)=>i===lastIdx?mkBeat():b);
+      setLibrary(lib=>lib.map(p=>p.id!==piece.id?p:{...p,
+        sections:p.sections.map((s,sI)=>sI!==si?s:{...s,
+          measures:s.measures.map((mm,mI)=>mI!==mi?mm:{...mm,beats:nb,chords:nb.map(b=>b.c).filter(c=>c)})
+        })
+      }));
+    }
+    else if(action==='split'){
+      const srcBeats=getBeats(cur.sections[si].measures[mi]);
+      const srcChord=srcBeats.find(b=>b.c)?.c||'C';
+      setLibrary(lib=>lib.map(p=>p.id!==piece.id?p:{...p,
+        sections:p.sections.map((s,sI)=>sI!==si?s:{...s,
+          measures:s.measures.map((mm,mI)=>mI!==mi?mm:{...mm,split2:mkSplit2([srcChord])})
+        })
+      }));
+    }
+    else if(action==='unsplit'){
+      setLibrary(lib=>lib.map(p=>p.id!==piece.id?p:{...p,
+        sections:p.sections.map((s,sI)=>sI!==si?s:{...s,
+          measures:s.measures.map((mm,mI)=>mI!==mi?mm:{...mm,split2:null})
+        })
+      }));
+    }
+    else if(action==='addMeasure'){
+      setLibrary(lib=>lib.map(p=>p.id!==piece.id?p:{...p,
+        sections:p.sections.map((s,sI)=>sI!==si?s:{...s,
+          measures:[...s.measures.slice(0,mi+1),mk([]),...s.measures.slice(mi+1)]
+        })
+      }));
+    }
+    else if(action==='deleteMeasure'){
+      const sec=cur.sections[si];
+      if(sec.measures.length<=1)return;
+      saveUndo();
+      // Si c'est un master de grande mesure (barAfter==='none'), supprimer aussi la continuation
+      const isMasterGM=sec.measures[mi]?.barAfter==='none';
+      const contMi=isMasterGM?mi+1:null;
+      // Si c'est une continuation, supprimer aussi le master
+      const prevM=mi>0?sec.measures[mi-1]:null;
+      const isCont=!!(prevM&&prevM.barAfter==='none');
+      const masterMi=isCont?mi-1:null;
+      const toDelete=new Set([mi]);
+      if(contMi!=null&&contMi<sec.measures.length)toDelete.add(contMi);
+      if(masterMi!=null)toDelete.add(masterMi);
+      if(sec.measures.length-toDelete.size<1)return; // garder au moins 1
+      setLibrary(lib=>lib.map(p=>p.id!==piece.id?p:{...p,
+        sections:p.sections.map((s,sI)=>sI!==si?s:{...s,measures:s.measures.filter((_,mI)=>!toDelete.has(mI))})
+      }));
+    }
+  }
+
+  function addMeasureAtEnd(si){
+    saveUndo();
+    setLibrary(lib=>lib.map(p=>{
+      if(p.id!==piece.id)return p;
+      return{...p,sections:p.sections.map((s,sI)=>{
+        if(sI!==si)return s;
+        return{...s,measures:[...s.measures,mk([])]};
+      })};
+    }));
+  }
+
+  function getDisp(chord){
+    if(!degreeMode)return applyPrefs(chord,prefs);
+    return chordToDeg(chord,displayKey)||applyPrefs(chord,prefs)+'✱';
+  }
+
+  // ── Rendu d'une demi-case — positionnement par temps ──────────────────────────
+  // num = numéro de mesure (null pour half B d'un split)
+  function renderHalf(mm,half,si,mi,num){
+    const data=half==='b'?mm.split2:mm;
+    const beats=getBeats(data);
+    const nFilled=beats.filter(b=>b.c).length||1;
+    // Taille adaptative : 4 beats = légèrement réduit, 1 beat = pleine taille
+    const chFs=nFilled>=4?Math.round(chordFsBase*0.82)
+              :nFilled===3?Math.round(chordFsBase*0.88)
+              :nFilled===2?Math.round(chordFsBase*0.93)
+              :chordFsBase;
+    const VOLTA_H=15;
+
+    return(
+      <div style={{flex:1,display:'flex',minWidth:0,position:'relative',background:'transparent'}}>
+
+        {/* ── 4 colonnes de temps ── */}
+        {beats.map((beat,bi)=>{
+          const chord=beat.c||'';
+          const hasChord=!!chord;
+          const hasVolta=!!beat.v;
+          const hasSigns=beat.s&&beat.s.length>0;
+          const hasText=!!beat.t;
+          const spec=isSpec(chord);
+          const idem=chord==='%';
+          const isDia=!spec&&!idem&&hasChord&&chordToDeg(chord,displayKey)!==null;
+          const disp=spec?chord:(idem?'%':getDisp(chord));
+          const chColor=idem?'#C7C2BC':(degreeMode&&!spec?(isDia?'#1A1A1A':'#8A3020'):'#1A1A1A');
+          // Réduction de police pour les accords longs (évite débordement)
+          const dispLen=disp?disp.replace(/[♭♯%]/g,'xx').length:0;
+          const lenScale=dispLen>=8?0.68:dispLen>=7?0.74:dispLen>=6?0.82:dispLen>=5?0.90:1;
+          const effectiveFs=Math.round(chFs*lenScale);
+          return(
+            <div key={bi}
+              onClick={editMode?(e)=>{e.stopPropagation();openMeasurePicker(si,mi,half,e,bi);}:undefined}
+              style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',
+                minWidth:0,position:'relative',cursor:editMode?'pointer':'default'}}>
+              {/* Crochet de volta — absolu, ne décale PAS l'accord */}
+              {hasVolta&&(
+                <div style={{position:'absolute',top:0,left:0,right:0,height:VOLTA_H,
+                  borderLeft:`2px solid ${INK_ACCENT}`,borderTop:`2px solid ${INK_ACCENT}`,
+                  display:'flex',alignItems:'flex-start',paddingLeft:3,paddingTop:2,
+                  pointerEvents:'none',zIndex:2}}>
+                  <span style={{fontSize:8,fontWeight:900,color:INK_ACCENT,lineHeight:1,fontStyle:'italic'}}>
+                    {beat.v}.
+                  </span>
+                </div>
+              )}
+              {/* Signes — absolu, sous le volta si présent */}
+              {hasSigns&&(
+                <div style={{position:'absolute',top:hasVolta?VOLTA_H+1:2,left:0,right:0,
+                  display:'flex',justifyContent:'center',pointerEvents:'none',zIndex:2}}>
+                  <span style={{fontSize:8,color:SIGN_COLOR,fontWeight:900,
+                    background:SIGN_COLOR+'18',borderRadius:2,padding:'1px 3px',lineHeight:1}}>
+                    {beat.s.map(s=>{const st=SIGN_TYPES.find(x=>x.id===s);return st?st.sym:s;}).join(' ')}
+                  </span>
+                </div>
+              )}
+              {/* Accord — toujours centré dans la cellule entière */}
+              {hasChord&&(
+                <span style={{background:degreeMode&&!isDia&&!spec&&!idem?'#F5DDD8':'transparent',
+                  padding:'2px 1px',borderRadius:4,lineHeight:1,display:'inline-flex',alignItems:'center'}}>
+                  {spec?(<span style={{fontSize:effectiveFs,fontWeight:700,color:chColor,letterSpacing:'0.05em',lineHeight:1}}>{disp}</span>)
+                  :idem?(<span style={{fontSize:Math.round(effectiveFs*1.1),fontWeight:200,color:chColor,letterSpacing:'0.08em',lineHeight:1}}>%</span>)
+                  :degreeMode?(<DegreeText deg={disp} fs={effectiveFs} color={chColor} weight={900}/>)
+                  :(<ChordText chord={disp} fs={effectiveFs} color={chColor} weight={900}/>)}
+                </span>
+              )}
+              {!hasChord&&editMode&&(
+                <span style={{fontSize:10,color:'#D0CAC0',fontWeight:300,lineHeight:1,userSelect:'none'}}>·</span>
+              )}
+              {/* Annotation — absolu en bas */}
+              {hasText&&(
+                <div style={{position:'absolute',bottom:2,left:0,right:0,
+                  textAlign:'center',fontSize:8,fontStyle:'italic',
+                  fontWeight:700,color:'#9A7050',lineHeight:1.2,
+                  overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',
+                  pointerEvents:'none',zIndex:2}}>
+                  {beat.t}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  return(<div className="app-screen" style={{display:'flex',flexDirection:'column',background:'#F2F0EB'}}>
+
+    {/* TOP BAR */}
+    <div style={{background:'rgba(255,255,255,0.88)',backdropFilter:'blur(20px)',WebkitBackdropFilter:'blur(20px)',
+      borderBottom:'0.5px solid #D0CCC4',height:52,
+      display:'flex',alignItems:'center',padding:'0 12px',gap:7,flexShrink:0}}>
+      <button onClick={onBack}
+        style={{background:'transparent',border:'none',color:'#1A1A1A',fontSize:20,cursor:'pointer',padding:'4px 6px 4px 0',fontFamily:'inherit',flexShrink:0}}>←</button>
+      <div style={{display:'flex',alignItems:'center',gap:5,flexShrink:0}}>
+        <SoupirLogo size={16}/><span style={{fontSize:14,fontWeight:900,letterSpacing:'-0.5px'}}>Soupir.</span>
+      </div>
+      <div style={{width:1,height:16,background:'#D0CAC0',flexShrink:0}}/>
+      <span style={{fontSize:13,fontWeight:700,flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{cur.title}</span>
+      <button onClick={()=>setShowTimeSig(true)} className="icon-btn"
+        style={{background:'#F5F2EC',border:'1.5px solid #D0CAC0',borderRadius:100,padding:'3px 10px',cursor:'pointer',flexShrink:0,fontFamily:'inherit'}}>
+        <span style={{fontSize:12,fontWeight:800}}>{timeSig}</span>
+      </button>
+      <button onClick={()=>setShowKeyPicker(true)} className="icon-btn"
+        style={{display:'flex',alignItems:'center',gap:3,background:'#F5F2EC',border:'1.5px solid #D0CAC0',borderRadius:100,padding:'3px 10px',cursor:'pointer',flexShrink:0}}>
+        <span style={{fontSize:9,color:'#8A847C',fontWeight:600}}>Ton.</span>
+        <span style={{fontSize:12,fontWeight:800}}>{displayKey}{displayMode==='min'?'m':''}</span>
+      </button>
+      <button onClick={()=>setDegreeMode(d=>!d)}
+        style={{background:degreeMode?'#1A1A1A':'transparent',border:'1.5px solid #1A1A1A',color:degreeMode?'#F2EDE4':'#1A1A1A',
+          padding:'3px 9px',borderRadius:100,fontSize:10,fontWeight:700,cursor:'pointer',whiteSpace:'nowrap',flexShrink:0,fontFamily:'inherit'}}>
+        {degreeMode?'Degrés':'Acc.'}
+      </button>
+      <div style={{display:'flex',alignItems:'center',gap:4,background:'#F5F2EC',border:'1.5px solid #D0CAC0',borderRadius:100,padding:'3px 7px',flexShrink:0}}>
+        <div style={{display:'flex',gap:2}}>
+          {[0,1,2,3].map(i=>(<div key={i} style={{width:4,height:4,borderRadius:'50%',transition:'all 0.06s',
+            background:metroOn&&beat===i?(i===0?'#1A1A1A':'#6B6560'):'#C0BAB0',
+            transform:metroOn&&beat===i?'scale(1.35)':'scale(1)'}}/>))}
+        </div>
+        <input type="number" value={bpm} min={40} max={300} onChange={e=>setBpm(Number(e.target.value))}
+          style={{width:30,background:'transparent',border:'none',color:'#1A1A1A',fontSize:11,fontWeight:700,textAlign:'center',outline:'none',fontFamily:'inherit'}}/>
+        <button onClick={()=>setMetroOn(m=>!m)}
+          style={{background:metroOn?'#1A1A1A':'transparent',border:`1.5px solid ${metroOn?'#1A1A1A':'#C0BAB0'}`,
+            color:metroOn?'#F2EDE4':'#8A847C',width:18,height:18,borderRadius:'50%',cursor:'pointer',
+            fontSize:7,display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'inherit'}}>
+          {metroOn?'■':'▶'}
+        </button>
+      </div>
+      <button onClick={()=>setShowDegrees(v=>!v)}
+        style={{background:showDegrees?'#1A1A1A':'transparent',border:`1.5px solid ${showDegrees?'#1A1A1A':'#D0CAC0'}`,
+          color:showDegrees?'#F2EDE4':'#8A847C',height:26,borderRadius:100,cursor:'pointer',
+          fontSize:9,fontWeight:700,padding:'0 7px',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontFamily:'inherit',whiteSpace:'nowrap'}}>Gamme</button>
+    </div>
+
+    {/* CONTENT — page plein écran, zéro scroll */}
+    <div style={{flex:1,overflow:'hidden',position:'relative',background:'#F2F0EB',display:'flex',flexDirection:'column'}}>
+
+      {/* Bandeau titre + sélecteur Lecture/Édition */}
+      <div style={{display:'flex',alignItems:'center',padding:'0 10px',gap:8,borderBottom:'0.5px solid #D0CCC4',
+        background:'rgba(252,250,246,0.95)',height:INFO_H,flexShrink:0}}>
+        <span style={{fontSize:13,fontWeight:800,letterSpacing:'-0.4px',color:'#1C1C1E',flex:1,
+          overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{cur.title}</span>
+        {degreeMode&&<span style={{fontSize:9,fontWeight:700,color:'#4A3F2F',background:'#F5DDD8',
+          borderRadius:4,padding:'1px 5px',flexShrink:0}}>Degrés</span>}
+        {/* Sélecteur Lecture / Édition */}
+        <div style={{display:'flex',background:'#E2DDD6',borderRadius:8,padding:2,gap:1,flexShrink:0}}>
+          <button onClick={()=>setEditMode(false)}
+            style={{background:!editMode?'#FFFFFF':'transparent',border:'none',
+              borderRadius:6,padding:'3px 9px',fontSize:10,fontWeight:700,
+              cursor:'pointer',fontFamily:'inherit',color:!editMode?'#1A1A1A':'#8A847C',
+              boxShadow:!editMode?'0 1px 3px rgba(0,0,0,0.12)':'none',transition:'all 0.12s'}}>
+            👁 Lire
+          </button>
+          <button onClick={()=>setEditMode(true)}
+            style={{background:editMode?'#1A1A1A':'transparent',border:'none',
+              borderRadius:6,padding:'3px 9px',fontSize:10,fontWeight:700,
+              cursor:'pointer',fontFamily:'inherit',color:editMode?'#F2EDE4':'#8A847C',
+              boxShadow:editMode?'0 1px 3px rgba(0,0,0,0.12)':'none',transition:'all 0.12s'}}>
+            ✏ Éditer
+          </button>
+        </div>
+      </div>
+
+      {/* Grille pages */}
+      <div style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden',background:'#FFFFFF'}}>
+        {/* Pre-pass : détecter les rows dont la section se termine à pleine capacité
+            → le "+" doit apparaître au début de la row suivante, ou dans la 1re ligne vide */}
+        {(()=>{
+          if(editMode){
+            pageRows._addSiForFiller=null;
+            pageRows.forEach((row,ri)=>{
+              if(row.rowType!=='measures')return;
+              const lc=row.cells[row.cells.length-1];
+              if(!lc||lc.type!=='measure')return;
+              const sec=cur.sections[lc.si];
+              if(sec?.type&&sec.type!=='grid')return;
+              if(lc.mi===sec.measures.length-1&&!lc.isContinuation&&row.cells.length===GCOLS){
+                // tag la row suivante si elle existe, sinon la 1re ligne vide
+                const nextRow=pageRows[ri+1];
+                if(nextRow)nextRow._addMeasureSi=lc.si;
+                else pageRows._addSiForFiller=lc.si;
+              }
+            });
+          }
+          return null;
+        })()}
+        {pageRows.map((row,ri)=>{
+          if(row.rowType==='staff'){
+            const item=row.cells[0];
+            return(
+              <div key={ri} style={{flexShrink:0,overflow:'auto',borderBottom:'0.5px solid #D0CCC4'}}>
+                <StaffSectionView section={item.section}
+                  editMode={editMode}
+                  onUpdate={ns=>updateStaffSection(item.si,ns)}
+                  onDelete={cur.sections.length>1?()=>deleteSection(item.si):null}/>
+              </div>
+            );
+          }
+          if(row.rowType==='tab'){
+            const item=row.cells[0];
+            return(
+              <div key={ri} style={{flexShrink:0,overflow:'auto',borderBottom:'0.5px solid #D0CCC4'}}>
+                <TabSectionView section={item.section}
+                  editMode={editMode}
+                  onUpdate={ns=>updateTabSection(item.si,ns)}
+                  onDelete={cur.sections.length>1?()=>deleteSection(item.si):null}/>
+              </div>
+            );
+          }
+          const firstCell=row.cells[0];
+          // Détecter si la dernière cellule réelle est la fin d'une section grille (row non-plein)
+          const lastRealCell=row.cells[row.cells.length-1];
+          const lastRealSi=lastRealCell?.si;
+          const lastRealSection=lastRealSi!=null?cur.sections[lastRealSi]:null;
+          const isLastOfSection=editMode&&lastRealSection&&
+            (!lastRealSection.type||lastRealSection.type==='grid')&&
+            lastRealCell.mi===lastRealSection.measures.length-1&&
+            !lastRealCell.isContinuation&&row.cells.length<GCOLS;
+          // "+" en début de row : provient d'une section terminée en row pleine
+          const addSiAtStart=editMode?row._addMeasureSi:null;
+          return(
+            <div key={ri} style={{flex:1,display:'flex',alignItems:'stretch',position:'relative',
+              borderBottom:'0.5px solid rgba(0,0,0,0.07)',minHeight:0,overflow:'visible'}}>
+              {/* Barre gauche — avec badge "+" si la section précédente se termine ici */}
+              <div style={{position:'relative',display:'flex',flexShrink:0}}>
+                <Barline
+                  type={firstCell.mi===0?(cur.sections[firstCell.si].startBar||'normal'):'normal'}
+                  onClick={editMode?(e)=>{e.stopPropagation();setBarlinePick({si:firstCell.si,mi:firstCell.mi,side:'left'});}:undefined}
+                  minH={rowH} accentColor={INK_ACCENT}/>
+                {addSiAtStart!=null&&(
+                  <button onClick={()=>{addMeasureAtEnd(addSiAtStart);setCurrentPage(Math.ceil((allRows.length+1)/rowsPerPage)-1);}}
+                    style={{position:'absolute',left:'50%',top:'50%',transform:'translate(-50%,-50%)',
+                      width:26,height:26,background:'#F2F0EB',border:'1.5px solid #D0CAC0',borderRadius:'50%',
+                      fontSize:18,cursor:'pointer',color:'#8A847C',display:'flex',alignItems:'center',
+                      justifyContent:'center',fontWeight:300,padding:0,lineHeight:1,zIndex:20,
+                      boxShadow:'0 1px 4px rgba(0,0,0,0.15)'}}>+</button>
+                )}
+              </div>
+              {/* Mesures */}
+              {(()=>{
+                const rendered=[];let skip=false;
+                // Suppression de mesure déplacée dans la MeasureSheet (tap sur mesure)
+                row.cells.forEach((cell,ci)=>{
+                  if(skip){skip=false;return;}
+                  const{si,mi,measure,num,sectionStart,sectionName,isContinuation}=cell;
+                  const isMaster=!isContinuation&&measure.barAfter==='none';
+                  const nextCell=row.cells[ci+1];
+                  const isGrande=isMaster&&nextCell&&nextCell.isContinuation;
+
+                  // ── Grande mesure : master + continuation fusionnés ──────────────
+                  if(isGrande){
+                    skip=true;
+                    const{si:cSi,mi:cMi,measure:cMm}=nextCell;
+                    // Grande mesure : 8 beats (4 master + 4 cont), positionnés par temps
+                    const masterBeats=getBeats(measure);
+                    const contBeats=getBeats(cMm);
+                    const allBeats=[
+                      ...masterBeats.map((b,bi)=>({...b,key:`m${mi}-b${bi}`})),
+                      ...contBeats.map((b,bi)=>({...b,key:`m${cMi}-b${bi}`})),
+                    ];
+                    const nFilled=allBeats.filter(b=>b.c).length||1;
+                    const chFs=nFilled>=8?Math.round(chordFsBase*0.72)
+                              :nFilled>=6?Math.round(chordFsBase*0.80)
+                              :nFilled>=4?Math.round(chordFsBase*0.86)
+                              :nFilled>=2?Math.round(chordFsBase*0.93)
+                              :chordFsBase;
+                    const VOLTA_H=15;
+                    rendered.push(
+                      <React.Fragment key={`${si}-${mi}-gm`}>
+                        <div style={{flex:'0 0 calc(50% - 70px)',position:'relative',display:'flex',
+                            minWidth:0,overflow:'hidden'}}>
+                          {sectionStart&&(
+                            <div onClick={editMode?(e)=>{e.stopPropagation();setSectionRenameOverlay({si,name:sectionName});}:undefined}
+                              style={{position:'absolute',top:3,left:ci===0?28:4,zIndex:5,
+                              background:'#C0392B',color:'white',borderRadius:3,
+                              fontSize:7,fontWeight:900,padding:'1px 4px',lineHeight:1.5,
+                              letterSpacing:0.5,cursor:editMode?'pointer':'default'}}>{sectionName}</div>
+                          )}
+                          {/* 8 colonnes de temps (positionnement par quart) */}
+                          {allBeats.map((beat,bi)=>{
+                            const chord=beat.c||'';
+                            const hasChord=!!chord;
+                            const hasVolta=!!beat.v;
+                            const hasSigns=beat.s&&beat.s.length>0;
+                            const hasText=!!beat.t;
+                            const spec=isSpec(chord);const idem=chord==='%';
+                            const isDia=!spec&&!idem&&hasChord&&chordToDeg(chord,displayKey)!==null;
+                            const disp=spec?chord:(idem?'%':getDisp(chord));
+                            const chColor=idem?'#C7C2BC':(degreeMode&&!spec?(isDia?'#1A1A1A':'#8A3020'):'#1A1A1A');
+                            const gDispLen=disp?disp.replace(/[♭♯%]/g,'xx').length:0;
+                            const gLenScale=gDispLen>=8?0.68:gDispLen>=7?0.74:gDispLen>=6?0.82:gDispLen>=5?0.90:1;
+                            const gEffFs=Math.round(chFs*gLenScale);
+                            return(
+                              <div key={beat.key}
+                                onClick={editMode?(e)=>{e.stopPropagation();openGrandeMeasurePicker(si,mi,cSi,cMi,e,bi);}:undefined}
+                                style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',
+                                  minWidth:0,position:'relative',cursor:editMode?'pointer':'default'}}>
+                                {hasVolta&&(
+                                  <div style={{position:'absolute',top:0,left:0,right:0,height:VOLTA_H,
+                                    borderLeft:`2px solid ${INK_ACCENT}`,borderTop:`2px solid ${INK_ACCENT}`,
+                                    display:'flex',alignItems:'flex-start',paddingLeft:3,paddingTop:2,
+                                    pointerEvents:'none',zIndex:2}}>
+                                    <span style={{fontSize:8,fontWeight:900,color:INK_ACCENT,lineHeight:1,fontStyle:'italic'}}>{beat.v}.</span>
+                                  </div>
+                                )}
+                                {hasSigns&&(
+                                  <div style={{position:'absolute',top:hasVolta?VOLTA_H+1:2,left:0,right:0,
+                                    display:'flex',justifyContent:'center',pointerEvents:'none',zIndex:2}}>
+                                    <span style={{fontSize:7,color:SIGN_COLOR,fontWeight:900,
+                                      background:SIGN_COLOR+'18',borderRadius:2,padding:'1px 2px',lineHeight:1}}>
+                                      {beat.s.map(s=>{const st=SIGN_TYPES.find(x=>x.id===s);return st?st.sym:s;}).join(' ')}
+                                    </span>
+                                  </div>
+                                )}
+                                <div style={{display:'flex',alignItems:'center',justifyContent:'center',
+                                  paddingLeft:1,paddingRight:1}}>
+                                  {hasChord&&(
+                                    <span style={{background:degreeMode&&!isDia&&!spec&&!idem?'#F5DDD8':'transparent',
+                                      padding:'2px 1px',borderRadius:3,lineHeight:1,display:'inline-flex',alignItems:'center'}}>
+                                      {spec?(<span style={{fontSize:gEffFs,fontWeight:700,color:chColor,letterSpacing:'0.05em',lineHeight:1}}>{disp}</span>)
+                                      :idem?(<span style={{fontSize:Math.round(gEffFs*1.1),fontWeight:200,color:chColor,letterSpacing:'0.08em',lineHeight:1}}>%</span>)
+                                      :degreeMode?(<DegreeText deg={disp} fs={gEffFs} color={chColor} weight={900}/>)
+                                      :(<ChordText chord={disp} fs={gEffFs} color={chColor} weight={900}/>)}
+                                    </span>
+                                  )}
+                                  {!hasChord&&editMode&&<span style={{fontSize:9,color:'#D8D4CE',lineHeight:1,userSelect:'none'}}>·</span>}
+                                </div>
+                                {hasText&&(
+                                  <div style={{position:'absolute',bottom:2,left:0,right:0,
+                                    textAlign:'center',fontSize:7,fontStyle:'italic',
+                                    fontWeight:700,color:'#9A7050',lineHeight:1.2,
+                                    overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',
+                                    pointerEvents:'none',zIndex:2}}>
+                                    {beat.t}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                          {/* Handle central (mode édition) pour changer le type de barre */}
+                          {editMode&&(
+                            <div style={{position:'absolute',top:0,bottom:0,left:'50%',width:28,
+                              display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer'}}
+                              onClick={(e)=>{e.stopPropagation();setBarlinePick({si,mi,side:'right'});}}>
+                              <div style={{width:2,height:24,background:'#D0CAC0',borderRadius:1,opacity:0.8}}/>
+                            </div>
+                          )}
+                        </div>
+                        {/* Spacer 28px : compense la barline 'none' disparue pour aligner les rows */}
+                        <div style={{width:28,flexShrink:0}}/>
+                        <Barline type={cMm.barAfter||'normal'}
+                          onClick={editMode?(e)=>{e.stopPropagation();setBarlinePick({si:cSi,mi:cMi,side:'right'});}:undefined}
+                          minH={rowH} accentColor={INK_ACCENT}/>
+                      </React.Fragment>
+                    );
+                    return;
+                  }
+
+                  // ── Mesure normale ─────────────────────────────────────────────
+                  const isSplit=!!measure.split2;
+                  if(isContinuation){
+                    const isSplitCont=!!measure.split2;
+                    rendered.push(
+                      <React.Fragment key={`${si}-${mi}`}>
+                        <div style={{flex:'0 0 calc(25% - 35px)',position:'relative',display:'flex',flexDirection:'row',
+                          minWidth:0,overflow:'hidden'}}>
+
+                          {isSplitCont?(
+                            <>
+                              {renderHalf(measure,'a',si,mi,num)}
+                              <div style={{width:1.5,background:'rgba(0,0,0,0.15)',flexShrink:0,alignSelf:'stretch'}}/>
+                              {renderHalf(measure,'b',si,mi,null)}
+                            </>
+                          ):(
+                            renderHalf(measure,'a',si,mi,num)
+                          )}
+                        </div>
+                        <Barline type={measure.barAfter||'normal'}
+                          onClick={editMode?(e)=>{e.stopPropagation();setBarlinePick({si,mi,side:'right'});}:undefined}
+                          minH={rowH} accentColor={INK_ACCENT}/>
+                      </React.Fragment>
+                    );
+                    return;
+                  }
+                  rendered.push(
+                    <React.Fragment key={`${si}-${mi}`}>
+                      <div style={{flex:'0 0 calc(25% - 35px)',position:'relative',display:'flex',flexDirection:'row',
+                        minWidth:0,overflow:'hidden'}}>
+                        {sectionStart&&(
+                          <div onClick={editMode?(e)=>{e.stopPropagation();setSectionRenameOverlay({si,name:sectionName});}:undefined}
+                            style={{position:'absolute',top:3,left:ci===0?28:4,zIndex:5,
+                            background:'#C0392B',color:'white',borderRadius:3,
+                            fontSize:7,fontWeight:900,padding:'1px 4px',lineHeight:1.5,
+                            letterSpacing:0.5,cursor:editMode?'pointer':'default'}}>{sectionName}</div>
+                        )}
+                        
+                        {isSplit?(
+                          <>
+                            {renderHalf(measure,'a',si,mi,num)}
+                            <div style={{width:1.5,background:'rgba(0,0,0,0.15)',flexShrink:0,alignSelf:'stretch'}}/>
+                            {renderHalf(measure,'b',si,mi,null)}
+                          </>
+                        ):(
+                          renderHalf(measure,'a',si,mi,num)
+                        )}
+                      </div>
+                      <Barline type={isMaster?'none':(measure.barAfter||'normal')}
+                        onClick={editMode?(e)=>{e.stopPropagation();setBarlinePick({si,mi,side:'right'});}:undefined}
+                        minH={rowH} accentColor={INK_ACCENT}/>
+                    </React.Fragment>
+                  );
+                });
+                return rendered;
+              })()}
+              {/* Cellules vides fin de ligne — première = bouton "+" si fin de section */}
+              {row.cells.length<GCOLS&&Array.from({length:GCOLS-row.cells.length}).map((_,pi)=>(
+                <React.Fragment key={`pad${pi}`}>
+                  {pi===0&&isLastOfSection?(
+                    <div style={{flex:'0 0 calc(25% - 35px)',minHeight:rowH,display:'flex',alignItems:'center',justifyContent:'flex-start',paddingLeft:14}}>
+                      <button onClick={()=>{addMeasureAtEnd(lastRealSi);setCurrentPage(Math.ceil((allRows.length+1)/rowsPerPage)-1);}}
+                        style={{width:26,height:26,background:'rgba(0,0,0,0.06)',border:'none',borderRadius:'50%',
+                          fontSize:18,cursor:'pointer',color:'#8A847C',display:'flex',alignItems:'center',
+                          justifyContent:'center',fontWeight:300,padding:0,lineHeight:1}}>+</button>
+                    </div>
+                  ):(
+                    <div style={{flex:'0 0 calc(25% - 35px)',minHeight:rowH}}/>
+                  )}
+                  <Barline type="none" minH={rowH} accentColor={INK_ACCENT}/>
+                </React.Fragment>
+              ))}
+            </div>
+          );
+        })}
+        {/* Lignes vides pour remplir la page */}
+        {Array.from({length:Math.max(0,rowsPerPage-pageRows.length)}).map((_,ei)=>{
+          const addSiFiller=ei===0&&editMode?pageRows._addSiForFiller:null;
+          return(
+          <div key={`e${ei}`} style={{flex:1,display:'flex',alignItems:'stretch',
+            borderBottom:'0.5px solid rgba(0,0,0,0.04)',background:'#FAFAFA',minHeight:0}}>
+            {Array.from({length:GCOLS}).map((_,ci)=>(
+              <React.Fragment key={ci}>
+                {ci===0&&addSiFiller!=null?(
+                  <div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'flex-start',paddingLeft:42}}>
+                    <button onClick={()=>{addMeasureAtEnd(addSiFiller);setCurrentPage(Math.ceil((allRows.length+1)/rowsPerPage)-1);}}
+                      style={{width:26,height:26,background:'rgba(0,0,0,0.06)',border:'none',borderRadius:'50%',
+                        fontSize:18,cursor:'pointer',color:'#8A847C',display:'flex',alignItems:'center',
+                        justifyContent:'center',fontWeight:300,padding:0,lineHeight:1}}>+</button>
+                  </div>
+                ):(
+                  <div style={{flex:1}}/>
+                )}
+                <Barline type="none" minH={rowH} accentColor={INK_ACCENT}/>
+              </React.Fragment>
+            ))}
+          </div>
+          );
+        })}
+      </div>
+
+      {/* Section rename overlay */}
+      {sectionRenameOverlay&&(
+        <Sheet onClose={()=>setSectionRenameOverlay(null)}>
+          <div style={{padding:'14px 20px 32px'}}>
+            <div style={{fontSize:10,fontWeight:700,color:'#8A847C',textTransform:'uppercase',letterSpacing:1.4,marginBottom:12}}>Nom de section</div>
+            <div style={{display:'flex',flexWrap:'wrap',gap:6,marginBottom:14}}>
+              {['A','B','C','D','Intro','Verse','Chorus','Bridge','Outro','Solo','Coda'].map(n=>(
+                <button key={n}
+                  onClick={()=>renameSectionDirect(sectionRenameOverlay.si, n)}
+                  style={{background:sectionRenameOverlay.name===n?'#1A1A1A':'transparent',
+                    color:sectionRenameOverlay.name===n?'#F2EDE4':'#1A1A1A',
+                    border:`1.5px solid ${sectionRenameOverlay.name===n?'#1A1A1A':'#C0BAB0'}`,
+                    borderRadius:20,padding:'6px 11px',fontSize:12,fontWeight:700,cursor:'pointer',fontFamily:'inherit'}}>
+                  {n}
+                </button>
+              ))}
+            </div>
+            <input key={sectionRenameOverlay.si}
+              defaultValue={sectionRenameOverlay.name}
+              placeholder="Nom personnalisé…"
+              onKeyDown={e=>{if(e.key==='Enter'&&e.target.value.trim()){renameSectionDirect(sectionRenameOverlay.si,e.target.value.trim());}}}
+              onBlur={e=>{if(e.target.value.trim()&&e.target.value.trim()!==sectionRenameOverlay.name){renameSectionDirect(sectionRenameOverlay.si,e.target.value.trim());}}}
+              style={{width:'100%',padding:'10px 14px',border:'1.5px solid #D0CAC0',borderRadius:12,
+                fontSize:15,fontFamily:'inherit',background:'#FAF8F4',color:'#1A1A1A',outline:'none'}}/>
+          </div>
+        </Sheet>
+      )}
+
+      {/* Degrés panel */}
+      {showDegrees&&(<div style={{position:'fixed',top:60,right:12,background:'rgba(237,232,224,0.97)',
+        border:'1.5px solid #D0CAC0',borderRadius:14,padding:'10px 14px',
+        backdropFilter:'blur(12px)',WebkitBackdropFilter:'blur(12px)',
+        minWidth:148,zIndex:200,boxShadow:'0 4px 24px rgba(0,0,0,0.12)'}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8,paddingBottom:6,borderBottom:'1px solid #D0CAC0'}}>
+          <span style={{fontSize:10,fontWeight:700,color:'#8A847C',textTransform:'uppercase',letterSpacing:1}}>{displayKey}</span>
+          <button onClick={()=>setShowDegrees(false)}
+            style={{background:'transparent',border:'none',color:'#8A847C',fontSize:18,cursor:'pointer',fontFamily:'inherit'}}>×</button>
+        </div>
+        {scale.map((item,i)=>(
+          <div key={i} style={{display:'flex',alignItems:'center',gap:8,padding:'4px'}}>
+            <span style={{fontSize:11,color:'#6B6560',fontWeight:800,width:24,textAlign:'right',flexShrink:0}}>{item.degree}</span>
+            <span style={{fontSize:10,color:'#C0BAB0'}}>—</span>
+            <span style={{fontSize:13,color:'#1A1A1A',fontWeight:700}}>
+              {item.note}<span style={{fontSize:10,color:'#8A847C',fontWeight:500}}>{item.quality}</span>
+            </span>
+          </div>
+        ))}
+      </div>)}
+
+      {/* Key picker */}
+      {showKeyPicker&&(<Sheet onClose={()=>setShowKeyPicker(false)}>
+        <div style={{padding:'14px 20px 32px'}}>
+          <div style={{fontSize:10,fontWeight:700,color:'#8A847C',textTransform:'uppercase',letterSpacing:1.4,marginBottom:12}}>Tonalité</div>
+          <div style={{display:'flex',gap:8,marginBottom:18,background:'rgba(0,0,0,0.05)',borderRadius:12,padding:4}}>
+            {[{v:'maj',l:'Majeur'},{v:'min',l:'Mineur'}].map(m=>(
+              <button key={m.v} className="pill-btn"
+                style={{flex:1,background:displayMode===m.v?'#1A1A1A':'transparent',
+                  color:displayMode===m.v?'#F2EDE4':'#8A847C',border:'none',
+                  borderRadius:10,padding:'9px 0',fontWeight:700,fontSize:14,
+                  cursor:'pointer',fontFamily:'inherit',transition:'all 0.15s'}}
+                onClick={()=>setDisplayMode(m.v)}>{m.l}</button>
+            ))}
+          </div>
+          <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+            {ALL_KEYS.map(k=>(
+              <button key={k} className="pill-btn"
+                style={{background:k===displayKey?'#1A1A1A':'transparent',color:k===displayKey?'#F2EDE4':'#1A1A1A',
+                  border:`1.5px solid ${k===displayKey?'#1A1A1A':'#C0BAB0'}`,borderRadius:100,
+                  padding:'10px 16px',fontWeight:700,fontSize:16,cursor:'pointer',fontFamily:'inherit'}}
+                onClick={()=>handleKeyChange(k)}>{k}</button>
+            ))}
+          </div>
+        </div>
+      </Sheet>)}
+
+      {showTimeSig&&<TimeSigPicker current={timeSig}
+        onSelect={ts=>{setLibrary(lib=>lib.map(p=>p.id!==piece.id?p:{...p,timeSig:ts}));setShowTimeSig(false);}}
+        onClose={()=>setShowTimeSig(false)}/>}
+
+      {picker.visible&&<ChordPicker picker={picker}
+        onChange={(upd)=>{
+          // Synchronise localBeats[selectedBeat].c avec l'état de l'éditeur (root/quality/ext/bass)
+          const prevSbi=picker.selectedBeat??0;
+          const sbi=upd.selectedBeat??0;
+          const nSlots=upd.isGrande?8:4;
+          const emptyBeats=Array.from({length:nSlots},()=>mkBeat());
+          if(sbi===prevSbi){
+            const root=upd.letter+(upd.acc==='#'?'#':upd.acc==='b'?'b':'');
+            const bass=(upd.bass||'')+((upd.bass&&upd.bassAcc)?upd.bassAcc:'');
+            // buildChordStr gère root vide → basse seule '/G' ou ''
+            const newChord=buildChordStr(root,upd.qualityId,upd.extensions,bass);
+            const newBeats=(upd.localBeats||emptyBeats).map((b,i)=>{
+              if(i!==sbi)return b;
+              if(isSpec(b.c)||b.c==='%')return b;
+              return{...b,c:newChord};
+            });
+            setPicker({...upd,localBeats:newBeats});
+          } else {
+            setPicker({...upd});
+          }
+        }}
+        onConfirm={confirmMeasure}
+        onCancel={()=>setPicker(pk=>({...pk,visible:false}))}
+        onStructure={()=>{setPicker(pk=>({...pk,visible:false}));setMeasureSheet({si:picker.si,mi:picker.mi});}}
+        sectionName={cur.sections[picker.si]?.name||''}
+        onRenameSection={renameSectionAtPicker}
+        prefs={prefs} displayKey={displayKey} displayMode={displayMode} autoHarmonize={!!prefs?.autoHarmonize}/>}
+
+      {measureSheet&&(<MeasureSheet si={measureSheet.si} mi={measureSheet.mi}
+        measure={cur.sections[measureSheet.si]?.measures[measureSheet.mi]}
+        sectionName={cur.sections[measureSheet.si]?.name||''}
+        onRenameSection={(name)=>{
+          saveUndo();
+          setLibrary(lib=>lib.map(p=>p.id!==piece.id?p:{...p,
+            sections:p.sections.map((s,sI)=>sI!==measureSheet.si?s:{...s,name})
+          }));
+        }}
+        onAction={a=>handleMeasureAction(measureSheet.si,measureSheet.mi,a)}
+        onClose={()=>setMeasureSheet(null)} prefs={prefs}/>)}
+
+      {insertSheet!==null&&(<InsertSectionSheet
+        onInsert={(type,name)=>{insertSection(insertSheet,type,name);setInsertSheet(null);}}
+        onClose={()=>setInsertSheet(null)}/>)}
+
+      {barlinePick&&(<BarlinePicker
+        current={barlinePick.side==='right'
+          ?(cur.sections[barlinePick.si]?.measures[barlinePick.mi]?.barAfter||'normal')
+          :(barlinePick.mi===0?(cur.sections[barlinePick.si]?.startBar||'normal'):(cur.sections[barlinePick.si]?.measures[barlinePick.mi-1]?.barAfter||'normal'))}
+        onSelect={t=>updateBarline(barlinePick.si,barlinePick.mi,barlinePick.side,t)}
+        onClose={()=>setBarlinePick(null)}/>)}
+
+    </div>
+
+    {/* BOTTOM BAR — navigation pages + actions */}
+    <div style={{background:'rgba(255,255,255,0.92)',backdropFilter:'blur(20px)',WebkitBackdropFilter:'blur(20px)',
+      borderTop:'0.5px solid rgba(0,0,0,0.1)',height:BOTTOMBAR_H,
+      display:'flex',alignItems:'center',padding:'0 12px',gap:8,flexShrink:0,
+      paddingBottom:'env(safe-area-inset-bottom,0px)'}}>
+      {/* ↩ Annuler */}
+      <button onClick={undo} disabled={undoStack.current.length===0}
+        style={{background:'transparent',border:'1.5px solid #D0CAC0',borderRadius:100,
+          padding:'4px 10px',fontSize:11,cursor:undoStack.current.length===0?'default':'pointer',
+          fontFamily:'inherit',color:undoStack.current.length===0?'#C0BAB0':'#6B6560',fontWeight:600,
+          flexShrink:0,opacity:undoStack.current.length===0?0.45:1,transition:'opacity 0.15s'}}>
+        ↩ Annuler
+      </button>
+      <div style={{width:1,height:20,background:'#D0CAC0',flexShrink:0}}/>
+      {/* Prev */}
+      <button onClick={()=>setCurrentPage(p=>Math.max(0,p-1))} disabled={safePage===0}
+        style={{background:'transparent',border:'none',color:safePage===0?'#B0A8A0':'#1A1A1A',
+          fontSize:28,fontWeight:700,cursor:safePage===0?'default':'pointer',padding:'0 6px',lineHeight:1,fontFamily:'inherit',opacity:safePage===0?0.4:1}}>
+        ‹
+      </button>
+      {/* Dots */}
+      <div style={{flex:1,display:'flex',justifyContent:'center',alignItems:'center',gap:6}}>
+        {Array.from({length:totalPages}).map((_,i)=>(
+          <button key={i} onClick={()=>setCurrentPage(i)}
+            style={{width:safePage===i?20:7,height:7,borderRadius:4,
+              background:safePage===i?'#1A1A1A':'#C0BAB0',
+              border:'none',cursor:'pointer',padding:0,transition:'all 0.15s'}}/>
+        ))}
+        {totalPages>1&&(
+          <span style={{fontSize:10,color:'#8A847C',marginLeft:4}}>
+            {safePage+1}/{totalPages}
+          </span>
+        )}
+      </div>
+      {/* Next */}
+      <button onClick={()=>setCurrentPage(p=>Math.min(totalPages-1,p+1))} disabled={safePage===totalPages-1}
+        style={{background:'transparent',border:'none',color:safePage===totalPages-1?'#B0A8A0':'#1A1A1A',
+          fontSize:28,fontWeight:700,cursor:safePage===totalPages-1?'default':'pointer',padding:'0 6px',lineHeight:1,fontFamily:'inherit',opacity:safePage===totalPages-1?0.4:1}}>
+        ›
+      </button>
+      {editMode&&<>
+        <div style={{width:1,height:20,background:'#D0CAC0',flexShrink:0}}/>
+        {/* + Section */}
+        <button onClick={()=>setInsertSheet(cur.sections.length)}
+          style={{background:'transparent',border:'1.5px solid #D0CAC0',borderRadius:100,
+            padding:'4px 11px',fontSize:11,cursor:'pointer',fontFamily:'inherit',
+            color:'#6B6560',fontWeight:600,display:'flex',alignItems:'center',gap:3}}>
+          <span style={{fontSize:14,lineHeight:1}}>+</span><span>Section</span>
+        </button>
+      </>}
+    </div>
+  </div>);
+}
+
+// ─── APP ──────────────────────────────────────────────────────────────────────
+function App(){
+  const [view,setView]=useState('home');
+  const [library,setLibrary]=useState(LIBRARY_INIT);
+  const [pieceId,setPieceId]=useState(1);
+  const [displayKey,setDisplayKey]=useState('Bb');
+  const [displayMode,setDisplayMode]=useState('maj');
+  const [prefs,setPrefs]=useState(loadPrefs);
+  function updatePrefs(p){setPrefs(p);savePrefs(p);}
+  const piece=library.find(p=>p.id===pieceId)||library[0];
+  function selectPiece(p){setPieceId(p.id);setDisplayKey(p.key);setView('editor');}
+  function createPiece(){
+    const newId=Date.now();
+    const newPiece={id:newId,title:'Nouveau morceau',key:'C',bpm:120,style:'',timeSig:'4/4',
+      sections:[{name:'A',type:'grid',startBar:'normal',
+        measures:[mk(['C']),mk(['C']),mk(['C']),mk(['C'])]}]};
+    setLibrary(lib=>[...lib,newPiece]);
+    setPieceId(newId);setDisplayKey('C');setView('editor');
+  }
+  if(view==='home')    return <HomeScreen    onNavigate={v=>setView(v)}/>;
+  if(view==='library') return <LibraryScreen library={library} activePieceId={pieceId} onSelect={selectPiece} onBack={()=>setView('home')} onCreate={createPiece}/>;
+  if(view==='prefs')   return <PreferencesScreen prefs={prefs} onUpdate={updatePrefs} onBack={()=>setView('home')}/>;
+  if(view==='editor')  return <EditorScreen  library={library} setLibrary={setLibrary} piece={piece} displayKey={displayKey} setDisplayKey={setDisplayKey} displayMode={displayMode} setDisplayMode={setDisplayMode} onBack={()=>setView('library')} prefs={prefs}/>;
+  return null;
+}
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+<script>
+  if('serviceWorker' in navigator){
+    window.addEventListener('load',()=>{
+      navigator.serviceWorker.register('./sw.js').catch(()=>{});
+    });
+  }
+</script>
+</body>
+</html>
