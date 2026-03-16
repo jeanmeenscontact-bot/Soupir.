@@ -158,7 +158,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='v31.3';
+const APP_VERSION='v31.4';
 const CHORD_FONT="'Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -291,8 +291,8 @@ function SoupirLogo({size=90,color='#1A1A1A'}){
 // ─── BARLINE ─────────────────────────────────────────────────────────────────
 function Barline({type='normal',onClick,minH=106,accentColor='#1A1A1A'}){
   // type 'none' → largeur 0 (grande mesure = fusionner avec la suivante)
-  const BW=type==='none'?0:28;
   const isRepeat=['repeat-start','repeat-end','repeat-end-start'].includes(type);
+  const BW=type==='none'?0:isRepeat?22:10;
   const INK=isRepeat?accentColor:'#1A1A1A';
   const thin={width:1.5,alignSelf:'stretch',background:INK,flexShrink:0};
   const thick={width:3.5,alignSelf:'stretch',background:INK,flexShrink:0};
@@ -304,12 +304,10 @@ function Barline({type='normal',onClick,minH=106,accentColor='#1A1A1A'}){
       <div style={{width:4,height:4,borderRadius:'50%',background:INK}}/>
     </div>);
   if(type==='none'){
-    // Toujours rendu (28px) pour maintenir l'alignement — invisible en lecture, discret en édition
     return(<div className={onClick?'barline-hit':''} onClick={onClick}
-      style={{width:28,flexShrink:0,alignSelf:'stretch',minHeight:minH,
+      style={{width:10,flexShrink:0,alignSelf:'stretch',minHeight:minH,
         display:'flex',alignItems:'center',justifyContent:'center',
         cursor:onClick?'pointer':'default'}}>
-      {/* En mode édition : petit indicateur | centré verticalement */}
       {onClick&&(<div style={{width:2,height:24,background:'#D0CAC0',borderRadius:1,opacity:0.8}}/>)}
     </div>);
   }
@@ -329,7 +327,7 @@ function Barline({type='normal',onClick,minH=106,accentColor='#1A1A1A'}){
     <div className={onClick?'barline-hit':''}
       onClick={onClick}
       style={{width:BW,flexShrink:0,alignSelf:'stretch',minHeight:minH,overflow:'hidden',
-        display:'flex',alignItems:'stretch',justifyContent:'center',
+        display:'flex',alignItems:'stretch',justifyContent:'flex-end',
         cursor:onClick?'pointer':'default',transition:'opacity 0.1s'}}>
       <div style={{display:'flex',alignItems:'stretch'}}>{inner}</div>
     </div>);
