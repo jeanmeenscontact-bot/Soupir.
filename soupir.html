@@ -58,7 +58,7 @@ const MAJOR_IV=[0,2,4,5,7,9,11];
 const DEG_LBL=['I','II','III','IV','V','VI','VII'];
 const DEG_QUAL=['maj7','m7','m7','maj7','7','m7','m7b5'];
 const ALL_KEYS=['C','Db','D','Eb','E','F','Gb','G','Ab','A','Bb','B'];
-const LETTERS=['C','D','E','F','G','A','B'];
+const LETTERS=['A','B','C','D','E','F','G'];
 const MINOR_IV=[0,2,3,5,7,8,10];
 const MINOR_DEG_QUAL=['m7','m7b5','maj7','m7','m7','maj7','7'];
 const MINOR_DEG_LBL=['i','ii°','III','iv','v','VI','VII'];
@@ -148,7 +148,7 @@ function applyPrefs(chord,prefs){
   const p=prefs||DEFAULT_PREFS;
   let rest=main.slice(root.length);
   if(rest.startsWith('m7b5')){rest=(p.hdim==='ø'?'ø':'m7b5')+rest.slice(4);}
-  else if(rest.startsWith('mMaj7')){/* keep */}
+  else if(rest.startsWith('mMaj7')){rest=(p.minor==='-'?'-':'m')+'Δ'+rest.slice(5);}
   else if(rest.startsWith('maj7')){rest=(p.maj7==='Δ'?'Δ':'maj7')+rest.slice(4);}
   else if(rest.startsWith('dim7')){rest=(p.dim==='°'?'°7':'dim7')+rest.slice(4);}
   else if(rest.startsWith('dim')){rest=(p.dim==='°'?'°':'dim')+rest.slice(3);}
@@ -158,7 +158,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='v31.4';
+const APP_VERSION='v32';
 const CHORD_FONT="'Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -558,7 +558,7 @@ function ChordPicker({picker,onChange,onConfirm,onCancel,onStructure,sectionName
         const labels={'maj':'Maj','min':prefs?.minor==='-'?'−':'m','dim':prefs?.dim==='°'?'°':'dim',
           'aug':prefs?.aug==='+'?'+':'aug','sus4':'sus4','sus2':'sus2','dom7':'7',
           'maj7':prefs?.maj7==='Δ'?'Δ':'maj7','min7':prefs?.minor==='-'?'−7':'m7',
-          'mMaj7':'mMaj7','hdim':prefs?.hdim==='ø'?'ø':'m7b5',
+          'mMaj7':prefs?.minor==='-'?'−Δ':'mΔ','hdim':prefs?.hdim==='ø'?'ø':'m7b5',
           'dim7':prefs?.dim==='°'?'°7':'dim7','maj6':'6','min6':prefs?.minor==='-'?'−6':'m6','5':'5'};
         return(<div key={g} style={{marginBottom:10}}>
           <div style={{fontSize:9,color:'#B0AA9F',letterSpacing:0.8,marginBottom:6,fontWeight:600}}>{g.toUpperCase()}</div>
@@ -813,13 +813,6 @@ function ChordPicker({picker,onChange,onConfirm,onCancel,onStructure,sectionName
           padding:'13px',borderRadius:100,fontSize:14,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>
         Annuler
       </button>
-      {onStructure&&(
-        <button onClick={onStructure}
-          style={{flex:1,background:'transparent',border:'1.5px solid #C0BAB0',color:'#6B6560',
-            padding:'13px',borderRadius:100,fontSize:13,fontWeight:700,cursor:'pointer',fontFamily:'inherit'}}>
-          ≡ Mesure
-        </button>
-      )}
       <button onClick={onConfirm}
         style={{flex:2,background:'#1A1A1A',border:'none',color:'#F2EDE4',
           padding:'13px',borderRadius:100,fontSize:15,fontWeight:700,cursor:'pointer',fontFamily:'inherit'}}>
@@ -829,26 +822,71 @@ function ChordPicker({picker,onChange,onConfirm,onCancel,onStructure,sectionName
   </Sheet>);
 }
 
-// ─── BARLINE PICKER ───────────────────────────────────────────────────────────
-function BarlinePicker({current,onSelect,onClose}){
+// ─── BARLINE PANEL ─────────────────────────────────────────────────────────────
+function BarlinePanel({si,mi,currentBarType,measure,onSelectBarline,onAction,onClose}){
+  const beats=getBeats(measure||{});
+  const isSplit=!!(measure&&measure.split2);
+  const rowBtn={display:'flex',alignItems:'center',gap:16,padding:'14px 22px',
+    background:'transparent',border:'none',borderBottom:'1px solid #EAE4DC',
+    cursor:'pointer',fontFamily:'inherit',color:'#1A1A1A',textAlign:'left',width:'100%'};
   return(<Sheet onClose={onClose}>
     <div style={{padding:'14px 22px 10px',borderBottom:'1px solid #D6D0C8'}}>
       <div style={{fontSize:10,fontWeight:700,color:'#8A847C',textTransform:'uppercase',letterSpacing:1.4}}>
-        Type de barre de mesure
+        Mesure {mi+1}
       </div>
     </div>
-    <div style={{padding:'12px 18px 28px',display:'flex',flexDirection:'column',gap:7,overflowY:'auto'}}>
-      {BAR_TYPES.map(bt=>(
-        <button key={bt.id} onClick={()=>onSelect(bt.id)}
-          style={{display:'flex',alignItems:'center',gap:14,
-            background:bt.id===current?'#1A1A1A':'transparent',
-            border:`1.5px solid ${bt.id===current?'#1A1A1A':'#C0BAB0'}`,
-            borderRadius:12,padding:'13px 18px',cursor:'pointer',fontFamily:'inherit',transition:'all 0.12s'}}>
-          <span style={{fontSize:17,fontWeight:900,color:bt.id===current?'#F2EDE4':'#1A1A1A',
-            fontFamily:'monospace',minWidth:38,textAlign:'center'}}>{bt.label}</span>
-          <span style={{fontSize:13,color:bt.id===current?'#D0C8BC':'#6B6560',fontWeight:500}}>{bt.hint}</span>
+    <div style={{overflowY:'auto'}}>
+
+      {/* ── Type de barre ── */}
+      <div style={{padding:'10px 18px 10px',borderBottom:'1px solid #EAE4DC'}}>
+        <div style={{fontSize:9,fontWeight:700,color:'#8A847C',textTransform:'uppercase',letterSpacing:1.2,marginBottom:6}}>
+          Type de barre
+        </div>
+        <div style={{display:'flex',flexDirection:'column',gap:5}}>
+          {BAR_TYPES.map(bt=>(
+            <button key={bt.id} onClick={()=>onSelectBarline(bt.id)}
+              style={{display:'flex',alignItems:'center',gap:14,
+                background:bt.id===currentBarType?'#1A1A1A':'transparent',
+                border:`1.5px solid ${bt.id===currentBarType?'#1A1A1A':'#C0BAB0'}`,
+                borderRadius:12,padding:'10px 16px',cursor:'pointer',fontFamily:'inherit',transition:'all 0.12s'}}>
+              <span style={{fontSize:15,fontWeight:900,color:bt.id===currentBarType?'#F2EDE4':'#1A1A1A',
+                fontFamily:'monospace',minWidth:32,textAlign:'center'}}>{bt.label}</span>
+              <span style={{fontSize:12,color:bt.id===currentBarType?'#D0C8BC':'#6B6560',fontWeight:500}}>{bt.hint}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Ajouter avant / après ── */}
+      <div style={{borderBottom:'1px solid #EAE4DC'}}>
+        <button onClick={()=>onAction('addBefore')} style={rowBtn}>
+          <span style={{width:22,textAlign:'center',fontSize:15,flexShrink:0}}>+</span>
+          <span style={{fontSize:14,fontWeight:600}}>Insérer une mesure avant</span>
         </button>
-      ))}
+        <button onClick={()=>onAction('addAfter')} style={rowBtn}>
+          <span style={{width:22,textAlign:'center',fontSize:15,flexShrink:0}}>+</span>
+          <span style={{fontSize:14,fontWeight:600}}>Insérer une mesure après</span>
+        </button>
+      </div>
+
+      {/* ── Structure ── */}
+      <div style={{paddingBottom:28}}>
+        {isSplit
+          ?<button onClick={()=>onAction('unsplit')} style={rowBtn}>
+            <span style={{width:22,textAlign:'center',fontSize:15,flexShrink:0}}>⟺</span>
+            <span style={{fontSize:14,fontWeight:600}}>Réunir les 2 demi-mesures</span>
+          </button>
+          :<button onClick={()=>onAction('split')} style={rowBtn}>
+            <span style={{width:22,textAlign:'center',fontSize:15,flexShrink:0}}>⟨⟩</span>
+            <span style={{fontSize:14,fontWeight:600}}>Diviser en 2 demi-mesures</span>
+          </button>
+        }
+        <button onClick={()=>onAction('deleteMeasure')} style={{...rowBtn,color:'#C0392B'}}>
+          <span style={{width:22,textAlign:'center',fontSize:15,flexShrink:0}}>×</span>
+          <span style={{fontSize:14,fontWeight:600}}>Supprimer cette mesure</span>
+        </button>
+      </div>
+
     </div>
   </Sheet>);
 }
@@ -2141,7 +2179,6 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
 
   function handleMeasureAction(si,mi,action){
     saveUndo();
-    setMeasureSheet(null);
     if(action==='addChord'){
       const mm0=cur.sections[si].measures[mi];
       const beats0=getBeats(mm0);
@@ -2185,10 +2222,17 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
         })
       }));
     }
-    else if(action==='addMeasure'){
+    else if(action==='addMeasure'||action==='addAfter'){
       setLibrary(lib=>lib.map(p=>p.id!==piece.id?p:{...p,
         sections:p.sections.map((s,sI)=>sI!==si?s:{...s,
           measures:[...s.measures.slice(0,mi+1),mk([]),...s.measures.slice(mi+1)]
+        })
+      }));
+    }
+    else if(action==='addBefore'){
+      setLibrary(lib=>lib.map(p=>p.id!==piece.id?p:{...p,
+        sections:p.sections.map((s,sI)=>sI!==si?s:{...s,
+          measures:[...s.measures.slice(0,mi),mk([]),...s.measures.slice(mi)]
         })
       }));
     }
@@ -2792,32 +2836,22 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
         }}
         onConfirm={confirmMeasure}
         onCancel={()=>setPicker(pk=>({...pk,visible:false}))}
-        onStructure={()=>{setPicker(pk=>({...pk,visible:false}));setMeasureSheet({si:picker.si,mi:picker.mi});}}
         sectionName={cur.sections[picker.si]?.name||''}
         onRenameSection={renameSectionAtPicker}
         prefs={prefs} displayKey={displayKey} displayMode={displayMode} autoHarmonize={!!prefs?.autoHarmonize}/>}
-
-      {measureSheet&&(<MeasureSheet si={measureSheet.si} mi={measureSheet.mi}
-        measure={cur.sections[measureSheet.si]?.measures[measureSheet.mi]}
-        sectionName={cur.sections[measureSheet.si]?.name||''}
-        onRenameSection={(name)=>{
-          saveUndo();
-          setLibrary(lib=>lib.map(p=>p.id!==piece.id?p:{...p,
-            sections:p.sections.map((s,sI)=>sI!==measureSheet.si?s:{...s,name})
-          }));
-        }}
-        onAction={a=>handleMeasureAction(measureSheet.si,measureSheet.mi,a)}
-        onClose={()=>setMeasureSheet(null)} prefs={prefs}/>)}
 
       {insertSheet!==null&&(<InsertSectionSheet
         onInsert={(type,name)=>{insertSection(insertSheet,type,name);setInsertSheet(null);}}
         onClose={()=>setInsertSheet(null)}/>)}
 
-      {barlinePick&&(<BarlinePicker
-        current={barlinePick.side==='right'
+      {barlinePick&&(<BarlinePanel
+        si={barlinePick.si} mi={barlinePick.mi}
+        currentBarType={barlinePick.side==='right'
           ?(cur.sections[barlinePick.si]?.measures[barlinePick.mi]?.barAfter||'normal')
           :(barlinePick.mi===0?(cur.sections[barlinePick.si]?.startBar||'normal'):(cur.sections[barlinePick.si]?.measures[barlinePick.mi-1]?.barAfter||'normal'))}
-        onSelect={t=>updateBarline(barlinePick.si,barlinePick.mi,barlinePick.side,t)}
+        measure={cur.sections[barlinePick.si]?.measures[barlinePick.mi]}
+        onSelectBarline={t=>updateBarline(barlinePick.si,barlinePick.mi,barlinePick.side,t)}
+        onAction={a=>{setBarlinePick(null);handleMeasureAction(barlinePick.si,barlinePick.mi,a);}}
         onClose={()=>setBarlinePick(null)}/>)}
 
     </div>
