@@ -158,7 +158,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='v29';
+const APP_VERSION='v29.2';
 const CHORD_FONT="'Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -944,7 +944,7 @@ function MeasureSheet({si,mi,measure,onAction,onClose,prefs,sectionName,onRename
 }
 
 // ─── CHORD TEXT — typographie iReal Pro (racine grande, altération + qualité petites) ──
-function ChordText({chord,fs=30,color='#1C1C1E',weight=400}){
+function ChordText({chord,fs=30,color='#1C1C1E',weight=500}){
   if(!chord)return null;
   const CF=CHORD_FONT;
   // Basse seule : chord commence par '/'
@@ -2016,7 +2016,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
   const totalPages=Math.max(1,Math.ceil(allRows.length/rowsPerPage));
   const safePage=Math.min(currentPage,totalPages-1);
   const pageRows=allRows.slice(safePage*rowsPerPage,(safePage+1)*rowsPerPage);
-  const chordFsBase=Math.max(13,Math.round(34*rowH/136));
+  const chordFsBase=Math.max(13,Math.round(60*rowH/136));
 
   // Ouvre le ChordPicker pour une GRANDE MESURE — 8 beats (master 0-3 + suite 4-7)
   function openGrandeMeasurePicker(si,mi,cSi,cMi,e,initialBeat=null){
@@ -2261,13 +2261,13 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
           const chColor=idem?'#C7C2BC':(degreeMode&&!spec?(isDia?'#1A1A1A':'#8A3020'):'#1A1A1A');
           // Réduction de police pour les accords longs (évite débordement)
           const dispLen=disp?disp.replace(/[♭♯%]/g,'xx').length:0;
-          const lenScale=dispLen>=8?0.68:dispLen>=7?0.74:dispLen>=6?0.82:dispLen>=5?0.90:1;
+          const lenScale=dispLen>=8?0.76:dispLen>=7?0.83:dispLen>=6?0.90:dispLen>=5?0.95:1;
           const effectiveFs=Math.round(chFs*lenScale);
           return(
             <div key={bi}
               onClick={editMode?(e)=>{e.stopPropagation();openMeasurePicker(si,mi,half,e,bi);}:undefined}
               style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',
-                minWidth:0,position:'relative',cursor:editMode?'pointer':'default'}}>
+                minWidth:0,overflow:'hidden',position:'relative',cursor:editMode?'pointer':'default'}}>
               {/* Crochet de volta — absolu, ne décale PAS l'accord */}
               {hasVolta&&(
                 <div style={{position:'absolute',top:0,left:0,right:0,height:VOLTA_H,
@@ -2295,8 +2295,8 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                   padding:'2px 1px',borderRadius:4,lineHeight:1,display:'inline-flex',alignItems:'center'}}>
                   {spec?(<span style={{fontSize:effectiveFs,fontWeight:700,color:chColor,letterSpacing:'0.05em',lineHeight:1}}>{disp}</span>)
                   :idem?(<span style={{fontSize:Math.round(effectiveFs*1.1),fontWeight:200,color:chColor,letterSpacing:'0.08em',lineHeight:1}}>%</span>)
-                  :degreeMode?(<DegreeText deg={disp} fs={effectiveFs} color={chColor} weight={400}/>)
-                  :(<ChordText chord={disp} fs={effectiveFs} color={chColor} weight={400}/>)}
+                  :degreeMode?(<DegreeText deg={disp} fs={effectiveFs} color={chColor} weight={500}/>)
+                  :(<ChordText chord={disp} fs={effectiveFs} color={chColor} weight={500}/>)}
                 </span>
               )}
               {!hasChord&&editMode&&(
@@ -2524,13 +2524,13 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                             const disp=spec?chord:(idem?'%':getDisp(chord));
                             const chColor=idem?'#C7C2BC':(degreeMode&&!spec?(isDia?'#1A1A1A':'#8A3020'):'#1A1A1A');
                             const gDispLen=disp?disp.replace(/[♭♯%]/g,'xx').length:0;
-                            const gLenScale=gDispLen>=8?0.68:gDispLen>=7?0.74:gDispLen>=6?0.82:gDispLen>=5?0.90:1;
+                            const gLenScale=gDispLen>=8?0.76:gDispLen>=7?0.83:gDispLen>=6?0.90:gDispLen>=5?0.95:1;
                             const gEffFs=Math.round(chFs*gLenScale);
                             return(
                               <div key={beat.key}
                                 onClick={editMode?(e)=>{e.stopPropagation();openGrandeMeasurePicker(si,mi,cSi,cMi,e,bi);}:undefined}
                                 style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',
-                                  minWidth:0,position:'relative',cursor:editMode?'pointer':'default'}}>
+                                  minWidth:0,overflow:'hidden',position:'relative',cursor:editMode?'pointer':'default'}}>
                                 {hasVolta&&(
                                   <div style={{position:'absolute',top:0,left:0,right:0,height:VOLTA_H,
                                     borderLeft:`2px solid ${INK_ACCENT}`,borderTop:`2px solid ${INK_ACCENT}`,
@@ -2555,8 +2555,8 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                                       padding:'2px 1px',borderRadius:3,lineHeight:1,display:'inline-flex',alignItems:'center'}}>
                                       {spec?(<span style={{fontSize:gEffFs,fontWeight:700,color:chColor,letterSpacing:'0.05em',lineHeight:1}}>{disp}</span>)
                                       :idem?(<span style={{fontSize:Math.round(gEffFs*1.1),fontWeight:200,color:chColor,letterSpacing:'0.08em',lineHeight:1}}>%</span>)
-                                      :degreeMode?(<DegreeText deg={disp} fs={gEffFs} color={chColor} weight={400}/>)
-                                      :(<ChordText chord={disp} fs={gEffFs} color={chColor} weight={400}/>)}
+                                      :degreeMode?(<DegreeText deg={disp} fs={gEffFs} color={chColor} weight={500}/>)
+                                      :(<ChordText chord={disp} fs={gEffFs} color={chColor} weight={500}/>)}
                                     </span>
                                   )}
                                   {!hasChord&&editMode&&<span style={{fontSize:9,color:'#D8D4CE',lineHeight:1,userSelect:'none'}}>·</span>}
