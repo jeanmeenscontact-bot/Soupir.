@@ -158,7 +158,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='v31.2';
+const APP_VERSION='v31.3';
 const CHORD_FONT="'Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -2266,9 +2266,8 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
           return(
             <div key={bi}
               onClick={editMode?(e)=>{e.stopPropagation();openMeasurePicker(si,mi,half,e,bi);}:undefined}
-              style={{flex:1,display:'flex',flexDirection:'column',justifyContent:'center',alignItems:'flex-start',
-                minWidth:0,overflow:'hidden',position:'relative',cursor:editMode?'pointer':'default'}}>
-              {/* Crochet de volta — absolu, ne décale PAS l'accord */}
+              style={{flex:1,minWidth:0,overflow:'hidden',position:'relative',cursor:editMode?'pointer':'default'}}>
+              {/* Crochet de volta — absolu */}
               {hasVolta&&(
                 <div style={{position:'absolute',top:0,left:0,right:0,height:VOLTA_H,
                   borderLeft:`2px solid ${INK_ACCENT}`,borderTop:`2px solid ${INK_ACCENT}`,
@@ -2279,7 +2278,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                   </span>
                 </div>
               )}
-              {/* Signes — absolu, sous le volta si présent */}
+              {/* Signes — absolu */}
               {hasSigns&&(
                 <div style={{position:'absolute',top:hasVolta?VOLTA_H+1:2,left:0,right:0,
                   display:'flex',justifyContent:'center',pointerEvents:'none',zIndex:2}}>
@@ -2289,10 +2288,11 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                   </span>
                 </div>
               )}
-              {/* Accord — toujours centré dans la cellule entière */}
+              {/* Accord — absolu, collé à gauche, centré verticalement */}
               {hasChord&&(
-                <span style={{background:degreeMode&&!isDia&&!spec&&!idem?'#F5DDD8':'transparent',
-                  padding:'2px 1px',borderRadius:4,lineHeight:1,display:'inline-flex',alignItems:'center'}}>
+                <span style={{position:'absolute',left:0,top:'50%',transform:'translateY(-50%)',
+                  background:degreeMode&&!isDia&&!spec&&!idem?'#F5DDD8':'transparent',
+                  borderRadius:4,lineHeight:1,display:'inline-flex',alignItems:'center'}}>
                   {spec?(<span style={{fontSize:effectiveFs,fontWeight:700,color:chColor,letterSpacing:'0.05em',lineHeight:1}}>{disp}</span>)
                   :idem?(<span style={{fontSize:Math.round(effectiveFs*1.1),fontWeight:200,color:chColor,letterSpacing:'0.08em',lineHeight:1}}>%</span>)
                   :degreeMode?(<DegreeText deg={disp} fs={effectiveFs} color={chColor} weight={500}/>)
@@ -2300,7 +2300,8 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                 </span>
               )}
               {!hasChord&&editMode&&(
-                <span style={{fontSize:10,color:'#D0CAC0',fontWeight:300,lineHeight:1,userSelect:'none'}}>·</span>
+                <span style={{position:'absolute',left:0,top:'50%',transform:'translateY(-50%)',
+                  fontSize:10,color:'#D0CAC0',fontWeight:300,lineHeight:1,userSelect:'none'}}>·</span>
               )}
               {/* Annotation — absolu en bas */}
               {hasText&&(
@@ -2529,8 +2530,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                             return(
                               <div key={beat.key}
                                 onClick={editMode?(e)=>{e.stopPropagation();openGrandeMeasurePicker(si,mi,cSi,cMi,e,bi);}:undefined}
-                                style={{flex:1,display:'flex',flexDirection:'column',justifyContent:'center',alignItems:'flex-start',
-                                  minWidth:0,overflow:'hidden',position:'relative',cursor:editMode?'pointer':'default'}}>
+                                style={{flex:1,minWidth:0,overflow:'hidden',position:'relative',cursor:editMode?'pointer':'default'}}>
                                 {hasVolta&&(
                                   <div style={{position:'absolute',top:0,left:0,right:0,height:VOLTA_H,
                                     borderLeft:`2px solid ${INK_ACCENT}`,borderTop:`2px solid ${INK_ACCENT}`,
@@ -2548,18 +2548,17 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                                     </span>
                                   </div>
                                 )}
-                                <div style={{display:'flex',flexDirection:'column',justifyContent:'center',alignItems:'flex-start'}}>
-                                  {hasChord&&(
-                                    <span style={{background:degreeMode&&!isDia&&!spec&&!idem?'#F5DDD8':'transparent',
-                                      padding:'2px 1px',borderRadius:3,lineHeight:1,display:'inline-flex',alignItems:'center'}}>
-                                      {spec?(<span style={{fontSize:gEffFs,fontWeight:700,color:chColor,letterSpacing:'0.05em',lineHeight:1}}>{disp}</span>)
-                                      :idem?(<span style={{fontSize:Math.round(gEffFs*1.1),fontWeight:200,color:chColor,letterSpacing:'0.08em',lineHeight:1}}>%</span>)
-                                      :degreeMode?(<DegreeText deg={disp} fs={gEffFs} color={chColor} weight={500}/>)
-                                      :(<ChordText chord={disp} fs={gEffFs} color={chColor} weight={500}/>)}
-                                    </span>
-                                  )}
-                                  {!hasChord&&editMode&&<span style={{fontSize:9,color:'#D8D4CE',lineHeight:1,userSelect:'none'}}>·</span>}
-                                </div>
+                                {hasChord&&(
+                                  <span style={{position:'absolute',left:0,top:'50%',transform:'translateY(-50%)',
+                                    background:degreeMode&&!isDia&&!spec&&!idem?'#F5DDD8':'transparent',
+                                    borderRadius:3,lineHeight:1,display:'inline-flex',alignItems:'center'}}>
+                                    {spec?(<span style={{fontSize:gEffFs,fontWeight:700,color:chColor,letterSpacing:'0.05em',lineHeight:1}}>{disp}</span>)
+                                    :idem?(<span style={{fontSize:Math.round(gEffFs*1.1),fontWeight:200,color:chColor,letterSpacing:'0.08em',lineHeight:1}}>%</span>)
+                                    :degreeMode?(<DegreeText deg={disp} fs={gEffFs} color={chColor} weight={500}/>)
+                                    :(<ChordText chord={disp} fs={gEffFs} color={chColor} weight={500}/>)}
+                                  </span>
+                                )}
+                                {!hasChord&&editMode&&<span style={{position:'absolute',left:0,top:'50%',transform:'translateY(-50%)',fontSize:9,color:'#D8D4CE',lineHeight:1,userSelect:'none'}}>·</span>}
                                 {hasText&&(
                                   <div style={{position:'absolute',bottom:2,left:0,right:0,
                                     textAlign:'center',fontSize:7,fontStyle:'italic',
