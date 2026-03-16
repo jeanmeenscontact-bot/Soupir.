@@ -158,7 +158,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='v27';
+const APP_VERSION='v28';
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
 const BAR_TYPES=[
@@ -1902,6 +1902,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
   const [insertSheet,setInsertSheet]=useState(null);
   const [currentPage,setCurrentPage]=useState(0);
   const [editMode,setEditMode]=useState(true); // true = édition, false = lecture
+  const [barsVisible,setBarsVisible]=useState(true);
   const [sectionRenameOverlay,setSectionRenameOverlay]=useState(null); // {si, name}
   const metroRef=useRef(null),beatRef=useRef(0);
   const undoStack=useRef([]);
@@ -1980,11 +1981,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
     }));
   }
   // ── Layout pages ────────────────────────────────────────────────────────────
-  const ZOOM_STEPS=[0.5,0.6,0.75,0.9,1.0,1.1,1.25,1.5,1.75,2.0];
-  const zoomIdx=typeof cur.zoomIdx==='number'&&cur.zoomIdx>=0&&cur.zoomIdx<ZOOM_STEPS.length?cur.zoomIdx:4;
-  const zoom=ZOOM_STEPS[zoomIdx];
-  function zoomIn(){if(zoomIdx<ZOOM_STEPS.length-1)setLibrary(lib=>lib.map(p=>p.id!==piece.id?p:{...p,zoomIdx:zoomIdx+1}));}
-  function zoomOut(){if(zoomIdx>0)setLibrary(lib=>lib.map(p=>p.id!==piece.id?p:{...p,zoomIdx:zoomIdx-1}));}
+  const rowsPerPage=cur.rowsPerPage||5;
   function computeRows(sections){
     const rows=[];let row=[];let mCount=0;
     sections.forEach((section,si)=>{
@@ -2010,9 +2007,10 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
   }
   const allRows=computeRows(cur.sections);
   const TOPBAR_H=52,BOTTOMBAR_H=44,INFO_H=36;
-  const availH=(typeof window!=='undefined'?window.innerHeight:900)-TOPBAR_H-BOTTOMBAR_H-INFO_H;
-  const rowH=Math.max(48,Math.round(88*zoom));
-  const rowsPerPage=Math.max(1,Math.floor(availH/rowH));
+  const fullscreen=!editMode&&!barsVisible;
+  const availH=(typeof window!=='undefined'?window.innerHeight:900)
+    -(fullscreen?0:TOPBAR_H)-(fullscreen?0:BOTTOMBAR_H)-(fullscreen?0:INFO_H);
+  const rowH=Math.max(56,Math.floor(availH/rowsPerPage));
   const totalPages=Math.max(1,Math.ceil(allRows.length/rowsPerPage));
   const safePage=Math.min(currentPage,totalPages-1);
   const pageRows=allRows.slice(safePage*rowsPerPage,(safePage+1)*rowsPerPage);
@@ -2324,7 +2322,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
     {/* TOP BAR */}
     <div style={{background:'rgba(255,255,255,0.88)',backdropFilter:'blur(20px)',WebkitBackdropFilter:'blur(20px)',
       borderBottom:'0.5px solid #D0CCC4',height:52,
-      display:'flex',alignItems:'center',padding:'0 12px',gap:7,flexShrink:0}}>
+      display:fullscreen?'none':'flex',alignItems:'center',padding:'0 12px',gap:7,flexShrink:0}}>
       <button onClick={onBack}
         style={{background:'transparent',border:'none',color:'#1A1A1A',fontSize:20,cursor:'pointer',padding:'4px 6px 4px 0',fontFamily:'inherit',flexShrink:0}}>←</button>
       <div style={{display:'flex',alignItems:'center',gap:5,flexShrink:0}}>
@@ -2371,7 +2369,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
     <div style={{flex:1,overflow:'hidden',position:'relative',background:'#F2F0EB',display:'flex',flexDirection:'column'}}>
 
       {/* Bandeau titre + sélecteur Lecture/Édition */}
-      <div style={{display:'flex',alignItems:'center',padding:'0 10px',gap:8,borderBottom:'0.5px solid #D0CCC4',
+      <div style={{display:fullscreen?'none':'flex',alignItems:'center',padding:'0 10px',gap:8,borderBottom:'0.5px solid #D0CCC4',
         background:'rgba(252,250,246,0.95)',height:INFO_H,flexShrink:0}}>
         <span style={{fontSize:13,fontWeight:800,letterSpacing:'-0.4px',color:'#1C1C1E',flex:1,
           overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{cur.title}</span>
@@ -2379,14 +2377,14 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
           borderRadius:4,padding:'1px 5px',flexShrink:0}}>Degrés</span>}
         {/* Sélecteur Lecture / Édition */}
         <div style={{display:'flex',background:'#E2DDD6',borderRadius:8,padding:2,gap:1,flexShrink:0}}>
-          <button onClick={()=>setEditMode(false)}
+          <button onClick={()=>{setEditMode(false);setBarsVisible(true);}}
             style={{background:!editMode?'#FFFFFF':'transparent',border:'none',
               borderRadius:6,padding:'3px 9px',fontSize:10,fontWeight:700,
               cursor:'pointer',fontFamily:'inherit',color:!editMode?'#1A1A1A':'#8A847C',
               boxShadow:!editMode?'0 1px 3px rgba(0,0,0,0.12)':'none',transition:'all 0.12s'}}>
             👁 Lire
           </button>
-          <button onClick={()=>setEditMode(true)}
+          <button onClick={()=>{setEditMode(true);setBarsVisible(true);}}
             style={{background:editMode?'#1A1A1A':'transparent',border:'none',
               borderRadius:6,padding:'3px 9px',fontSize:10,fontWeight:700,
               cursor:'pointer',fontFamily:'inherit',color:editMode?'#F2EDE4':'#8A847C',
@@ -2397,7 +2395,8 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
       </div>
 
       {/* Grille pages */}
-      <div style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden',background:'#FFFFFF'}}>
+      <div onClick={!editMode?()=>setBarsVisible(v=>!v):undefined}
+        style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden',background:'#FFFFFF',cursor:!editMode?'pointer':undefined}}>
         {/* Pre-pass : détecter les rows dont la section se termine à pleine capacité
             → le "+" doit apparaître au début de la row suivante, ou dans la 1re ligne vide */}
         {(()=>{
@@ -2828,7 +2827,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
     {/* BOTTOM BAR — navigation pages + actions */}
     <div style={{background:'rgba(255,255,255,0.92)',backdropFilter:'blur(20px)',WebkitBackdropFilter:'blur(20px)',
       borderTop:'0.5px solid rgba(0,0,0,0.1)',height:BOTTOMBAR_H,
-      display:'flex',alignItems:'center',padding:'0 12px',gap:8,flexShrink:0,
+      display:fullscreen?'none':'flex',alignItems:'center',padding:'0 12px',gap:8,flexShrink:0,
       paddingBottom:'env(safe-area-inset-bottom,0px)'}}>
       {/* ↩ Annuler */}
       <button onClick={undo} disabled={undoStack.current.length===0}
@@ -2865,28 +2864,6 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
           fontSize:28,fontWeight:700,cursor:safePage===totalPages-1?'default':'pointer',padding:'0 6px',lineHeight:1,fontFamily:'inherit',opacity:safePage===totalPages-1?0.4:1}}>
         ›
       </button>
-      {/* Zoom A/A */}
-      <div style={{width:1,height:20,background:'#D0CAC0',flexShrink:0}}/>
-      <div style={{display:'flex',alignItems:'center',gap:3,flexShrink:0}}>
-        <button onClick={zoomOut} disabled={zoomIdx===0}
-          title="Réduire"
-          style={{width:26,height:26,background:'transparent',border:'1.5px solid #D0CAC0',
-            borderRadius:100,cursor:zoomIdx===0?'default':'pointer',
-            color:zoomIdx===0?'#C0BAB0':'#6B6560',
-            display:'flex',alignItems:'center',justifyContent:'center',padding:0,
-            fontFamily:'inherit',opacity:zoomIdx===0?0.4:1}}>
-          <span style={{fontSize:9,fontWeight:900,lineHeight:1}}>A</span>
-        </button>
-        <button onClick={zoomIn} disabled={zoomIdx===ZOOM_STEPS.length-1}
-          title="Agrandir"
-          style={{width:26,height:26,background:'transparent',border:'1.5px solid #D0CAC0',
-            borderRadius:100,cursor:zoomIdx===ZOOM_STEPS.length-1?'default':'pointer',
-            color:zoomIdx===ZOOM_STEPS.length-1?'#C0BAB0':'#6B6560',
-            display:'flex',alignItems:'center',justifyContent:'center',padding:0,
-            fontFamily:'inherit',opacity:zoomIdx===ZOOM_STEPS.length-1?0.4:1}}>
-          <span style={{fontSize:14,fontWeight:900,lineHeight:1}}>A</span>
-        </button>
-      </div>
       {editMode&&<>
         <div style={{width:1,height:20,background:'#D0CAC0',flexShrink:0}}/>
         {/* + Section */}
