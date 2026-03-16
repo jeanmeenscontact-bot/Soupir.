@@ -158,7 +158,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='v30';
+const APP_VERSION='v30.1';
 const CHORD_FONT="'Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -2548,8 +2548,8 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                                     </span>
                                   </div>
                                 )}
-                                <div style={{display:'flex',alignItems:'center',justifyContent:'center',
-                                  paddingLeft:1,paddingRight:1}}>
+                                <div style={{display:'flex',alignItems:'center',justifyContent:'flex-start',
+                                  paddingLeft:3,paddingRight:1}}>
                                   {hasChord&&(
                                     <span style={{background:degreeMode&&!isDia&&!spec&&!idem?'#F5DDD8':'transparent',
                                       padding:'2px 1px',borderRadius:3,lineHeight:1,display:'inline-flex',alignItems:'center'}}>
