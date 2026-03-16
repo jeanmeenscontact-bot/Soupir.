@@ -2546,7 +2546,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                     const VOLTA_H=15;
                     rendered.push(
                       <React.Fragment key={`${si}-${mi}-gm`}>
-                        <div style={{flex:'0 0 calc(50% - 70px)',position:'relative',display:'flex',
+                        <div style={{flex:2,position:'relative',display:'flex',
                             minWidth:0,overflow:'hidden'}}>
                           {sectionStart&&(
                             <div onClick={editMode?(e)=>{e.stopPropagation();setSectionRenameOverlay({si,name:sectionName});}:undefined}
@@ -2622,8 +2622,8 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                             </div>
                           )}
                         </div>
-                        {/* Spacer 28px : compense la barline 'none' disparue pour aligner les rows */}
-                        <div style={{width:28,flexShrink:0}}/>
+                        {/* Spacer : compense la barline 'none' disparue pour aligner les rows */}
+                        <div style={{width:10,flexShrink:0}}/>
                         <Barline type={cMm.barAfter||'normal'}
                           onClick={editMode?(e)=>{e.stopPropagation();setBarlinePick({si:cSi,mi:cMi,side:'right'});}:undefined}
                           minH={rowH} accentColor={INK_ACCENT}/>
@@ -2638,7 +2638,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                     const isSplitCont=!!measure.split2;
                     rendered.push(
                       <React.Fragment key={`${si}-${mi}`}>
-                        <div style={{flex:'0 0 calc(25% - 35px)',position:'relative',display:'flex',flexDirection:'row',
+                        <div style={{flex:1,position:'relative',display:'flex',flexDirection:'row',
                           minWidth:0,overflow:'hidden'}}>
 
                           {isSplitCont?(
@@ -2660,7 +2660,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                   }
                   rendered.push(
                     <React.Fragment key={`${si}-${mi}`}>
-                      <div style={{flex:'0 0 calc(25% - 35px)',position:'relative',display:'flex',flexDirection:'row',
+                      <div style={{flex:1,position:'relative',display:'flex',flexDirection:'row',
                         minWidth:0,overflow:'hidden'}}>
                         {sectionStart&&(
                           <div onClick={editMode?(e)=>{e.stopPropagation();setSectionRenameOverlay({si,name:sectionName});}:undefined}
@@ -2692,14 +2692,14 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
               {row.cells.length<GCOLS&&Array.from({length:GCOLS-row.cells.length}).map((_,pi)=>(
                 <React.Fragment key={`pad${pi}`}>
                   {pi===0&&isLastOfSection?(
-                    <div style={{flex:'0 0 calc(25% - 35px)',minHeight:rowH,display:'flex',alignItems:'center',justifyContent:'flex-start',paddingLeft:14}}>
+                    <div style={{flex:1,minHeight:rowH,display:'flex',alignItems:'center',justifyContent:'flex-start',paddingLeft:14}}>
                       <button onClick={()=>{addMeasureAtEnd(lastRealSi);setCurrentPage(Math.ceil((allRows.length+1)/rowsPerPage)-1);}}
                         style={{width:26,height:26,background:'rgba(0,0,0,0.06)',border:'none',borderRadius:'50%',
                           fontSize:18,cursor:'pointer',color:'#8A847C',display:'flex',alignItems:'center',
                           justifyContent:'center',fontWeight:300,padding:0,lineHeight:1}}>+</button>
                     </div>
                   ):(
-                    <div style={{flex:'0 0 calc(25% - 35px)',minHeight:rowH}}/>
+                    <div style={{flex:1,minHeight:rowH}}/>
                   )}
                   <Barline type="none" minH={rowH} accentColor={INK_ACCENT}/>
                 </React.Fragment>
