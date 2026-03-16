@@ -158,7 +158,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='v31.1';
+const APP_VERSION='v31.2';
 const CHORD_FONT="'Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -2267,7 +2267,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
             <div key={bi}
               onClick={editMode?(e)=>{e.stopPropagation();openMeasurePicker(si,mi,half,e,bi);}:undefined}
               style={{flex:1,display:'flex',flexDirection:'column',justifyContent:'center',alignItems:'flex-start',
-                minWidth:0,overflow:'hidden',position:'relative',cursor:editMode?'pointer':'default',paddingLeft:3}}>
+                minWidth:0,overflow:'hidden',position:'relative',cursor:editMode?'pointer':'default'}}>
               {/* Crochet de volta — absolu, ne décale PAS l'accord */}
               {hasVolta&&(
                 <div style={{position:'absolute',top:0,left:0,right:0,height:VOLTA_H,
@@ -2530,7 +2530,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                               <div key={beat.key}
                                 onClick={editMode?(e)=>{e.stopPropagation();openGrandeMeasurePicker(si,mi,cSi,cMi,e,bi);}:undefined}
                                 style={{flex:1,display:'flex',flexDirection:'column',justifyContent:'center',alignItems:'flex-start',
-                                  minWidth:0,overflow:'hidden',position:'relative',cursor:editMode?'pointer':'default',paddingLeft:3}}>
+                                  minWidth:0,overflow:'hidden',position:'relative',cursor:editMode?'pointer':'default'}}>
                                 {hasVolta&&(
                                   <div style={{position:'absolute',top:0,left:0,right:0,height:VOLTA_H,
                                     borderLeft:`2px solid ${INK_ACCENT}`,borderTop:`2px solid ${INK_ACCENT}`,
