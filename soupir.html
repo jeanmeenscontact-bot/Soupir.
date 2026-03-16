@@ -1980,19 +1980,11 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
     }));
   }
   // ── Layout pages ────────────────────────────────────────────────────────────
-  const ROWS_STEPS=[3,4,5,6,8,10];
-  const rowsPerPage=ROWS_STEPS.includes(cur.rowsPerPage)?cur.rowsPerPage:4;
-  function setRowsPerPage(n){
-    setLibrary(lib=>lib.map(p=>p.id!==piece.id?p:{...p,rowsPerPage:n}));
-  }
-  function rowsZoomIn(){
-    const idx=ROWS_STEPS.indexOf(rowsPerPage);
-    if(idx>0)setRowsPerPage(ROWS_STEPS[idx-1]);
-  }
-  function rowsZoomOut(){
-    const idx=ROWS_STEPS.indexOf(rowsPerPage);
-    if(idx<ROWS_STEPS.length-1)setRowsPerPage(ROWS_STEPS[idx+1]);
-  }
+  const ZOOM_STEPS=[0.5,0.6,0.75,0.9,1.0,1.1,1.25,1.5,1.75,2.0];
+  const zoomIdx=typeof cur.zoomIdx==='number'&&cur.zoomIdx>=0&&cur.zoomIdx<ZOOM_STEPS.length?cur.zoomIdx:4;
+  const zoom=ZOOM_STEPS[zoomIdx];
+  function zoomIn(){if(zoomIdx<ZOOM_STEPS.length-1)setLibrary(lib=>lib.map(p=>p.id!==piece.id?p:{...p,zoomIdx:zoomIdx+1}));}
+  function zoomOut(){if(zoomIdx>0)setLibrary(lib=>lib.map(p=>p.id!==piece.id?p:{...p,zoomIdx:zoomIdx-1}));}
   function computeRows(sections){
     const rows=[];let row=[];let mCount=0;
     sections.forEach((section,si)=>{
@@ -2017,12 +2009,13 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
     return rows;
   }
   const allRows=computeRows(cur.sections);
+  const TOPBAR_H=52,BOTTOMBAR_H=44,INFO_H=36;
+  const availH=(typeof window!=='undefined'?window.innerHeight:900)-TOPBAR_H-BOTTOMBAR_H-INFO_H;
+  const rowH=Math.max(48,Math.round(88*zoom));
+  const rowsPerPage=Math.max(1,Math.floor(availH/rowH));
   const totalPages=Math.max(1,Math.ceil(allRows.length/rowsPerPage));
   const safePage=Math.min(currentPage,totalPages-1);
   const pageRows=allRows.slice(safePage*rowsPerPage,(safePage+1)*rowsPerPage);
-  const TOPBAR_H=52,BOTTOMBAR_H=44,INFO_H=36;
-  const availH=(typeof window!=='undefined'?window.innerHeight:900)-TOPBAR_H-BOTTOMBAR_H-INFO_H;
-  const rowH=Math.max(56,Math.floor(availH/rowsPerPage));
   const chordFsBase=Math.max(13,Math.round(34*rowH/136));
 
   // Ouvre le ChordPicker pour une GRANDE MESURE — 8 beats (master 0-3 + suite 4-7)
@@ -2872,24 +2865,27 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
           fontSize:28,fontWeight:700,cursor:safePage===totalPages-1?'default':'pointer',padding:'0 6px',lineHeight:1,fontFamily:'inherit',opacity:safePage===totalPages-1?0.4:1}}>
         ›
       </button>
-      {/* Zoom lignes */}
+      {/* Zoom A/A */}
       <div style={{width:1,height:20,background:'#D0CAC0',flexShrink:0}}/>
-      <div style={{display:'flex',alignItems:'center',gap:2,flexShrink:0}}>
-        <button onClick={rowsZoomIn} disabled={ROWS_STEPS.indexOf(rowsPerPage)===0}
-          title="Zoom +"
-          style={{width:24,height:24,background:'transparent',border:'1.5px solid #D0CAC0',
-            borderRadius:100,fontSize:14,cursor:ROWS_STEPS.indexOf(rowsPerPage)===0?'default':'pointer',
-            color:ROWS_STEPS.indexOf(rowsPerPage)===0?'#C0BAB0':'#6B6560',
+      <div style={{display:'flex',alignItems:'center',gap:3,flexShrink:0}}>
+        <button onClick={zoomOut} disabled={zoomIdx===0}
+          title="Réduire"
+          style={{width:26,height:26,background:'transparent',border:'1.5px solid #D0CAC0',
+            borderRadius:100,cursor:zoomIdx===0?'default':'pointer',
+            color:zoomIdx===0?'#C0BAB0':'#6B6560',
             display:'flex',alignItems:'center',justifyContent:'center',padding:0,
-            fontFamily:'inherit',opacity:ROWS_STEPS.indexOf(rowsPerPage)===0?0.4:1,lineHeight:1}}>+</button>
-        <span style={{fontSize:10,fontWeight:700,color:'#8A847C',minWidth:14,textAlign:'center',userSelect:'none'}}>{rowsPerPage}</span>
-        <button onClick={rowsZoomOut} disabled={ROWS_STEPS.indexOf(rowsPerPage)===ROWS_STEPS.length-1}
-          title="Zoom −"
-          style={{width:24,height:24,background:'transparent',border:'1.5px solid #D0CAC0',
-            borderRadius:100,fontSize:14,cursor:ROWS_STEPS.indexOf(rowsPerPage)===ROWS_STEPS.length-1?'default':'pointer',
-            color:ROWS_STEPS.indexOf(rowsPerPage)===ROWS_STEPS.length-1?'#C0BAB0':'#6B6560',
+            fontFamily:'inherit',opacity:zoomIdx===0?0.4:1}}>
+          <span style={{fontSize:9,fontWeight:900,lineHeight:1}}>A</span>
+        </button>
+        <button onClick={zoomIn} disabled={zoomIdx===ZOOM_STEPS.length-1}
+          title="Agrandir"
+          style={{width:26,height:26,background:'transparent',border:'1.5px solid #D0CAC0',
+            borderRadius:100,cursor:zoomIdx===ZOOM_STEPS.length-1?'default':'pointer',
+            color:zoomIdx===ZOOM_STEPS.length-1?'#C0BAB0':'#6B6560',
             display:'flex',alignItems:'center',justifyContent:'center',padding:0,
-            fontFamily:'inherit',opacity:ROWS_STEPS.indexOf(rowsPerPage)===ROWS_STEPS.length-1?0.4:1,lineHeight:1}}>−</button>
+            fontFamily:'inherit',opacity:zoomIdx===ZOOM_STEPS.length-1?0.4:1}}>
+          <span style={{fontSize:14,fontWeight:900,lineHeight:1}}>A</span>
+        </button>
       </div>
       {editMode&&<>
         <div style={{width:1,height:20,background:'#D0CAC0',flexShrink:0}}/>
