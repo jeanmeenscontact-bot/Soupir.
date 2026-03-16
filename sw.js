@@ -1,4 +1,4 @@
-const CACHE = 'soupir-v28';
+const CACHE = 'soupir-v29';
 const ASSETS = [
   './soupir.html',
   './manifest.json',
@@ -7,7 +7,7 @@ const ASSETS = [
   'https://unpkg.com/react@18/umd/react.production.min.js',
   'https://unpkg.com/react-dom@18/umd/react-dom.production.min.js',
   'https://unpkg.com/@babel/standalone/babel.min.js',
-  'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap'
+  'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Barlow+Condensed:wght@400;500&display=swap'
 ];
 
 self.addEventListener('install', e => {

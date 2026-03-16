@@ -11,7 +11,7 @@
   <link rel="apple-touch-icon" href="icon-192.png"/>
   <title>Soupir.</title>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Barlow+Condensed:wght@400;500&display=swap');
     *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
     html,body{height:100%;overflow:hidden;}
     body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','Inter',system-ui,sans-serif;background:#F2F0EB;color:#1C1C1E;overscroll-behavior:none;user-select:none;-webkit-user-select:none;}
@@ -158,7 +158,8 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='v28';
+const APP_VERSION='v29';
+const CHORD_FONT="'Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
 const BAR_TYPES=[
@@ -943,8 +944,9 @@ function MeasureSheet({si,mi,measure,onAction,onClose,prefs,sectionName,onRename
 }
 
 // ─── CHORD TEXT — typographie iReal Pro (racine grande, altération + qualité petites) ──
-function ChordText({chord,fs=30,color='#1C1C1E',weight=900}){
+function ChordText({chord,fs=30,color='#1C1C1E',weight=400}){
   if(!chord)return null;
+  const CF=CHORD_FONT;
   // Basse seule : chord commence par '/'
   if(chord.startsWith('/')){
     const bassOnly=chord.slice(1);
@@ -954,8 +956,8 @@ function ChordText({chord,fs=30,color='#1C1C1E',weight=900}){
     const bAccDisp=bAcc==='b'?'♭':bAcc==='#'?'♯':'';
     const bFs=Math.round(fs*0.72);
     return(
-      <span style={{display:'inline-flex',alignItems:'flex-start',gap:0,lineHeight:1,color}}>
-        <span style={{fontSize:Math.round(bFs*0.72),fontWeight:600,lineHeight:1,color:color==='#1C1C1E'?'#8A8A8A':color}}>/</span>
+      <span style={{display:'inline-flex',alignItems:'flex-start',gap:0,lineHeight:1,color,fontFamily:CF}}>
+        <span style={{fontSize:Math.round(bFs*0.72),fontWeight:400,lineHeight:1,color:color==='#1C1C1E'?'#8A8A8A':color}}>/</span>
         <span style={{fontSize:bFs,fontWeight:weight,lineHeight:1}}>{bL}</span>
         {bAccDisp&&<span style={{fontSize:Math.round(bFs*0.56),fontWeight:weight,lineHeight:1,paddingTop:2}}>{bAccDisp}</span>}
       </span>
@@ -975,19 +977,19 @@ function ChordText({chord,fs=30,color='#1C1C1E',weight=900}){
     const acc=rawAcc==='b'?'♭':rawAcc==='#'?'♯':'';
     const suffix=mainChord.slice(root.length);
     return(
-      <span style={{display:'inline-flex',alignItems:'flex-start',gap:0,lineHeight:1}}>
-        <span style={{fontSize:fs,fontWeight:weight,lineHeight:1,letterSpacing:'-0.5px'}}>{letter}</span>
+      <span style={{display:'inline-flex',alignItems:'flex-start',gap:0,lineHeight:1,fontFamily:CF}}>
+        <span style={{fontSize:fs,fontWeight:weight,lineHeight:1,letterSpacing:0}}>{letter}</span>
         {(acc||suffix)&&(
           <span style={{display:'flex',flexDirection:'column',alignItems:'flex-start',lineHeight:1,gap:1,
             paddingLeft:1,paddingTop:acc?0:sfxTop}}>
             {acc&&<span style={{fontSize:accFs,fontWeight:weight,lineHeight:1}}>{acc}</span>}
-            {suffix&&<span style={{fontSize:sfxFs,fontWeight:600,lineHeight:1,
+            {suffix&&<span style={{fontSize:sfxFs,fontWeight:400,lineHeight:1,
               color:color==='#1C1C1E'?'#525252':color,paddingTop:acc?1:0}}>{suffix}</span>}
           </span>
         )}
       </span>
     );
-  })():(<span style={{fontSize:fs,fontWeight:weight,lineHeight:1,letterSpacing:'-0.5px'}}>{mainChord}</span>);
+  })():(<span style={{fontSize:fs,fontWeight:weight,lineHeight:1,fontFamily:CF}}>{mainChord}</span>);
   if(!bassStr)return(
     <span style={{display:'inline-flex',alignItems:'flex-start',gap:0,lineHeight:1,color}}>{renderMain}</span>
   );
@@ -999,11 +1001,11 @@ function ChordText({chord,fs=30,color='#1C1C1E',weight=900}){
   const bassFs=Math.round(fs*0.46);
   const bassShift=Math.round(fs*0.18);
   return(
-    <span style={{display:'inline-flex',alignItems:'flex-end',gap:1,lineHeight:1,color}}>
+    <span style={{display:'inline-flex',alignItems:'flex-end',gap:1,lineHeight:1,color,fontFamily:CF}}>
       <span style={{display:'inline-flex',alignItems:'flex-start',gap:0,lineHeight:1}}>{renderMain}</span>
       <span style={{display:'inline-flex',alignItems:'baseline',gap:0,lineHeight:1,
         position:'relative',top:bassShift}}>
-        <span style={{fontSize:Math.round(bassFs*0.75),fontWeight:600,lineHeight:1,color:color==='#1C1C1E'?'#8A8A8A':color}}>/</span>
+        <span style={{fontSize:Math.round(bassFs*0.75),fontWeight:400,lineHeight:1,color:color==='#1C1C1E'?'#8A8A8A':color}}>/</span>
         <span style={{fontSize:bassFs,fontWeight:weight,lineHeight:1,color:color==='#1C1C1E'?'#525252':color}}>{bassLetter}{bassAccDisp}</span>
       </span>
     </span>
@@ -1981,7 +1983,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
     }));
   }
   // ── Layout pages ────────────────────────────────────────────────────────────
-  const rowsPerPage=cur.rowsPerPage||5;
+  const rowsPerPage=cur.rowsPerPage||10;
   function computeRows(sections){
     const rows=[];let row=[];let mCount=0;
     sections.forEach((section,si)=>{
@@ -2293,8 +2295,8 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                   padding:'2px 1px',borderRadius:4,lineHeight:1,display:'inline-flex',alignItems:'center'}}>
                   {spec?(<span style={{fontSize:effectiveFs,fontWeight:700,color:chColor,letterSpacing:'0.05em',lineHeight:1}}>{disp}</span>)
                   :idem?(<span style={{fontSize:Math.round(effectiveFs*1.1),fontWeight:200,color:chColor,letterSpacing:'0.08em',lineHeight:1}}>%</span>)
-                  :degreeMode?(<DegreeText deg={disp} fs={effectiveFs} color={chColor} weight={900}/>)
-                  :(<ChordText chord={disp} fs={effectiveFs} color={chColor} weight={900}/>)}
+                  :degreeMode?(<DegreeText deg={disp} fs={effectiveFs} color={chColor} weight={400}/>)
+                  :(<ChordText chord={disp} fs={effectiveFs} color={chColor} weight={400}/>)}
                 </span>
               )}
               {!hasChord&&editMode&&(
@@ -2553,8 +2555,8 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                                       padding:'2px 1px',borderRadius:3,lineHeight:1,display:'inline-flex',alignItems:'center'}}>
                                       {spec?(<span style={{fontSize:gEffFs,fontWeight:700,color:chColor,letterSpacing:'0.05em',lineHeight:1}}>{disp}</span>)
                                       :idem?(<span style={{fontSize:Math.round(gEffFs*1.1),fontWeight:200,color:chColor,letterSpacing:'0.08em',lineHeight:1}}>%</span>)
-                                      :degreeMode?(<DegreeText deg={disp} fs={gEffFs} color={chColor} weight={900}/>)
-                                      :(<ChordText chord={disp} fs={gEffFs} color={chColor} weight={900}/>)}
+                                      :degreeMode?(<DegreeText deg={disp} fs={gEffFs} color={chColor} weight={400}/>)
+                                      :(<ChordText chord={disp} fs={gEffFs} color={chColor} weight={400}/>)}
                                     </span>
                                   )}
                                   {!hasChord&&editMode&&<span style={{fontSize:9,color:'#D8D4CE',lineHeight:1,userSelect:'none'}}>·</span>}
