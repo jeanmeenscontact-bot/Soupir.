@@ -158,7 +158,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='v33.2';
+const APP_VERSION='v33.3';
 const CHORD_FONT="'Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -1254,12 +1254,6 @@ function StaffSectionView({section,onUpdate,onDelete,editMode=true,prefs}){
   if(!editMode){
     return(
       <div style={{background:SBGR,overflow:'hidden',display:'flex',flexDirection:'column'}}>
-        {/* Ligne nom + chiffrage */}
-        <div style={{display:'flex',alignItems:'center',gap:6,padding:'3px 10px',
-          background:SHDR,borderBottom:`0.5px solid ${SBDR}`,flexShrink:0}}>
-          <span style={{fontSize:10,fontWeight:700,color:STXT,flex:1}}>{section.name}</span>
-          {showTimeSig&&<span style={{fontSize:9,color:SSUB,fontWeight:600}}>{timeSig}</span>}
-        </div>
         {/* Portée compacte sur une ligne horizontale */}
         <div style={{overflowX:'auto',padding:'4px 4px 4px',background:SBGR,flexShrink:0}}>
           <div style={{display:'flex',alignItems:'flex-start',minWidth:'fit-content'}}>
@@ -2634,7 +2628,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                                 <div key="gm-sep"
                                   style={{width:20,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',cursor:editMode?'pointer':'default'}}
                                   onClick={editMode?(e)=>{e.stopPropagation();setBarlinePick({si,mi,side:'right'});}:undefined}>
-                                  <div style={{width:1.5,alignSelf:'stretch',background:INK_ACCENT,opacity:0.4}}/>
+                                  <div style={{width:0,alignSelf:'stretch',borderLeft:`1.5px dashed ${isDark?'rgba(255,255,255,0.25)':'rgba(0,0,0,0.18)'}`}}/>
                                 </div>,
                                 beatEl
                               ];
@@ -2735,6 +2729,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
           <div key={`e${ei}`} style={{flex:1,display:'flex',alignItems:'stretch',
             borderBottom:`0.5px solid ${TH.rowBorder}`,background:TH.fillerBg,minHeight:0,
             paddingTop:ROW_PAD,paddingBottom:ROW_PAD}}>
+            <div style={{width:10,flexShrink:0}}/>
             {Array.from({length:GCOLS}).map((_,ci)=>(
               <React.Fragment key={ci}>
                 {ci===0&&addSiFiller!=null?(
