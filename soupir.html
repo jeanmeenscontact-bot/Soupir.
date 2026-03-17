@@ -158,7 +158,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='v32.1';
+const APP_VERSION='v32.2';
 const CHORD_FONT="'Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -2010,6 +2010,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
   // Ouvre le ChordPicker pour UNE MESURE ENTIÈRE — 4 beats chargés en local
   function openMeasurePicker(si,mi,half='a',e,initialBeat=null){
     if(e)e.stopPropagation();
+    saveUndo();
     const mm=cur.sections[si]?.measures[mi];
     if(!mm)return;
     const measureData=(half==='b'&&mm.split2)?mm.split2:mm;
@@ -2032,6 +2033,26 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
       letter,acc,qualityId:parsed.qualityId,extensions:parsed.extensions,
       bass:bL,bassAcc:bA,
       localBeats,selectedBeat});
+  }
+
+  // Applique les beats en temps réel sans fermer le picker (compact mode)
+  function applyMeasureLive(pk){
+    const{si,mi,half,localBeats}=pk||picker;
+    const clean=bs=>bs.map(b=>({c:b.c||'',s:b.s||[],v:b.v||null,t:b.t||''}));
+    const safeC=bs=>{const c=bs.map(b=>b.c).filter(c=>c);return c.length?c:[''];};
+    const cleanBeats=clean(localBeats||[mkBeat(),mkBeat(),mkBeat(),mkBeat()]);
+    const safeChords=safeC(cleanBeats);
+    setLibrary(lib=>lib.map(p=>{
+      if(p.id!==piece.id)return p;
+      return{...p,sections:p.sections.map((s,sI)=>{
+        if(sI!==si)return s;
+        return{...s,measures:s.measures.map((mm,mI)=>{
+          if(mI!==mi)return mm;
+          if(half==='b'&&mm.split2){return{...mm,split2:{...mm.split2,beats:cleanBeats,chords:safeChords}};}
+          return{...mm,beats:cleanBeats,chords:safeChords};
+        })};
+      })};
+    }));
   }
 
   // Sauvegarde les 4 beats (accord + métadonnées) de la mesure en une seule opération
@@ -2214,8 +2235,11 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
               :chordFsBase;
     const VOLTA_H=15;
 
+    const isSel=editMode&&picker.visible&&!picker.isGrande&&picker.si===si&&picker.mi===mi&&picker.half===(half||'a');
     return(
-      <div style={{flex:1,display:'flex',minWidth:0,position:'relative',background:'transparent'}}>
+      <div style={{flex:1,display:'flex',minWidth:0,position:'relative',
+        background:isSel?'rgba(58,155,213,0.09)':'transparent',
+        transition:'background 0.12s'}}>
 
         {/* ── 4 colonnes de temps ── */}
         {beats.map((beat,bi)=>{
@@ -2485,7 +2509,9 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                     rendered.push(
                       <React.Fragment key={`${si}-${mi}-gm`}>
                         <div style={{flex:2,position:'relative',display:'flex',
-                            minWidth:0,overflow:'hidden'}}>
+                            minWidth:0,overflow:'hidden',
+                            background:editMode&&picker.visible&&picker.isGrande&&picker.si===si&&picker.mi===mi?'rgba(58,155,213,0.09)':'transparent',
+                            transition:'background 0.12s'}}>
                           {sectionStart&&(
                             <div onClick={editMode?(e)=>{e.stopPropagation();setSectionRenameOverlay({si,name:sectionName});}:undefined}
                               style={{position:'absolute',top:3,left:ci===0?28:4,zIndex:5,
@@ -2669,6 +2695,42 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
           </div>
           );
         })}
+      {/* ── Calque annotations — toujours visible ── */}
+      {!drawMode&&getPageDrawings().length>0&&(
+        <svg style={{position:'absolute',inset:0,width:'100%',height:'100%',
+          pointerEvents:'none',zIndex:50}}>
+          {getPageDrawings().map((ann,i)=>{
+            const isMrk=(ann.opacity||1)<1;
+            return(<path key={i} d={ann.path} fill="none" stroke={ann.color||'#1A1A1A'}
+              strokeWidth={ann.width||2} strokeOpacity={ann.opacity||1}
+              strokeLinecap={isMrk?'square':'round'} strokeLinejoin={isMrk?'bevel':'round'}/>);
+          })}
+        </svg>
+      )}
+      {/* ── Overlay de dessin ── */}
+      {drawMode&&(
+        <svg ref={drawSvgRef}
+          style={{position:'absolute',inset:0,width:'100%',height:'100%',
+            touchAction:'none',cursor:'crosshair',zIndex:100,userSelect:'none'}}
+          onPointerDown={handleDrawStart}
+          onPointerMove={handleDrawMove}
+          onPointerUp={handleDrawEnd}
+          onPointerCancel={()=>{setIsDrawing(false);setDrawPath([]);}}>
+          {getPageDrawings().map((ann,i)=>{
+            const isMrk=(ann.opacity||1)<1;
+            return(<path key={i} d={ann.path} fill="none" stroke={ann.color||'#1A1A1A'}
+              strokeWidth={ann.width||2} strokeOpacity={ann.opacity||1}
+              strokeLinecap={isMrk?'square':'round'} strokeLinejoin={isMrk?'bevel':'round'}/>);
+          })}
+          {isDrawing&&drawPath.length>1&&(
+            <path d={ptsToPath(drawPath)} fill="none" stroke={drawColor}
+              strokeWidth={drawWidth}
+              strokeOpacity={drawTool==='marqueur'?0.35:1}
+              strokeLinecap={drawTool==='marqueur'?'square':'round'}
+              strokeLinejoin={drawTool==='marqueur'?'bevel':'round'}/>
+          )}
+        </svg>
+      )}
       </div>
 
       {/* Section rename overlay */}
@@ -2750,7 +2812,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
         onSelect={ts=>{setLibrary(lib=>lib.map(p=>p.id!==piece.id?p:{...p,timeSig:ts}));setShowTimeSig(false);}}
         onClose={()=>setShowTimeSig(false)}/>}
 
-      {picker.visible&&<ChordPicker picker={picker}
+      {picker.visible&&(picker.isGrande||picker.advanced)&&<ChordPicker picker={picker}
         onChange={(upd)=>{
           // Synchronise localBeats[selectedBeat].c avec l'état de l'éditeur (root/quality/ext/bass)
           const prevSbi=picker.selectedBeat??0;
@@ -2760,7 +2822,6 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
           if(sbi===prevSbi){
             const root=upd.letter+(upd.acc==='#'?'#':upd.acc==='b'?'b':'');
             const bass=(upd.bass||'')+((upd.bass&&upd.bassAcc)?upd.bassAcc:'');
-            // buildChordStr gère root vide → basse seule '/G' ou ''
             const newChord=buildChordStr(root,upd.qualityId,upd.extensions,bass);
             const newBeats=(upd.localBeats||emptyBeats).map((b,i)=>{
               if(i!==sbi)return b;
@@ -2773,10 +2834,121 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
           }
         }}
         onConfirm={confirmMeasure}
-        onCancel={()=>setPicker(pk=>({...pk,visible:false}))}
+        onCancel={picker.isGrande
+          ?()=>setPicker(pk=>({...pk,visible:false}))
+          :()=>setPicker(pk=>({...pk,advanced:false}))}
         sectionName={cur.sections[picker.si]?.name||''}
         onRenameSection={renameSectionAtPicker}
         prefs={prefs} displayKey={displayKey} displayMode={displayMode} autoHarmonize={!!prefs?.autoHarmonize}/>}
+
+      {/* ── Compact ChordPicker flottant (Option B) ── */}
+      {editMode&&picker.visible&&!picker.isGrande&&!picker.advanced&&(()=>{
+        const sbi=picker.selectedBeat??0;
+        function cpkNote(newL,newA){
+          const root=newL+(newA==='#'?'#':newA==='b'?'b':'');
+          const bass=(picker.bass||'')+((picker.bass&&picker.bassAcc)?picker.bassAcc:'');
+          const chord=buildChordStr(root,picker.qualityId,picker.extensions||[],bass);
+          const newBeats=(picker.localBeats||[]).map((b,i)=>i!==sbi?b:{...b,c:chord});
+          const np={...picker,letter:newL,acc:newA,localBeats:newBeats};
+          setPicker(np);applyMeasureLive(np);
+        }
+        function cpkQual(qid){
+          const root=picker.letter+(picker.acc==='#'?'#':picker.acc==='b'?'b':'');
+          const bass=(picker.bass||'')+((picker.bass&&picker.bassAcc)?picker.bassAcc:'');
+          const chord=buildChordStr(root,qid,picker.extensions||[],bass);
+          const newBeats=(picker.localBeats||[]).map((b,i)=>i!==sbi?b:{...b,c:chord});
+          const np={...picker,qualityId:qid,localBeats:newBeats};
+          setPicker(np);applyMeasureLive(np);
+        }
+        function cpkBeat(bi){
+          const ib=bi;
+          const initChord=(picker.localBeats||[])[ib]?.c||'';
+          const fc=(initChord&&!isSpec(initChord)&&initChord!=='%')?initChord:'C';
+          const parsed=parseChordFull(fc);
+          const{letter:nl,acc:na}=rootToLetterAcc(parsed.root);
+          const bR=parsed.bass||'';
+          const{letter:bL,acc:bA}=bR?rootToLetterAcc(bR):{letter:'',acc:''};
+          setPicker(pk=>({...pk,selectedBeat:ib,letter:nl,acc:na,
+            qualityId:parsed.qualityId,extensions:parsed.extensions,bass:bL,bassAcc:bA}));
+        }
+        const CQUALITIES=[
+          {id:'maj',l:'M'},{id:'min',l:'m'},{id:'dom7',l:'7'},{id:'min7',l:'m7'},
+          {id:'maj7',l:'M7'},{id:'mMaj7',l:prefs?.minor==='-'?'−Δ':'mΔ'},
+          {id:'dim',l:'dim'},{id:'aug',l:'+'},{id:'sus4',l:'sus4'},{id:'sus2',l:'sus2'},
+          {id:'hdim',l:'ø'},{id:'dim7',l:'o7'},{id:'maj6',l:'6'},{id:'min6',l:'m6'},{id:'5',l:'5'},
+        ];
+        const btnBase={cursor:'pointer',fontFamily:'inherit',border:'none',padding:0,
+          display:'flex',alignItems:'center',justifyContent:'center'};
+        const activeClr='#F2EDE4',inactiveClr='#A09A90',borderInactive='#4A4540';
+        return(
+          <div style={{position:'absolute',bottom:0,left:0,right:0,zIndex:150,
+            background:'rgba(26,24,22,0.95)',backdropFilter:'blur(18px)',WebkitBackdropFilter:'blur(18px)',
+            borderRadius:'14px 14px 0 0',padding:'9px 10px 12px',
+            boxShadow:'0 -3px 20px rgba(0,0,0,0.35)'}}>
+            {/* Rangée 1 : beats + lettres + altérations + avancé + fermer */}
+            <div style={{display:'flex',alignItems:'center',gap:4,marginBottom:7,flexWrap:'nowrap',overflowX:'auto'}}>
+              {/* Beat tabs */}
+              {(picker.localBeats||[]).map((_b,bi)=>(
+                <button key={bi} onClick={()=>cpkBeat(bi)}
+                  style={{...btnBase,width:22,height:22,borderRadius:5,fontSize:9,fontWeight:700,
+                    background:sbi===bi?activeClr:'transparent',
+                    color:sbi===bi?'#1A1A1A':inactiveClr,
+                    outline:`1.5px solid ${sbi===bi?activeClr:borderInactive}`,
+                    flexShrink:0}}>
+                  {bi+1}
+                </button>
+              ))}
+              <div style={{width:1,height:16,background:'#4A4540',flexShrink:0,margin:'0 1px'}}/>
+              {/* Lettres */}
+              {LETTERS.map(l=>(
+                <button key={l} onClick={()=>cpkNote(l,picker.acc)}
+                  style={{...btnBase,width:25,height:25,borderRadius:6,fontSize:13,fontWeight:700,
+                    background:picker.letter===l?activeClr:'transparent',
+                    color:picker.letter===l?'#1A1A1A':inactiveClr,
+                    outline:`1.5px solid ${picker.letter===l?activeClr:borderInactive}`,
+                    flexShrink:0}}>
+                  {l}
+                </button>
+              ))}
+              <div style={{width:1,height:16,background:'#4A4540',flexShrink:0,margin:'0 1px'}}/>
+              {/* Altérations */}
+              {[{v:'b',l:'♭'},{v:'',l:'♮'},{v:'#',l:'♯'}].map(a=>(
+                <button key={a.v} onClick={()=>cpkNote(picker.letter,a.v)}
+                  style={{...btnBase,width:25,height:25,borderRadius:6,fontSize:12,fontWeight:700,
+                    background:picker.acc===a.v?activeClr:'transparent',
+                    color:picker.acc===a.v?'#1A1A1A':inactiveClr,
+                    outline:`1.5px solid ${picker.acc===a.v?activeClr:borderInactive}`,
+                    flexShrink:0}}>
+                  {a.l}
+                </button>
+              ))}
+              <div style={{flex:1,minWidth:4}}/>
+              {/* Avancé */}
+              <button onClick={()=>setPicker(pk=>({...pk,advanced:true}))}
+                style={{...btnBase,height:25,borderRadius:100,padding:'0 8px',fontSize:10,fontWeight:600,
+                  background:'transparent',color:inactiveClr,
+                  outline:`1.5px solid ${borderInactive}`,flexShrink:0}}>⋯</button>
+              {/* Fermer */}
+              <button onClick={()=>setPicker(pk=>({...pk,visible:false}))}
+                style={{...btnBase,height:25,borderRadius:100,padding:'0 10px',fontSize:10,fontWeight:700,
+                  background:activeClr,color:'#1A1A1A',flexShrink:0}}>✕</button>
+            </div>
+            {/* Rangée 2 : qualités */}
+            <div style={{display:'flex',alignItems:'center',gap:4,overflowX:'auto',paddingBottom:1}}>
+              {CQUALITIES.map(q=>(
+                <button key={q.id} onClick={()=>cpkQual(q.id)}
+                  style={{...btnBase,height:26,borderRadius:6,padding:'0 7px',fontSize:10,fontWeight:700,
+                    whiteSpace:'nowrap',flexShrink:0,
+                    background:picker.qualityId===q.id?activeClr:'transparent',
+                    color:picker.qualityId===q.id?'#1A1A1A':inactiveClr,
+                    outline:`1.5px solid ${picker.qualityId===q.id?activeClr:borderInactive}`}}>
+                  {q.l}
+                </button>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
 
       {insertSheet!==null&&(<InsertSectionSheet
         onInsert={(type,name)=>{insertSection(insertSheet,type,name);setInsertSheet(null);}}
@@ -2791,46 +2963,6 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
         onSelectBarline={t=>updateBarline(barlinePick.si,barlinePick.mi,barlinePick.side,t)}
         onAction={a=>{setBarlinePick(null);handleMeasureAction(barlinePick.si,barlinePick.mi,a);}}
         onClose={()=>setBarlinePick(null)}/>)}
-
-      {/* ── Calque annotations — toujours visible ── */}
-      {!drawMode&&getPageDrawings().length>0&&(
-        <svg style={{position:'absolute',inset:0,width:'100%',height:'100%',
-          pointerEvents:'none',zIndex:50}}>
-          {getPageDrawings().map((ann,i)=>{
-            const isMrk=(ann.opacity||1)<1;
-            return(<path key={i} d={ann.path} fill="none" stroke={ann.color||'#1A1A1A'}
-              strokeWidth={ann.width||2} strokeOpacity={ann.opacity||1}
-              strokeLinecap={isMrk?'square':'round'} strokeLinejoin={isMrk?'bevel':'round'}/>);
-          })}
-        </svg>
-      )}
-
-      {/* ── Overlay de dessin ── */}
-      {drawMode&&(
-        <svg ref={drawSvgRef}
-          style={{position:'absolute',inset:0,width:'100%',height:'100%',
-            touchAction:'none',cursor:'crosshair',zIndex:100,userSelect:'none'}}
-          onPointerDown={handleDrawStart}
-          onPointerMove={handleDrawMove}
-          onPointerUp={handleDrawEnd}
-          onPointerCancel={()=>{setIsDrawing(false);setDrawPath([]);}}>
-          {/* Annotations persistantes */}
-          {getPageDrawings().map((ann,i)=>{
-            const isMrk=(ann.opacity||1)<1;
-            return(<path key={i} d={ann.path} fill="none" stroke={ann.color||'#1A1A1A'}
-              strokeWidth={ann.width||2} strokeOpacity={ann.opacity||1}
-              strokeLinecap={isMrk?'square':'round'} strokeLinejoin={isMrk?'bevel':'round'}/>);
-          })}
-          {/* Tracé en cours */}
-          {isDrawing&&drawPath.length>1&&(
-            <path d={ptsToPath(drawPath)} fill="none" stroke={drawColor}
-              strokeWidth={drawWidth}
-              strokeOpacity={drawTool==='marqueur'?0.35:1}
-              strokeLinecap={drawTool==='marqueur'?'square':'round'}
-              strokeLinejoin={drawTool==='marqueur'?'bevel':'round'}/>
-          )}
-        </svg>
-      )}
 
     </div>
 
