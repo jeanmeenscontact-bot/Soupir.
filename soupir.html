@@ -158,7 +158,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='v32';
+const APP_VERSION='v32.1';
 const CHORD_FONT="'Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -1138,13 +1138,6 @@ function InsertSectionSheet({onInsert,onClose}){
 // ─── STAFF SECTION VIEW ────────────────────────────────────────────────────────
 function StaffSectionView({section,onUpdate,onDelete,editMode=true}){
   const [showSettings,setShowSettings]=useState(false);
-  const [drawing,setDrawing]=useState(false);
-  const [activeMi,setActiveMi]=useState(null); // mesure en cours de dessin
-  const [currentPath,setCurrentPath]=useState([]);
-  const [strokeColor,setStrokeColor]=useState('#1C1C1E');
-  const [strokeWidth,setStrokeWidth]=useState(2);
-  const svgRefs=useRef({});
-  const undoHistory=useRef([]);
 
   const timeSig   = section.timeSig   || '4/4';
   const clef      = section.clef      || 'treble';
@@ -1167,38 +1160,8 @@ function StaffSectionView({section,onUpdate,onDelete,editMode=true}){
 
   function updateSection(patch){onUpdate({...section,...patch});}
 
-  function getSVGPt(e,svgEl){
-    const r=svgEl.getBoundingClientRect();
-    const scaleX=parseFloat(svgEl.getAttribute('width'))/r.width;
-    const scaleY=parseFloat(svgEl.getAttribute('height'))/r.height;
-    const src=e.touches?e.touches[0]:e;
-    return{x:(src.clientX-r.left)*scaleX,y:(src.clientY-r.top)*scaleY};
-  }
-
-  function pointsToPath(pts){
-    if(pts.length<2)return'';
-    return pts.map((p,i)=>(i===0?`M${p.x.toFixed(1)},${p.y.toFixed(1)}`:`L${p.x.toFixed(1)},${p.y.toFixed(1)}`)).join(' ');
-  }
-
-  function commitPath(mi){
-    if(currentPath.length<2){setDrawing(false);setCurrentPath([]);setActiveMi(null);return;}
-    undoHistory.current.push(section.measures.map(mm=>({...mm,annotations:[...(mm.annotations||[])]})));
-    const pd=pointsToPath(currentPath);
-    onUpdate({...section,measures:section.measures.map((mm,i)=>
-      i!==mi?mm:{...mm,annotations:[...(mm.annotations||[]),{path:pd,color:strokeColor,width:strokeWidth}]}
-    )});
-    setDrawing(false);setCurrentPath([]);setActiveMi(null);
-  }
-
-  function undoStroke(){
-    if(undoHistory.current.length===0)return;
-    const prev=undoHistory.current.pop();
-    onUpdate({...section,measures:prev});
-  }
-
   function deleteMeasure(mi){
     if(section.measures.length<=1)return;
-    undoHistory.current=[];
     onUpdate({...section,measures:section.measures.filter((_,i)=>i!==mi)});
   }
 
@@ -1237,36 +1200,14 @@ function StaffSectionView({section,onUpdate,onDelete,editMode=true}){
     </g>);
   }
 
-  function renderMeasureSVG(mi,isFirst,interactive=true){
+  function renderMeasureSVG(mi,isFirst){
     const m=section.measures[mi];
     const annotations=(m?.annotations)||[];
     const svgW=(isFirst?PREF_W:0)+MWD+1;
-    const handlers=interactive?{
-      onPointerDown:e=>{
-        e.preventDefault();
-        const svgEl=svgRefs.current[mi];if(!svgEl)return;
-        svgEl.setPointerCapture(e.pointerId);
-        setDrawing(true);setActiveMi(mi);
-        setCurrentPath([getSVGPt(e,svgEl)]);
-      },
-      onPointerMove:e=>{
-        if(!drawing||activeMi!==mi)return;
-        e.preventDefault();
-        const svgEl=svgRefs.current[mi];if(!svgEl)return;
-        setCurrentPath(p=>[...p,getSVGPt(e,svgEl)]);
-      },
-      onPointerUp:e=>{if(activeMi===mi)commitPath(mi);},
-      onPointerCancel:()=>{setDrawing(false);setCurrentPath([]);setActiveMi(null);},
-    }:{};
 
     return(
-      <svg key={mi}
-        ref={interactive?(el=>{if(el)svgRefs.current[mi]=el;}):undefined}
-        width={svgW} height={STAFF_H}
-        style={{flexShrink:0,overflow:'visible',
-          cursor:interactive?'crosshair':'default',
-          touchAction:interactive?'none':'auto',userSelect:'none'}}
-        {...handlers}>
+      <svg key={mi} width={svgW} height={STAFF_H}
+        style={{flexShrink:0,overflow:'visible',cursor:'default',userSelect:'none'}}>
 
         {/* Lignes de portée */}
         {STAFF_LINES.map(ly=>(
@@ -1280,17 +1221,11 @@ function StaffSectionView({section,onUpdate,onDelete,editMode=true}){
         <line x1={svgW-1} y1={STAFF_LINES[0]} x2={svgW-1} y2={STAFF_LINES[4]}
           stroke={INK} strokeWidth="1.3"/>
 
-        {/* Annotations sauvegardées */}
+        {/* Annotations sauvegardées (rétro-compat) */}
         {annotations.map((ann,ai)=>(
           <path key={ai} d={ann.path} fill="none" stroke={ann.color||'#1C1C1E'}
             strokeWidth={ann.width||2} strokeLinecap="round" strokeLinejoin="round"/>
         ))}
-
-        {/* Tracé en cours (mode édition seulement) */}
-        {interactive&&drawing&&activeMi===mi&&currentPath.length>1&&(
-          <path d={pointsToPath(currentPath)} fill="none" stroke={strokeColor}
-            strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round"/>
-        )}
       </svg>
     );
   }
@@ -1340,6 +1275,12 @@ function StaffSectionView({section,onUpdate,onDelete,editMode=true}){
             borderRadius:100,padding:'3px 10px',fontSize:11,cursor:'pointer',
             fontFamily:'inherit',color:'#6B6560',fontWeight:600}}>
           Modifier
+        </button>
+        <button onClick={addMeasure}
+          style={{background:'transparent',border:'1.5px solid #D0CAC0',
+            borderRadius:100,padding:'3px 10px',fontSize:11,cursor:'pointer',
+            fontFamily:'inherit',color:'#6B6560',fontWeight:600}}>
+          + Mesure
         </button>
         <button onClick={clearAll}
           style={{background:'transparent',border:'1px solid #FFBBBB',borderRadius:100,
@@ -1432,31 +1373,6 @@ function StaffSectionView({section,onUpdate,onDelete,editMode=true}){
             )}
           </div>
 
-          {/* Traits de dessin */}
-          <div style={{paddingTop:12,borderTop:'0.5px solid rgba(0,0,0,0.1)'}}>
-            <div style={{fontSize:9,fontWeight:700,color:'#8A847C',textTransform:'uppercase',
-              letterSpacing:1.2,marginBottom:8}}>Traits</div>
-            <div style={{display:'flex',gap:6,marginBottom:10}}>
-              {[{v:1,l:'Fine'},{v:2,l:'Moyen'},{v:4,l:'Épais'}].map(opt=>(
-                <button key={opt.v}
-                  style={{background:strokeWidth===opt.v?'#1A1A1A':'transparent',
-                    color:strokeWidth===opt.v?'#F2EDE4':'#6B6560',
-                    border:`1.5px solid ${strokeWidth===opt.v?'#1A1A1A':'#D0CAC0'}`,
-                    borderRadius:100,padding:'5px 11px',fontSize:11,fontWeight:600,
-                    cursor:'pointer',fontFamily:'inherit'}}
-                  onClick={()=>setStrokeWidth(opt.v)}>{opt.l}</button>
-              ))}
-            </div>
-            <div style={{display:'flex',gap:8,alignItems:'center'}}>
-              {['#1C1C1E','#C0392B','#1A6BBF','#2E7D32'].map(col=>(
-                <button key={col} onClick={()=>setStrokeColor(col)}
-                  style={{width:26,height:26,borderRadius:'50%',background:col,border:'none',cursor:'pointer',
-                    flexShrink:0,
-                    boxShadow:strokeColor===col?`0 0 0 2.5px #FFF, 0 0 0 4.5px ${col}`:'none',
-                    transition:'box-shadow 0.12s'}}/>
-              ))}
-            </div>
-          </div>
         </div>
       )}
 
@@ -1482,48 +1398,6 @@ function StaffSectionView({section,onUpdate,onDelete,editMode=true}){
         ))}
       </div>
 
-      {/* ── Contrôles de dessin ── */}
-      <div style={{borderTop:'0.5px solid rgba(0,0,0,0.07)',padding:'10px 14px',
-        background:'rgba(0,0,0,0.01)',display:'flex',alignItems:'center',gap:10,flexWrap:'wrap'}}>
-
-        {/* Épaisseur */}
-        <div style={{display:'flex',gap:5,alignItems:'center'}}>
-          {[{v:1,l:'Fine'},{v:2,l:'Moyen'},{v:4,l:'Épais'}].map(opt=>(
-            <button key={opt.v}
-              style={{background:strokeWidth===opt.v?'#1A1A1A':'transparent',
-                color:strokeWidth===opt.v?'#F2EDE4':'#6B6560',
-                border:`1.5px solid ${strokeWidth===opt.v?'#1A1A1A':'#D0CAC0'}`,
-                borderRadius:100,padding:'3px 10px',fontSize:11,fontWeight:600,
-                cursor:'pointer',fontFamily:'inherit'}}
-              onClick={()=>setStrokeWidth(opt.v)}>{opt.l}</button>
-          ))}
-        </div>
-
-        {/* Couleur */}
-        <div style={{display:'flex',gap:6,alignItems:'center'}}>
-          {['#1C1C1E','#C0392B','#1A6BBF','#2E7D32'].map(col=>(
-            <button key={col} onClick={()=>setStrokeColor(col)}
-              style={{width:22,height:22,borderRadius:'50%',background:col,border:'none',cursor:'pointer',
-                boxShadow:strokeColor===col?`0 0 0 2px #FFF, 0 0 0 4px ${col}`:'none',
-                transition:'box-shadow 0.12s'}}/>
-          ))}
-        </div>
-
-        <div style={{marginLeft:'auto',display:'flex',gap:6}}>
-          <button onClick={undoStroke}
-            style={{background:'transparent',border:'1px solid #D0CAC0',
-              borderRadius:100,padding:'4px 12px',fontSize:11,cursor:'pointer',
-              fontFamily:'inherit',color:'#6B6560',fontWeight:600}}>
-            ↩ Annuler
-          </button>
-          <button onClick={addMeasure}
-            style={{background:'transparent',border:'1px solid #D0CAC0',
-              borderRadius:100,padding:'4px 12px',fontSize:11,cursor:'pointer',
-              fontFamily:'inherit',color:'#6B6560',fontWeight:600}}>
-            + Mesure
-          </button>
-        </div>
-      </div>
     </div>
   );
 }
@@ -1942,6 +1816,15 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
   const [editMode,setEditMode]=useState(true); // true = édition, false = lecture
   const [barsVisible,setBarsVisible]=useState(true);
   const [sectionRenameOverlay,setSectionRenameOverlay]=useState(null); // {si, name}
+  // ── Mode dessin global ───────────────────────────────────────────────────────
+  const [drawMode,setDrawMode]=useState(false);
+  const [drawTool,setDrawTool]=useState('crayon'); // 'crayon' | 'marqueur'
+  const [drawColor,setDrawColor]=useState('#1A1A1A');
+  const [drawWidth,setDrawWidth]=useState(2);
+  const [isDrawing,setIsDrawing]=useState(false);
+  const [drawPath,setDrawPath]=useState([]);
+  const drawSvgRef=useRef(null);
+  const drawUndoRef=useRef([]);
   const metroRef=useRef(null),beatRef=useRef(0);
   const undoStack=useRef([]);
 
@@ -1958,6 +1841,51 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
     else{clearInterval(metroRef.current);setBeat(0);beatRef.current=0;}
     return()=>clearInterval(metroRef.current);
   },[metroOn,bpm]);
+
+  // ── Fonctions dessin global ──────────────────────────────────────────────────
+  function getPageDrawings(){return(cur.drawings||{})[safePage]||[];}
+
+  function ptsToPath(pts){
+    return pts.map((p,i)=>(i===0?`M${p.x.toFixed(1)},${p.y.toFixed(1)}`:`L${p.x.toFixed(1)},${p.y.toFixed(1)}`)).join(' ');
+  }
+
+  function handleDrawStart(e){
+    e.preventDefault();
+    const svg=drawSvgRef.current;if(!svg)return;
+    svg.setPointerCapture(e.pointerId);
+    const r=svg.getBoundingClientRect();
+    setIsDrawing(true);
+    setDrawPath([{x:e.clientX-r.left,y:e.clientY-r.top}]);
+  }
+  function handleDrawMove(e){
+    if(!isDrawing)return;
+    e.preventDefault();
+    const svg=drawSvgRef.current;if(!svg)return;
+    const r=svg.getBoundingClientRect();
+    setDrawPath(p=>[...p,{x:e.clientX-r.left,y:e.clientY-r.top}]);
+  }
+  function handleDrawEnd(){
+    if(!isDrawing)return;
+    if(drawPath.length>=2){
+      const pd=ptsToPath(drawPath);
+      const prev={...(cur.drawings||{})};
+      drawUndoRef.current.push(prev);
+      const opacity=drawTool==='marqueur'?0.35:1;
+      const nd={...prev,[safePage]:[...(prev[safePage]||[]),{path:pd,color:drawColor,width:drawWidth,opacity}]};
+      setLibrary(lib=>lib.map(p=>p.id!==piece.id?p:{...p,drawings:nd}));
+    }
+    setIsDrawing(false);setDrawPath([]);
+  }
+  function undoDraw(){
+    if(drawUndoRef.current.length===0)return;
+    const prev=drawUndoRef.current.pop();
+    setLibrary(lib=>lib.map(p=>p.id!==piece.id?p:{...p,drawings:prev}));
+  }
+  function clearPageDraw(){
+    drawUndoRef.current.push({...(cur.drawings||{})});
+    const nd={...(cur.drawings||{}),[safePage]:[]};
+    setLibrary(lib=>lib.map(p=>p.id!==piece.id?p:{...p,drawings:nd}));
+  }
 
   function handleKeyChange(newKey){
     const semi=((noteIdx(newKey)-noteIdx(cur.key))%12+12)%12;
@@ -2420,6 +2348,15 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
           overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{cur.title}</span>
         {degreeMode&&<span style={{fontSize:9,fontWeight:700,color:'#4A3F2F',background:'#F5DDD8',
           borderRadius:4,padding:'1px 5px',flexShrink:0}}>Degrés</span>}
+        {/* Bouton dessin */}
+        <button onClick={()=>setDrawMode(d=>!d)}
+          style={{background:drawMode?'#1A1A1A':'transparent',
+            border:`1.5px solid ${drawMode?'#1A1A1A':'#D0CAC0'}`,
+            borderRadius:100,padding:'3px 10px',fontSize:12,cursor:'pointer',
+            fontFamily:'inherit',color:drawMode?'#F2EDE4':'#8A847C',
+            fontWeight:700,flexShrink:0,transition:'all 0.12s'}}>
+          ✎
+        </button>
         {/* Sélecteur Lecture / Édition */}
         <div style={{display:'flex',background:'#E2DDD6',borderRadius:8,padding:2,gap:1,flexShrink:0}}>
           <button onClick={()=>{setEditMode(false);setBarsVisible(true);}}
@@ -2440,8 +2377,9 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
       </div>
 
       {/* Grille pages */}
-      <div onClick={!editMode?()=>setBarsVisible(v=>!v):undefined}
-        style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden',background:'#FFFFFF',cursor:!editMode?'pointer':undefined}}>
+      <div onClick={!editMode&&!drawMode?()=>setBarsVisible(v=>!v):undefined}
+        style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden',background:'#FFFFFF',
+          position:'relative',cursor:!editMode&&!drawMode?'pointer':undefined}}>
         {/* Pre-pass : détecter les rows dont la section se termine à pleine capacité
             → le "+" doit apparaître au début de la row suivante, ou dans la 1re ligne vide */}
         {(()=>{
@@ -2854,7 +2792,117 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
         onAction={a=>{setBarlinePick(null);handleMeasureAction(barlinePick.si,barlinePick.mi,a);}}
         onClose={()=>setBarlinePick(null)}/>)}
 
+      {/* ── Calque annotations — toujours visible ── */}
+      {!drawMode&&getPageDrawings().length>0&&(
+        <svg style={{position:'absolute',inset:0,width:'100%',height:'100%',
+          pointerEvents:'none',zIndex:50}}>
+          {getPageDrawings().map((ann,i)=>{
+            const isMrk=(ann.opacity||1)<1;
+            return(<path key={i} d={ann.path} fill="none" stroke={ann.color||'#1A1A1A'}
+              strokeWidth={ann.width||2} strokeOpacity={ann.opacity||1}
+              strokeLinecap={isMrk?'square':'round'} strokeLinejoin={isMrk?'bevel':'round'}/>);
+          })}
+        </svg>
+      )}
+
+      {/* ── Overlay de dessin ── */}
+      {drawMode&&(
+        <svg ref={drawSvgRef}
+          style={{position:'absolute',inset:0,width:'100%',height:'100%',
+            touchAction:'none',cursor:'crosshair',zIndex:100,userSelect:'none'}}
+          onPointerDown={handleDrawStart}
+          onPointerMove={handleDrawMove}
+          onPointerUp={handleDrawEnd}
+          onPointerCancel={()=>{setIsDrawing(false);setDrawPath([]);}}>
+          {/* Annotations persistantes */}
+          {getPageDrawings().map((ann,i)=>{
+            const isMrk=(ann.opacity||1)<1;
+            return(<path key={i} d={ann.path} fill="none" stroke={ann.color||'#1A1A1A'}
+              strokeWidth={ann.width||2} strokeOpacity={ann.opacity||1}
+              strokeLinecap={isMrk?'square':'round'} strokeLinejoin={isMrk?'bevel':'round'}/>);
+          })}
+          {/* Tracé en cours */}
+          {isDrawing&&drawPath.length>1&&(
+            <path d={ptsToPath(drawPath)} fill="none" stroke={drawColor}
+              strokeWidth={drawWidth}
+              strokeOpacity={drawTool==='marqueur'?0.35:1}
+              strokeLinecap={drawTool==='marqueur'?'square':'round'}
+              strokeLinejoin={drawTool==='marqueur'?'bevel':'round'}/>
+          )}
+        </svg>
+      )}
+
     </div>
+
+    {/* ── Panneau dessin flottant ── */}
+    {drawMode&&(
+      <div style={{position:'absolute',bottom:barsVisible?BOTTOMBAR_H+8:8,left:8,right:8,
+        background:'rgba(30,28,26,0.95)',backdropFilter:'blur(18px)',WebkitBackdropFilter:'blur(18px)',
+        borderRadius:16,padding:'10px 14px',display:'flex',alignItems:'center',gap:8,
+        flexWrap:'wrap',zIndex:200,boxShadow:'0 4px 24px rgba(0,0,0,0.35)'}}>
+
+        {/* Toggle Crayon / Marqueur */}
+        {[{v:'crayon',l:'✒ Crayon'},{v:'marqueur',l:'☆ Marqueur'}].map(t=>(
+          <button key={t.v} onClick={()=>{
+              setDrawTool(t.v);
+              if(t.v==='marqueur'){if(drawWidth<8)setDrawWidth(14);setDrawColor('#FFE033');}
+              if(t.v==='crayon'){if(drawWidth>=8)setDrawWidth(2);setDrawColor('#F2EDE4');}
+            }}
+            style={{background:drawTool===t.v?'#F2EDE4':'transparent',
+              color:drawTool===t.v?'#1A1A1A':'#A09A90',
+              border:`1.5px solid ${drawTool===t.v?'#F2EDE4':'#4A4540'}`,
+              borderRadius:100,padding:'3px 11px',fontSize:11,fontWeight:700,
+              cursor:'pointer',fontFamily:'inherit',transition:'all 0.1s',whiteSpace:'nowrap'}}>{t.l}</button>
+        ))}
+
+        <div style={{width:1,height:18,background:'#4A4540',flexShrink:0}}/>
+
+        {/* Épaisseur — adaptée à l'outil */}
+        {(drawTool==='crayon'
+          ?[{v:1,l:'Fine'},{v:2,l:'Moy'},{v:4,l:'Épais'}]
+          :[{v:10,l:'Fine'},{v:14,l:'Moy'},{v:20,l:'Épais'}]
+        ).map(opt=>(
+          <button key={opt.v} onClick={()=>setDrawWidth(opt.v)}
+            style={{background:drawWidth===opt.v?'#F2EDE4':'transparent',
+              color:drawWidth===opt.v?'#1A1A1A':'#A09A90',
+              border:`1.5px solid ${drawWidth===opt.v?'#F2EDE4':'#4A4540'}`,
+              borderRadius:100,padding:'3px 9px',fontSize:11,fontWeight:700,
+              cursor:'pointer',fontFamily:'inherit',transition:'all 0.1s'}}>{opt.l}</button>
+        ))}
+
+        <div style={{width:1,height:18,background:'#4A4540',flexShrink:0}}/>
+
+        {/* Couleurs — adaptées à l'outil */}
+        {(drawTool==='crayon'
+          ?['#F2EDE4','#C0392B','#3A9BD5','#2ECC71','#F39C12']
+          :['#FFE033','#FF6EC7','#7DFFB3','#6EC6FF','#FF8C42']
+        ).map(col=>(
+          <button key={col} onClick={()=>setDrawColor(col)}
+            style={{width:20,height:20,
+              borderRadius:drawTool==='marqueur'?4:'50%',
+              background:col,border:'2px solid transparent',cursor:'pointer',flexShrink:0,
+              boxShadow:drawColor===col?`0 0 0 2px #1A1A1A, 0 0 0 4px ${col}`:'none',
+              transition:'box-shadow 0.12s'}}/>
+        ))}
+
+        <div style={{flex:1}}/>
+
+        <button onClick={undoDraw}
+          style={{background:'transparent',border:'1.5px solid #4A4540',borderRadius:100,
+            padding:'3px 10px',fontSize:11,cursor:'pointer',fontFamily:'inherit',
+            color:'#A09A90',fontWeight:600}}>↩</button>
+
+        <button onClick={clearPageDraw}
+          style={{background:'transparent',border:'1.5px solid #C0392B',borderRadius:100,
+            padding:'3px 10px',fontSize:11,cursor:'pointer',fontFamily:'inherit',
+            color:'#C0392B',fontWeight:600}}>Effacer</button>
+
+        <button onClick={()=>setDrawMode(false)}
+          style={{background:'#F2EDE4',border:'none',borderRadius:100,
+            padding:'4px 14px',fontSize:11,cursor:'pointer',fontFamily:'inherit',
+            color:'#1A1A1A',fontWeight:700}}>✕</button>
+      </div>
+    )}
 
     {/* BOTTOM BAR — navigation pages + actions */}
     <div style={{background:'rgba(255,255,255,0.92)',backdropFilter:'blur(20px)',WebkitBackdropFilter:'blur(20px)',
