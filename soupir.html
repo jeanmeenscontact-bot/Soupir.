@@ -158,7 +158,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='v32.8';
+const APP_VERSION='v33.0';
 const CHORD_FONT="'Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -1136,8 +1136,9 @@ function InsertSectionSheet({onInsert,onClose}){
 }
 
 // ─── STAFF SECTION VIEW ────────────────────────────────────────────────────────
-function StaffSectionView({section,onUpdate,onDelete,editMode=true}){
+function StaffSectionView({section,onUpdate,onDelete,editMode=true,prefs}){
   const [showSettings,setShowSettings]=useState(false);
+  const isDark=!!prefs?.darkMode;
 
   const timeSig   = section.timeSig   || '4/4';
   const clef      = section.clef      || 'treble';
@@ -1154,7 +1155,16 @@ function StaffSectionView({section,onUpdate,onDelete,editMode=true}){
   const ACC_W=showKey&&clef!=='none'?Math.max(ks.n*10+6,4):0;
   const TSW=showTimeSig?28:0;
   const PREF_W=CLEF_W+ACC_W+TSW;
-  const INK='#1A1A1A';
+  const INK=isDark?'#E8E4DC':'#1A1A1A';
+  const SBGR=isDark?'#1E1C1A':'#FAFAF8';
+  const SHDR=isDark?'rgba(26,24,22,0.98)':'rgba(255,255,255,0.9)';
+  const SBDR=isDark?'rgba(255,255,255,0.05)':'rgba(0,0,0,0.07)';
+  const STXT=isDark?'#F2EDE4':'#1C1C1E';
+  const SSUB=isDark?'#8A8480':'#8A847C';
+  const SBTN=isDark?'#4A4845':'#D0CAC0';
+  const SBTNTXT=isDark?'#C0BAB0':'#6B6560';
+  const SLINE=isDark?'#3A3634':'#D0CAC0'; // string/filler lines
+  const SFILL=isDark?'#2A2826':'#EDE8E0'; // filler partial-measure area
   const SHP_Y_S=[35,50,30,45,60,40,55];  // targets[30,45,25,40,55,35,50] + 5px baseline offset pour fontSize 15
   const FLT_Y_S=[55,40,60,45,65,50,70];  // targets[50,35,55,40,60,45,65] + 5px baseline offset pour fontSize 15
 
@@ -1235,23 +1245,23 @@ function StaffSectionView({section,onUpdate,onDelete,editMode=true}){
     rows.push(section.measures.slice(i,i+COLS).map((_,j)=>i+j));
 
   const pill=(active,col='#1A1A1A')=>({
-    background:active?col:'transparent',color:active?'#F2EDE4':col==='#1A1A1A'?'#1A1A1A':'#555',
-    border:`1.5px solid ${active?col:'#D0CAC0'}`,borderRadius:100,
+    background:active?col:'transparent',color:active?'#F2EDE4':STXT,
+    border:`1.5px solid ${active?col:SBTN}`,borderRadius:100,
     padding:'6px 10px',fontSize:12,fontWeight:700,cursor:'pointer',fontFamily:'inherit',transition:'all 0.1s'
   });
 
   // ── MODE LECTURE ──
   if(!editMode){
     return(
-      <div style={{background:'#FAFAF8',overflow:'hidden',display:'flex',flexDirection:'column'}}>
+      <div style={{background:SBGR,overflow:'hidden',display:'flex',flexDirection:'column'}}>
         {/* Ligne nom + chiffrage */}
         <div style={{display:'flex',alignItems:'center',gap:6,padding:'3px 10px',
-          background:'rgba(255,255,255,0.9)',borderBottom:'0.5px solid rgba(0,0,0,0.07)',flexShrink:0}}>
-          <span style={{fontSize:10,fontWeight:700,color:'#1C1C1E',flex:1}}>{section.name}</span>
-          {showTimeSig&&<span style={{fontSize:9,color:'#8A847C',fontWeight:600}}>{timeSig}</span>}
+          background:SHDR,borderBottom:`0.5px solid ${SBDR}`,flexShrink:0}}>
+          <span style={{fontSize:10,fontWeight:700,color:STXT,flex:1}}>{section.name}</span>
+          {showTimeSig&&<span style={{fontSize:9,color:SSUB,fontWeight:600}}>{timeSig}</span>}
         </div>
         {/* Portée compacte sur une ligne horizontale */}
-        <div style={{overflowX:'auto',padding:'4px 4px 4px',background:'#FAFAF8',flexShrink:0}}>
+        <div style={{overflowX:'auto',padding:'4px 4px 4px',background:SBGR,flexShrink:0}}>
           <div style={{display:'flex',alignItems:'flex-start',minWidth:'fit-content'}}>
             {section.measures.map((m,mi)=>renderMeasureSVG(mi,mi===0,false))}
           </div>
@@ -1262,24 +1272,24 @@ function StaffSectionView({section,onUpdate,onDelete,editMode=true}){
 
   // ── MODE ÉDITION ──
   return(
-    <div style={{background:'#FFFFFF',overflow:'visible',
-      borderTop:'0.5px solid rgba(0,0,0,0.08)',borderBottom:'0.5px solid rgba(0,0,0,0.08)'}}>
+    <div style={{background:SBGR,overflow:'visible',
+      borderTop:`0.5px solid ${SBDR}`,borderBottom:`0.5px solid ${SBDR}`}}>
 
       {/* ── En-tête ── */}
       <div style={{display:'flex',alignItems:'center',gap:8,padding:'8px 14px',
-        borderBottom:'0.5px solid rgba(0,0,0,0.07)'}}>
-        <span style={{fontSize:12,fontWeight:700,flex:1,color:'#1C1C1E'}}>{section.name}</span>
-        {showTimeSig&&<span style={{fontSize:11,color:'#8A847C',fontWeight:600}}>{timeSig}</span>}
+        borderBottom:`0.5px solid ${SBDR}`}}>
+        <span style={{fontSize:12,fontWeight:700,flex:1,color:STXT}}>{section.name}</span>
+        {showTimeSig&&<span style={{fontSize:11,color:SSUB,fontWeight:600}}>{timeSig}</span>}
         <button onClick={()=>setShowSettings(true)}
-          style={{background:'transparent',border:'1.5px solid #D0CAC0',
+          style={{background:'transparent',border:`1.5px solid ${SBTN}`,
             borderRadius:100,padding:'3px 10px',fontSize:11,cursor:'pointer',
-            fontFamily:'inherit',color:'#6B6560',fontWeight:600}}>
+            fontFamily:'inherit',color:SBTNTXT,fontWeight:600}}>
           Modifier
         </button>
         <button onClick={addMeasure}
-          style={{background:'transparent',border:'1.5px solid #D0CAC0',
+          style={{background:'transparent',border:`1.5px solid ${SBTN}`,
             borderRadius:100,padding:'3px 10px',fontSize:11,cursor:'pointer',
-            fontFamily:'inherit',color:'#6B6560',fontWeight:600}}>
+            fontFamily:'inherit',color:SBTNTXT,fontWeight:600}}>
           + Mesure
         </button>
         <button onClick={clearAll}
@@ -1299,7 +1309,8 @@ function StaffSectionView({section,onUpdate,onDelete,editMode=true}){
       {/* ── Panneau volant de personnalisation (flottant, non-bloquant) ── */}
       {showSettings&&(
         <div style={{position:'fixed',bottom:56,left:10,right:10,maxWidth:460,margin:'0 auto',
-          background:'rgba(240,236,228,0.97)',backdropFilter:'blur(18px)',WebkitBackdropFilter:'blur(18px)',
+          background:isDark?'rgba(26,24,22,0.97)':'rgba(240,236,228,0.97)',
+          backdropFilter:'blur(18px)',WebkitBackdropFilter:'blur(18px)',
           borderRadius:18,padding:'14px 18px 20px',
           boxShadow:'0 8px 40px rgba(0,0,0,0.22),0 2px 8px rgba(0,0,0,0.10)',
           zIndex:350,maxHeight:'54vh',overflowY:'auto'}}
@@ -1307,17 +1318,17 @@ function StaffSectionView({section,onUpdate,onDelete,editMode=true}){
 
           {/* En-tête panneau */}
           <div style={{display:'flex',alignItems:'center',marginBottom:14}}>
-            <span style={{fontSize:11,fontWeight:700,color:'#8A847C',textTransform:'uppercase',
+            <span style={{fontSize:11,fontWeight:700,color:SSUB,textTransform:'uppercase',
               letterSpacing:1.2,flex:1}}>Portée — {section.name}</span>
             <button onClick={()=>setShowSettings(false)}
-              style={{background:'rgba(0,0,0,0.07)',border:'none',borderRadius:'50%',
+              style={{background:isDark?'rgba(255,255,255,0.1)':'rgba(0,0,0,0.07)',border:'none',borderRadius:'50%',
                 width:26,height:26,display:'flex',alignItems:'center',justifyContent:'center',
-                cursor:'pointer',color:'#6B6560',fontSize:16,fontWeight:700,fontFamily:'inherit'}}>×</button>
+                cursor:'pointer',color:SBTNTXT,fontSize:16,fontWeight:700,fontFamily:'inherit'}}>×</button>
           </div>
 
           {/* Clef */}
           <div style={{marginBottom:14}}>
-            <div style={{fontSize:9,fontWeight:700,color:'#8A847C',textTransform:'uppercase',
+            <div style={{fontSize:9,fontWeight:700,color:SSUB,textTransform:'uppercase',
               letterSpacing:1.2,marginBottom:7}}>Clef</div>
             <div style={{display:'flex',gap:6}}>
               {[{v:'treble',l:'𝄞 Sol'},{v:'bass',l:'𝄢 Fa'},{v:'none',l:'— Aucune'}].map(opt=>(
@@ -1331,11 +1342,11 @@ function StaffSectionView({section,onUpdate,onDelete,editMode=true}){
           {clef!=='none'&&(
             <div style={{marginBottom:14}}>
               <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:7}}>
-                <div style={{fontSize:9,fontWeight:700,color:'#8A847C',textTransform:'uppercase',letterSpacing:1.2}}>
+                <div style={{fontSize:9,fontWeight:700,color:SSUB,textTransform:'uppercase',letterSpacing:1.2}}>
                   Armure
                 </div>
                 <button onClick={()=>updateSection({showKey:!showKey})}
-                  style={{fontSize:10,color:showKey?'#007AFF':'#8A847C',background:'none',border:'none',
+                  style={{fontSize:10,color:showKey?'#007AFF':SSUB,background:'none',border:'none',
                     cursor:'pointer',fontFamily:'inherit',fontWeight:600}}>
                   {showKey?'Affichée':'Masquée'}
                 </button>
@@ -1354,11 +1365,11 @@ function StaffSectionView({section,onUpdate,onDelete,editMode=true}){
           {/* Chiffrage */}
           <div style={{marginBottom:14}}>
             <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:7}}>
-              <div style={{fontSize:9,fontWeight:700,color:'#8A847C',textTransform:'uppercase',letterSpacing:1.2}}>
+              <div style={{fontSize:9,fontWeight:700,color:SSUB,textTransform:'uppercase',letterSpacing:1.2}}>
                 Chiffrage
               </div>
               <button onClick={()=>updateSection({showTimeSig:!showTimeSig})}
-                style={{fontSize:10,color:showTimeSig?'#007AFF':'#8A847C',background:'none',border:'none',
+                style={{fontSize:10,color:showTimeSig?'#007AFF':SSUB,background:'none',border:'none',
                   cursor:'pointer',fontFamily:'inherit',fontWeight:600}}>
                 {showTimeSig?'Affiché':'Masqué'}
               </button>
@@ -1377,7 +1388,7 @@ function StaffSectionView({section,onUpdate,onDelete,editMode=true}){
       )}
 
       {/* ── Portée ── */}
-      <div style={{overflowX:'auto',padding:'8px 4px 4px',background:'#FAFAF8'}}>
+      <div style={{overflowX:'auto',padding:'8px 4px 4px',background:SBGR}}>
         {rows.map((rowMis,ri)=>(
           <div key={ri} style={{display:'flex',alignItems:'flex-start',marginBottom:4,minWidth:'fit-content'}}>
             {ri>0&&<div style={{width:PREF_W,flexShrink:0}}/>}
@@ -1562,9 +1573,20 @@ function FretPicker({strings,si,current,onConfirm,onClose}){
 // ─── TAB SECTION VIEW (composants rythmiques réservés pour une prochaine version)
 
 // ─── TAB SECTION VIEW ─────────────────────────────────────────────────────────
-function TabSectionView({section,onUpdate,onDelete,editMode=true}){
+function TabSectionView({section,onUpdate,onDelete,editMode=true,prefs}){
   const [selCell,setSelCell]=useState(null);
   const [showSettings,setShowSettings]=useState(false);
+  const isDark=!!prefs?.darkMode;
+  const INK=isDark?'#E8E4DC':'#1A1A1A';
+  const SBGR=isDark?'#1E1C1A':'#FAFAF8';
+  const SHDR=isDark?'rgba(26,24,22,0.98)':'rgba(255,255,255,0.9)';
+  const SBDR=isDark?'rgba(255,255,255,0.05)':'rgba(0,0,0,0.07)';
+  const STXT=isDark?'#F2EDE4':'#1C1C1E';
+  const SSUB=isDark?'#8A8480':'#8A847C';
+  const SBTN=isDark?'#4A4845':'#D0CAC0';
+  const SBTNTXT=isDark?'#C0BAB0':'#6B6560';
+  const SLINE=isDark?'#3A3634':'#D0CAC0';
+  const SFILL=isDark?'#2A2826':'#EDE8E0';
   const instrument=section.instrument||'guitar';
   const strings=TAB_STR[instrument]||TAB_STR.guitar;
   const nStrings=strings.length;
@@ -1591,19 +1613,18 @@ function TabSectionView({section,onUpdate,onDelete,editMode=true}){
   }
   function renderTabSVG(){
     const SH=13,BW=30,LP=26,TP=5,BOT=20,BARW=10;
-    const INK='#1A1A1A';
     const W=LP+section.measures.reduce((s,m)=>s+m.beats.length*BW+BARW,0)+BARW+4;
     const H=TP+(nStrings-1)*SH+BOT;
     const els=[];
     strings.forEach((s,si)=>{
-      els.push(<text key={`lbl${si}`} x={LP-5} y={TP+si*SH+4} fontSize={9} textAnchor="end" fill="#8A847C" fontWeight="600">{s}</text>);
+      els.push(<text key={`lbl${si}`} x={LP-5} y={TP+si*SH+4} fontSize={9} textAnchor="end" fill={SSUB} fontWeight="600">{s}</text>);
     });
     els.push(<line key="bar0" x1={LP} y1={TP} x2={LP} y2={TP+(nStrings-1)*SH} stroke={INK} strokeWidth={1.5}/>);
     let xc=LP;
     section.measures.forEach((m,mi)=>{
       const mW=m.beats.length*BW+BARW;
       strings.forEach((_,si)=>{
-        els.push(<line key={`str${mi}${si}`} x1={xc} y1={TP+si*SH} x2={xc+mW} y2={TP+si*SH} stroke="#D0CAC0" strokeWidth={0.8}/>);
+        els.push(<line key={`str${mi}${si}`} x1={xc} y1={TP+si*SH} x2={xc+mW} y2={TP+si*SH} stroke={SLINE} strokeWidth={0.8}/>);
       });
       const bXs=m.beats.map((_,bi)=>xc+bi*BW+BW/2);
       m.beats.forEach((beat,bi)=>{
@@ -1612,12 +1633,12 @@ function TabSectionView({section,onUpdate,onDelete,editMode=true}){
           if(fret===null)return;
           const txt=fret==='x'?'×':String(fret);
           const tw=txt.length>1?14:9;
-          els.push(<rect key={`bg${mi}${bi}${si}`} x={cx-tw/2} y={TP+si*SH-6} width={tw} height={12} fill="#FAFAF8"/>);
+          els.push(<rect key={`bg${mi}${bi}${si}`} x={cx-tw/2} y={TP+si*SH-6} width={tw} height={12} fill={SBGR}/>);
           els.push(<text key={`fr${mi}${bi}${si}`} x={cx} y={TP+si*SH+4} fontSize={10} textAnchor="middle"
             fill={fret==='x'?'#C0392B':INK} fontWeight="700">{txt}</text>);
         });
         els.push(<text key={`bn${mi}${bi}`} x={cx} y={TP+(nStrings-1)*SH+13} fontSize={8} textAnchor="middle"
-          fill="#C0BAB0" fontWeight="600">{bi+1}</text>);
+          fill={SSUB} fontWeight="600">{bi+1}</text>);
       });
       xc+=m.beats.length*BW;
       if(m.barAfter==='final'){
@@ -1628,25 +1649,25 @@ function TabSectionView({section,onUpdate,onDelete,editMode=true}){
       }
       xc+=BARW;
     });
-    return(<svg width={W} height={H} style={{display:'block'}}>{els}</svg>);
+    return(<svg width={W} height={H} style={{display:'block',background:SBGR}}>{els}</svg>);
   }
 
   const pill=(active,col='#1A1A1A')=>({
-    background:active?col:'transparent',color:active?'#F2EDE4':'#1A1A1A',
-    border:`1.5px solid ${active?col:'#C0BAB0'}`,borderRadius:100,
+    background:active?col:'transparent',color:active?'#F2EDE4':STXT,
+    border:`1.5px solid ${active?col:SBTN}`,borderRadius:100,
     padding:'8px 16px',fontWeight:700,fontSize:13,cursor:'pointer',
     transition:'all 0.1s',fontFamily:'inherit',
   });
 
   if(!editMode){
     return(
-      <div style={{background:'#FAFAF8',overflow:'hidden',display:'flex',flexDirection:'column'}}>
+      <div style={{background:SBGR,overflow:'hidden',display:'flex',flexDirection:'column'}}>
         <div style={{display:'flex',alignItems:'center',gap:6,padding:'3px 10px',
-          background:'rgba(255,255,255,0.9)',borderBottom:'0.5px solid rgba(0,0,0,0.07)',flexShrink:0}}>
-          <span style={{fontSize:10,fontWeight:700,color:'#1C1C1E',flex:1}}>{section.name}</span>
-          <span style={{fontSize:9,color:'#8A847C',fontWeight:600,textTransform:'uppercase',letterSpacing:0.5}}>Tab · {instrument==='bass'?'Basse':'Guitare'}</span>
+          background:SHDR,borderBottom:`0.5px solid ${SBDR}`,flexShrink:0}}>
+          <span style={{fontSize:10,fontWeight:700,color:STXT,flex:1}}>{section.name}</span>
+          <span style={{fontSize:9,color:SSUB,fontWeight:600,textTransform:'uppercase',letterSpacing:0.5}}>Tab · {instrument==='bass'?'Basse':'Guitare'}</span>
         </div>
-        <div style={{overflowX:'auto',padding:'6px 8px 8px',background:'#FAFAF8',flexShrink:0}}>
+        <div style={{overflowX:'auto',padding:'6px 8px 8px',background:SBGR,flexShrink:0}}>
           {renderTabSVG()}
         </div>
       </div>
@@ -1655,18 +1676,18 @@ function TabSectionView({section,onUpdate,onDelete,editMode=true}){
 
   const SH=24,BW=36;
   return(
-    <div style={{background:'#FFFFFF',overflow:'visible',
-      borderTop:'0.5px solid rgba(0,0,0,0.08)',borderBottom:'0.5px solid rgba(0,0,0,0.08)'}}>
+    <div style={{background:SBGR,overflow:'visible',
+      borderTop:`0.5px solid ${SBDR}`,borderBottom:`0.5px solid ${SBDR}`}}>
       <div style={{display:'flex',alignItems:'center',gap:8,padding:'8px 14px',
-        borderBottom:'0.5px solid rgba(0,0,0,0.07)'}}>
-        <span style={{fontSize:12,fontWeight:700,flex:1,color:'#1C1C1E'}}>{section.name}</span>
-        <span style={{fontSize:10,color:'#8A847C',fontWeight:700,textTransform:'uppercase',letterSpacing:0.5}}>
+        borderBottom:`0.5px solid ${SBDR}`}}>
+        <span style={{fontSize:12,fontWeight:700,flex:1,color:STXT}}>{section.name}</span>
+        <span style={{fontSize:10,color:SSUB,fontWeight:700,textTransform:'uppercase',letterSpacing:0.5}}>
           Tab · {instrument==='bass'?'Basse':'Guitare'}
         </span>
         <button onClick={()=>setShowSettings(true)}
-          style={{background:'transparent',border:'1.5px solid #D0CAC0',
+          style={{background:'transparent',border:`1.5px solid ${SBTN}`,
             borderRadius:100,padding:'3px 10px',fontSize:11,cursor:'pointer',
-            fontFamily:'inherit',color:'#6B6560',fontWeight:600}}>Modifier</button>
+            fontFamily:'inherit',color:SBTNTXT,fontWeight:600}}>Modifier</button>
         {onDelete&&(
           <button onClick={onDelete}
             style={{background:'transparent',border:'1px solid #FFBBBB',borderRadius:100,
@@ -1677,19 +1698,20 @@ function TabSectionView({section,onUpdate,onDelete,editMode=true}){
 
       {showSettings&&(
         <div style={{position:'fixed',bottom:56,left:10,right:10,maxWidth:460,margin:'0 auto',
-          background:'rgba(240,236,228,0.97)',backdropFilter:'blur(18px)',WebkitBackdropFilter:'blur(18px)',
+          background:isDark?'rgba(26,24,22,0.97)':'rgba(240,236,228,0.97)',
+          backdropFilter:'blur(18px)',WebkitBackdropFilter:'blur(18px)',
           borderRadius:18,padding:'14px 18px 20px',
           boxShadow:'0 8px 40px rgba(0,0,0,0.22),0 2px 8px rgba(0,0,0,0.10)',zIndex:350}}
           onClick={e=>e.stopPropagation()}>
           <div style={{display:'flex',alignItems:'center',marginBottom:14}}>
-            <span style={{fontSize:11,fontWeight:700,color:'#8A847C',textTransform:'uppercase',
+            <span style={{fontSize:11,fontWeight:700,color:SSUB,textTransform:'uppercase',
               letterSpacing:1.2,flex:1}}>Tablature — {section.name}</span>
             <button onClick={()=>setShowSettings(false)}
-              style={{background:'rgba(0,0,0,0.07)',border:'none',borderRadius:'50%',
+              style={{background:isDark?'rgba(255,255,255,0.1)':'rgba(0,0,0,0.07)',border:'none',borderRadius:'50%',
                 width:26,height:26,display:'flex',alignItems:'center',justifyContent:'center',
-                cursor:'pointer',color:'#6B6560',fontSize:16,fontWeight:700,fontFamily:'inherit'}}>×</button>
+                cursor:'pointer',color:SBTNTXT,fontSize:16,fontWeight:700,fontFamily:'inherit'}}>×</button>
           </div>
-          <div style={{fontSize:9,fontWeight:700,color:'#8A847C',textTransform:'uppercase',letterSpacing:1.2,marginBottom:8}}>Instrument</div>
+          <div style={{fontSize:9,fontWeight:700,color:SSUB,textTransform:'uppercase',letterSpacing:1.2,marginBottom:8}}>Instrument</div>
           <div style={{display:'flex',gap:8,marginBottom:16}}>
             {[{v:'guitar',l:'🎸 Guitare (6)'},{v:'bass',l:'🎸 Basse (4)'}].map(opt=>(
               <button key={opt.v} style={pill(instrument===opt.v)}
@@ -1702,21 +1724,21 @@ function TabSectionView({section,onUpdate,onDelete,editMode=true}){
                 }}>{opt.l}</button>
             ))}
           </div>
-          <div style={{fontSize:9,fontWeight:700,color:'#8A847C',textTransform:'uppercase',letterSpacing:1.2,marginBottom:8}}>Mesures</div>
+          <div style={{fontSize:9,fontWeight:700,color:SSUB,textTransform:'uppercase',letterSpacing:1.2,marginBottom:8}}>Mesures</div>
           <button onClick={()=>{addMeasure();setShowSettings(false);}} style={pill(false)}>+ Mesure</button>
         </div>
       )}
 
-      <div style={{overflowX:'auto',padding:'10px 8px 14px',background:'#FAFAF8'}}>
+      <div style={{overflowX:'auto',padding:'10px 8px 14px',background:SBGR}}>
         <div style={{display:'flex',alignItems:'flex-start',minWidth:'fit-content'}}>
           <div style={{display:'flex',flexDirection:'column',paddingRight:4,flexShrink:0}}>
             {strings.map((s,si)=>(
               <div key={si} style={{height:SH,display:'flex',alignItems:'center',
-                fontSize:10,fontWeight:700,color:'#8A847C',width:18,justifyContent:'flex-end'}}>{s}</div>
+                fontSize:10,fontWeight:700,color:SSUB,width:18,justifyContent:'flex-end'}}>{s}</div>
             ))}
             <div style={{height:18}}/>
           </div>
-          <div style={{width:2,background:'#1A1A1A',alignSelf:'stretch',flexShrink:0,marginBottom:18,borderRadius:1}}/>
+          <div style={{width:2,background:INK,alignSelf:'stretch',flexShrink:0,marginBottom:18,borderRadius:1}}/>
           {section.measures.map((m,mi)=>(
             <React.Fragment key={mi}>
               <div style={{display:'flex',flexDirection:'column',position:'relative'}}>
@@ -1740,11 +1762,11 @@ function TabSectionView({section,onUpdate,onDelete,editMode=true}){
                               position:'relative',cursor:'pointer',
                               background:isSel?'rgba(0,122,255,0.08)':'transparent',borderRadius:4}}>
                             <div style={{position:'absolute',left:0,right:0,top:'50%',transform:'translateY(-50%)',
-                              height:1,background:'#D0CAC0',zIndex:0}}/>
+                              height:1,background:SLINE,zIndex:0}}/>
                             {disp?(
-                              <div style={{position:'relative',zIndex:1,background:'#FFFFFF',
+                              <div style={{position:'relative',zIndex:1,background:SBGR,
                                 borderRadius:3,padding:'0 3px',fontSize:11,fontWeight:700,
-                                color:fret==='x'?'#C0392B':'#1A1A1A',minWidth:14,textAlign:'center',lineHeight:'16px'}}>
+                                color:fret==='x'?'#C0392B':STXT,minWidth:14,textAlign:'center',lineHeight:'16px'}}>
                                 {disp}
                               </div>
                             ):isSel?(
@@ -1754,27 +1776,27 @@ function TabSectionView({section,onUpdate,onDelete,editMode=true}){
                         );
                       })}
                       <div style={{height:18,display:'flex',alignItems:'center',justifyContent:'center',
-                        fontSize:8,color:'#C0BAB0',fontWeight:600}}>{bi+1}</div>
+                        fontSize:8,color:SSUB,fontWeight:600}}>{bi+1}</div>
                     </div>
                   ))}
                   <div style={{display:'flex',flexDirection:'column'}}>
                     {strings.map((_s,si)=>(
                       <div key={si} style={{width:22,height:SH,position:'relative'}}>
-                        <div style={{position:'absolute',left:0,right:0,top:'50%',transform:'translateY(-50%)',height:1,background:'#EDE8E0'}}/>
+                        <div style={{position:'absolute',left:0,right:0,top:'50%',transform:'translateY(-50%)',height:1,background:SFILL}}/>
                       </div>
                     ))}
                     <div style={{height:18,display:'flex',alignItems:'center',justifyContent:'center'}}>
                       <button onClick={()=>addBeat(mi)}
-                        style={{background:'rgba(0,0,0,0.06)',border:'none',borderRadius:'50%',
-                          width:14,height:14,fontSize:10,cursor:'pointer',color:'#8A847C',
+                        style={{background:isDark?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.06)',border:'none',borderRadius:'50%',
+                          width:14,height:14,fontSize:10,cursor:'pointer',color:SSUB,
                           display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700,padding:0}}>+</button>
                     </div>
                   </div>
                 </div>
               </div>
-              <div style={{width:2,background:'#1A1A1A',alignSelf:'stretch',flexShrink:0,
+              <div style={{width:2,background:INK,alignSelf:'stretch',flexShrink:0,
                 marginBottom:18,
-                boxShadow:m.barAfter==='final'?'3px 0 0 #1A1A1A':'none',borderRadius:1}}/>
+                boxShadow:m.barAfter==='final'?`3px 0 0 ${INK}`:'none',borderRadius:1}}/>
             </React.Fragment>
           ))}
         </div>
@@ -2464,6 +2486,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
               <div key={ri} style={{flexShrink:0,overflow:'auto',borderBottom:`0.5px solid ${TH.border}`}}>
                 <StaffSectionView section={item.section}
                   editMode={editMode}
+                  prefs={prefs}
                   onUpdate={ns=>updateStaffSection(item.si,ns)}
                   onDelete={cur.sections.length>1?()=>deleteSection(item.si):null}/>
               </div>
@@ -2475,6 +2498,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
               <div key={ri} style={{flexShrink:0,overflow:'auto',borderBottom:`0.5px solid ${TH.border}`}}>
                 <TabSectionView section={item.section}
                   editMode={editMode}
+                  prefs={prefs}
                   onUpdate={ns=>updateTabSection(item.si,ns)}
                   onDelete={cur.sections.length>1?()=>deleteSection(item.si):null}/>
               </div>
@@ -2880,9 +2904,15 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
         function getBass(){return (picker.bass||'')+((picker.bass&&picker.bassAcc)?picker.bassAcc:'');}
         function pushChord(np){setPicker(np);applyMeasureLive(np);}
         function cpkNote(newL,newA){
-          const chord=buildChordStr(newL+(newA==='#'?'#':newA==='b'?'b':''),picker.qualityId,picker.extensions||[],getBass());
+          const useAH=prefs?.autoHarmonize;
+          const isLetterChange=newL!==picker.letter;
+          const finalAcc=(useAH&&isLetterChange)?scaleAccForLetter(newL,displayKey,displayMode):newA;
+          const harmony=useAH?autoHarmonizeTriad(newL,finalAcc,displayKey,displayMode):{};
+          const newQualId=harmony.qualityId||picker.qualityId;
+          const newExts=(useAH&&isLetterChange)?(harmony.extensions||[]):(picker.extensions||[]);
+          const chord=buildChordStr(newL+(finalAcc==='#'?'#':finalAcc==='b'?'b':''),newQualId,newExts,getBass());
           const nb=(picker.localBeats||[]).map((b,i)=>i!==sbi?b:{...b,c:chord});
-          pushChord({...picker,letter:newL,acc:newA,localBeats:nb});
+          pushChord({...picker,letter:newL,acc:finalAcc,qualityId:newQualId,extensions:newExts,localBeats:nb});
         }
         function cpkQual(qid){
           const chord=buildChordStr(getRoot(),qid,picker.extensions||[],getBass());
@@ -2942,8 +2972,8 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
           display:'flex',alignItems:'center',justifyContent:'center'};
         const AC=isDark?'#F2EDE4':'#1A1A1A';
         const ACtxt=isDark?'#1A1A1A':'#F2EDE4';
-        const IC=isDark?'#7A7470':'#888080';
-        const BC=isDark?'#3A3634':'#C8C2BA';
+        const IC=isDark?'#7A7470':'#2A2826';
+        const BC=isDark?'#3A3634':'#C0BAB0';
         const DIV=<div style={{height:1,background:isDark?'#302E2C':'#D8D2C8',margin:'8px 0'}}/>;
         const LBL=(t,extra)=>(
           <div style={{fontSize:9,fontWeight:800,color:isDark?'#5A5654':'#9A9490',textTransform:'uppercase',
@@ -3065,11 +3095,26 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
 
             {DIV}
 
-            {/* ── BASSE label + sous-panneaux sur la même ligne ── */}
-            <div style={{display:'flex',alignItems:'center',gap:5,marginBottom:6,flexWrap:'wrap'}}>
-              <div style={{fontSize:9,fontWeight:800,flexShrink:0,textTransform:'uppercase',
-                letterSpacing:1.4,color:picker.bass?'#C89A40':(isDark?'#5A5654':'#9A9490')}}>Basse</div>
-              <div style={{flex:1}}/>
+            {/* ── ANNOTATIONS : basse + sous-panneaux sur une ligne ── */}
+            {LBL('Annotations',(picker.bass?{color:'#C89A40'}:{}))}
+            <div style={{display:'flex',alignItems:'center',gap:5,overflowX:'auto',marginBottom:0}}>
+              {/* Notes de basse */}
+              {LETTERS.map(l=>noteBtn(l,picker.bass===l,()=>cpkBassNote(l),'#C89A40'))}
+              {picker.bass&&(<>
+                <div style={{width:1,height:24,background:BC,flexShrink:0,margin:'0 2px'}}/>
+                {[{v:'b',l:'♭'},{v:'',l:'♮'},{v:'#',l:'♯'}].map(a=>(
+                  <button key={a.v} onClick={()=>cpkBassAcc(a.v)}
+                    style={{...B,width:34,height:34,borderRadius:9,fontSize:14,fontWeight:800,
+                      background:picker.bassAcc===a.v?'#C89A40':'transparent',
+                      color:picker.bassAcc===a.v?'#1A1A1A':IC,
+                      outline:`2px solid ${picker.bassAcc===a.v?'#C89A40':BC}`,flexShrink:0}}>
+                    {a.l}
+                  </button>
+                ))}
+              </>)}
+              {/* Séparateur vertical */}
+              <div style={{width:1.5,height:30,background:BC,flexShrink:0,margin:'0 4px'}}/>
+              {/* Sous-panneaux */}
               <button onClick={()=>cpkToggleSub('signs')} style={subTabStyle('signs')}>
                 {curSigns.length>0?curSigns.map(s=>SIGN_TYPES.find(x=>x.id===s)?.sym).join(' '):'⊕ Signes'}
               </button>
@@ -3082,22 +3127,6 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
               <button onClick={()=>cpkToggleSub('partie')} style={subTabStyle('partie')}>
                 ¶ {(cur.sections[picker.si]?.measures[picker.mi]?.label)||'Partie'}
               </button>
-            </div>
-            {/* ── Notes de basse ── */}
-            <div style={{display:'flex',alignItems:'center',gap:5,overflowX:'auto',marginBottom:0}}>
-              {LETTERS.map(l=>noteBtn(l,picker.bass===l,()=>cpkBassNote(l),'#C89A40'))}
-              {picker.bass&&(<>
-                <div style={{width:1,height:24,background:BC,flexShrink:0,margin:'0 3px'}}/>
-                {[{v:'b',l:'♭'},{v:'',l:'♮'},{v:'#',l:'♯'}].map(a=>(
-                  <button key={a.v} onClick={()=>cpkBassAcc(a.v)}
-                    style={{...B,width:34,height:34,borderRadius:9,fontSize:14,fontWeight:800,
-                      background:picker.bassAcc===a.v?'#C89A40':'transparent',
-                      color:picker.bassAcc===a.v?'#1A1A1A':IC,
-                      outline:`2px solid ${picker.bassAcc===a.v?'#C89A40':BC}`,flexShrink:0}}>
-                    {a.l}
-                  </button>
-                ))}
-              </>)}
             </div>
 
             {/* Sous-panneaux */}
