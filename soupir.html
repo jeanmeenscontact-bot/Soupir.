@@ -158,7 +158,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='v32.3';
+const APP_VERSION='v32.4';
 const CHORD_FONT="'Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -2842,48 +2842,52 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
       {/* ── Compact ChordPicker flottant (Option B) ── */}
       {editMode&&picker.visible&&!picker.isGrande&&(()=>{
         const sbi=picker.selectedBeat??0;
-        const adv=!!picker.advanced;
         const bassStr=(picker.bass||'')+((picker.bass&&picker.bassAcc)?picker.bassAcc:'');
+        const selBeat=(picker.localBeats||[])[sbi]||mkBeat();
+        const curVolta=selBeat.v??null;
+        const curSigns=selBeat.s||[];
+        const curText=selBeat.t||'';
+        const isCustomVolta=curVolta!==null&&!['1','2','3'].includes(curVolta);
+        const cpkSub=picker.cpkSub||null;
+        // ── Helpers ────────────────────────────────────────────────────────────
+        function getRoot(){return picker.letter+(picker.acc==='#'?'#':picker.acc==='b'?'b':'');}
+        function getBass(){return (picker.bass||'')+((picker.bass&&picker.bassAcc)?picker.bassAcc:'');}
+        function pushChord(np){setPicker(np);applyMeasureLive(np);}
         function cpkNote(newL,newA){
-          const root=newL+(newA==='#'?'#':newA==='b'?'b':'');
-          const chord=buildChordStr(root,picker.qualityId,picker.extensions||[],bassStr);
-          const newBeats=(picker.localBeats||[]).map((b,i)=>i!==sbi?b:{...b,c:chord});
-          const np={...picker,letter:newL,acc:newA,localBeats:newBeats};
-          setPicker(np);applyMeasureLive(np);
+          const chord=buildChordStr(newL+(newA==='#'?'#':newA==='b'?'b':''),picker.qualityId,picker.extensions||[],getBass());
+          const nb=(picker.localBeats||[]).map((b,i)=>i!==sbi?b:{...b,c:chord});
+          pushChord({...picker,letter:newL,acc:newA,localBeats:nb});
         }
         function cpkQual(qid){
-          const root=picker.letter+(picker.acc==='#'?'#':picker.acc==='b'?'b':'');
-          const chord=buildChordStr(root,qid,picker.extensions||[],bassStr);
-          const newBeats=(picker.localBeats||[]).map((b,i)=>i!==sbi?b:{...b,c:chord});
-          const np={...picker,qualityId:qid,localBeats:newBeats};
-          setPicker(np);applyMeasureLive(np);
+          const chord=buildChordStr(getRoot(),qid,picker.extensions||[],getBass());
+          const nb=(picker.localBeats||[]).map((b,i)=>i!==sbi?b:{...b,c:chord});
+          pushChord({...picker,qualityId:qid,localBeats:nb});
         }
         function cpkExt(eid){
           const exts=picker.extensions||[];
           const newExts=exts.includes(eid)?exts.filter(x=>x!==eid):[...exts,eid];
-          const root=picker.letter+(picker.acc==='#'?'#':picker.acc==='b'?'b':'');
-          const chord=buildChordStr(root,picker.qualityId,newExts,bassStr);
-          const newBeats=(picker.localBeats||[]).map((b,i)=>i!==sbi?b:{...b,c:chord});
-          const np={...picker,extensions:newExts,localBeats:newBeats};
-          setPicker(np);applyMeasureLive(np);
+          const chord=buildChordStr(getRoot(),picker.qualityId,newExts,getBass());
+          const nb=(picker.localBeats||[]).map((b,i)=>i!==sbi?b:{...b,c:chord});
+          pushChord({...picker,extensions:newExts,localBeats:nb});
+        }
+        function cpkClearExt(){
+          const chord=buildChordStr(getRoot(),picker.qualityId,[],getBass());
+          const nb=(picker.localBeats||[]).map((b,i)=>i!==sbi?b:{...b,c:chord});
+          pushChord({...picker,extensions:[],localBeats:nb});
         }
         function cpkBassNote(newBL){
-          const newBassStr=picker.bass===newBL?'':(newBL+(picker.bassAcc==='#'?'#':picker.bassAcc==='b'?'b':''));
           const newBass=picker.bass===newBL?'':newBL;
           const newBassAcc=picker.bass===newBL?'':picker.bassAcc||'';
-          const root=picker.letter+(picker.acc==='#'?'#':picker.acc==='b'?'b':'');
-          const chord=buildChordStr(root,picker.qualityId,picker.extensions||[],newBassStr);
-          const newBeats=(picker.localBeats||[]).map((b,i)=>i!==sbi?b:{...b,c:chord});
-          const np={...picker,bass:newBass,bassAcc:newBassAcc,localBeats:newBeats};
-          setPicker(np);applyMeasureLive(np);
+          const newBStr=newBass+(newBassAcc==='#'?'#':newBassAcc==='b'?'b':'');
+          const chord=buildChordStr(getRoot(),picker.qualityId,picker.extensions||[],newBStr);
+          const nb=(picker.localBeats||[]).map((b,i)=>i!==sbi?b:{...b,c:chord});
+          pushChord({...picker,bass:newBass,bassAcc:newBassAcc,localBeats:nb});
         }
         function cpkBassAcc(newBA){
-          const newBassStr=(picker.bass||'')+(newBA==='#'?'#':newBA==='b'?'b':'');
-          const root=picker.letter+(picker.acc==='#'?'#':picker.acc==='b'?'b':'');
-          const chord=buildChordStr(root,picker.qualityId,picker.extensions||[],newBassStr);
-          const newBeats=(picker.localBeats||[]).map((b,i)=>i!==sbi?b:{...b,c:chord});
-          const np={...picker,bassAcc:newBA,localBeats:newBeats};
-          setPicker(np);applyMeasureLive(np);
+          const newBStr=(picker.bass||'')+(newBA==='#'?'#':newBA==='b'?'b':'');
+          const chord=buildChordStr(getRoot(),picker.qualityId,picker.extensions||[],newBStr);
+          const nb=(picker.localBeats||[]).map((b,i)=>i!==sbi?b:{...b,c:chord});
+          pushChord({...picker,bassAcc:newBA,localBeats:nb});
         }
         function cpkBeat(bi){
           const initChord=(picker.localBeats||[])[bi]?.c||'';
@@ -2895,6 +2899,13 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
           setPicker(pk=>({...pk,selectedBeat:bi,letter:nl,acc:na,
             qualityId:parsed.qualityId,extensions:parsed.extensions,bass:bL,bassAcc:bA}));
         }
+        function cpkUpdBeat(partial){
+          const nb=(picker.localBeats||[]).map((b,i)=>i!==sbi?b:{...b,...partial});
+          const np={...picker,localBeats:nb};
+          setPicker(np);applyMeasureLive(np);
+        }
+        function cpkToggleSub(s){setPicker(pk=>({...pk,cpkSub:pk.cpkSub===s?null:s}));}
+        // ── Constantes ─────────────────────────────────────────────────────────
         const CQUALITIES=[
           {id:'maj',l:'M'},{id:'min',l:'m'},{id:'dom7',l:'7'},{id:'min7',l:'m7'},
           {id:'maj7',l:'M7'},{id:'mMaj7',l:prefs?.minor==='-'?'−Δ':'mΔ'},
@@ -2903,135 +2914,265 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
         ];
         const B={cursor:'pointer',fontFamily:'inherit',border:'none',padding:0,
           display:'flex',alignItems:'center',justifyContent:'center'};
-        const AC='#F2EDE4',IC='#A09A90',BC='#4A4540';
-        const secLbl=(t)=>(
-          <div style={{fontSize:8,fontWeight:700,color:'#6A6460',textTransform:'uppercase',
-            letterSpacing:1.2,marginBottom:4,marginTop:6}}>{t}</div>
+        const AC='#F2EDE4',IC='#7A7470',BC='#3A3634';
+        const DIV=<div style={{height:1,background:'#302E2C',margin:'10px 0'}}/>;
+        const LBL=(t,extra)=>(
+          <div style={{fontSize:9,fontWeight:800,color:'#5A5654',textTransform:'uppercase',
+            letterSpacing:1.4,marginBottom:6,...extra}}>{t}</div>
         );
-        // Accord en cours d'affichage
-        const root=picker.letter+(picker.acc==='#'?'#':picker.acc==='b'?'b':'');
-        const dispChord=root?applyPrefs(buildChordStr(root,picker.qualityId,picker.extensions||[],bassStr),prefs):'—';
+        const noteBtn=(l,active,onClick,accentClr)=>(
+          <button key={l} onClick={onClick}
+            style={{...B,width:36,height:36,borderRadius:9,fontSize:16,fontWeight:800,
+              background:active?(accentClr||AC):'transparent',
+              color:active?'#1A1A1A':IC,
+              outline:`2px solid ${active?(accentClr||AC):BC}`,flexShrink:0}}>
+            {l}
+          </button>
+        );
+        const dispChord=getRoot()?applyPrefs(buildChordStr(getRoot(),picker.qualityId,picker.extensions||[],getBass()),prefs):'—';
+        const hasSub=(s)=>cpkSub===s;
+        const subTabStyle=(s)=>({...B,height:30,borderRadius:8,padding:'0 10px',fontSize:11,fontWeight:700,
+          background:hasSub(s)?'#3A3634':(!hasSub(s)&&cpkSub?'transparent':'transparent'),
+          color:hasSub(s)?AC:IC,outline:`1.5px solid ${hasSub(s)?'#5A5654':BC}`,
+          flexShrink:0,whiteSpace:'nowrap'});
+        // ── Render ──────────────────────────────────────────────────────────────
         return(
           <div style={{position:'absolute',bottom:0,left:0,right:0,zIndex:150,
-            background:'rgba(26,24,22,0.97)',backdropFilter:'blur(20px)',WebkitBackdropFilter:'blur(20px)',
-            borderRadius:'16px 16px 0 0',padding:'11px 12px 16px',
-            boxShadow:'0 -4px 24px rgba(0,0,0,0.4)'}}>
+            background:'rgba(22,20,18,0.98)',backdropFilter:'blur(22px)',WebkitBackdropFilter:'blur(22px)',
+            borderRadius:'18px 18px 0 0',padding:'14px 14px 20px',
+            boxShadow:'0 -6px 32px rgba(0,0,0,0.5)',maxHeight:'88vh',overflowY:'auto'}}>
 
-            {/* Ligne d'accord + toggle avancé + fermer */}
-            <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:9}}>
-              <span style={{fontSize:22,fontWeight:900,color:AC,letterSpacing:'-0.5px',flex:1,lineHeight:1}}>
+            {/* ── En-tête : accord + fermer ── */}
+            <div style={{display:'flex',alignItems:'center',marginBottom:12}}>
+              <span style={{fontSize:28,fontWeight:900,color:AC,letterSpacing:'-0.5px',flex:1,lineHeight:1}}>
                 {dispChord}
               </span>
-              <button onClick={()=>setPicker(pk=>({...pk,advanced:!pk.advanced}))}
-                style={{...B,height:26,borderRadius:100,padding:'0 10px',fontSize:10,fontWeight:700,
-                  background:adv?AC:'transparent',color:adv?'#1A1A1A':IC,
-                  outline:`1.5px solid ${adv?AC:BC}`,flexShrink:0}}>
-                {adv?'Compact':'⋯ Plus'}
-              </button>
-              <button onClick={()=>setPicker(pk=>({...pk,visible:false}))}
-                style={{...B,height:26,borderRadius:100,padding:'0 12px',fontSize:10,fontWeight:700,
-                  background:AC,color:'#1A1A1A',flexShrink:0}}>✕</button>
+              <button onClick={()=>setPicker(pk=>({...pk,visible:false,cpkSub:null}))}
+                style={{...B,width:32,height:32,borderRadius:'50%',fontSize:16,fontWeight:700,
+                  background:'#3A3634',color:AC,flexShrink:0}}>✕</button>
             </div>
 
-            {/* Rangée 1 : beats + lettres + altérations */}
-            <div style={{display:'flex',alignItems:'center',gap:5,marginBottom:8,overflowX:'auto'}}>
-              {(picker.localBeats||[]).map((_b,bi)=>(
-                <button key={bi} onClick={()=>cpkBeat(bi)}
-                  style={{...B,width:28,height:28,borderRadius:7,fontSize:10,fontWeight:700,
-                    background:sbi===bi?AC:'transparent',color:sbi===bi?'#1A1A1A':IC,
-                    outline:`1.5px solid ${sbi===bi?AC:BC}`,flexShrink:0}}>
-                  {bi+1}
-                </button>
-              ))}
-              <div style={{width:1,height:18,background:BC,flexShrink:0,margin:'0 1px'}}/>
-              {LETTERS.map(l=>(
-                <button key={l} onClick={()=>cpkNote(l,picker.acc)}
-                  style={{...B,width:32,height:32,borderRadius:8,fontSize:15,fontWeight:700,
-                    background:picker.letter===l?AC:'transparent',color:picker.letter===l?'#1A1A1A':IC,
-                    outline:`1.5px solid ${picker.letter===l?AC:BC}`,flexShrink:0}}>
-                  {l}
-                </button>
-              ))}
-              <div style={{width:1,height:18,background:BC,flexShrink:0,margin:'0 1px'}}/>
+            {/* ── TEMPS ── */}
+            {LBL('Temps')}
+            <div style={{display:'flex',gap:6,marginBottom:0}}>
+              {(picker.localBeats||[]).map((_b,bi)=>{
+                const bc=(picker.localBeats||[])[bi]?.c||'';
+                const filled=bc&&!isSpec(bc)&&bc!=='%';
+                return(
+                  <button key={bi} onClick={()=>cpkBeat(bi)}
+                    style={{...B,flex:1,height:38,borderRadius:9,fontSize:12,fontWeight:800,
+                      background:sbi===bi?AC:(filled?'#2E2C2A':'transparent'),
+                      color:sbi===bi?'#1A1A1A':(filled?'#C0BAB0':IC),
+                      outline:`2px solid ${sbi===bi?AC:(filled?'#4A4845':BC)}`}}>
+                    {sbi===bi&&filled?applyPrefs(bc,prefs)||String(bi+1):String(bi+1)}
+                  </button>
+                );
+              })}
+            </div>
+
+            {DIV}
+
+            {/* ── FONDAMENTALE ── */}
+            {LBL('Fondamentale')}
+            <div style={{display:'flex',alignItems:'center',gap:5,marginBottom:0,overflowX:'auto'}}>
+              {LETTERS.map(l=>noteBtn(l,picker.letter===l,()=>cpkNote(l,picker.acc)))}
+              <div style={{width:1,height:24,background:BC,flexShrink:0,margin:'0 3px'}}/>
               {[{v:'b',l:'♭'},{v:'',l:'♮'},{v:'#',l:'♯'}].map(a=>(
                 <button key={a.v} onClick={()=>cpkNote(picker.letter,a.v)}
-                  style={{...B,width:30,height:30,borderRadius:8,fontSize:13,fontWeight:700,
+                  style={{...B,width:34,height:34,borderRadius:9,fontSize:14,fontWeight:800,
                     background:picker.acc===a.v?AC:'transparent',color:picker.acc===a.v?'#1A1A1A':IC,
-                    outline:`1.5px solid ${picker.acc===a.v?AC:BC}`,flexShrink:0}}>
+                    outline:`2px solid ${picker.acc===a.v?AC:BC}`,flexShrink:0}}>
                   {a.l}
                 </button>
               ))}
             </div>
 
-            {/* Rangée 2 : qualités */}
-            <div style={{display:'flex',alignItems:'center',gap:5,overflowX:'auto',
-              paddingBottom:adv?0:2,marginBottom:adv?6:0}}>
+            {DIV}
+
+            {/* ── QUALITÉ ── */}
+            {LBL('Qualité')}
+            <div style={{display:'flex',gap:5,overflowX:'auto',marginBottom:0}}>
               {CQUALITIES.map(q=>(
                 <button key={q.id} onClick={()=>cpkQual(q.id)}
-                  style={{...B,height:32,borderRadius:7,padding:'0 10px',fontSize:12,fontWeight:700,
+                  style={{...B,height:36,borderRadius:8,padding:'0 12px',fontSize:13,fontWeight:800,
                     whiteSpace:'nowrap',flexShrink:0,
                     background:picker.qualityId===q.id?AC:'transparent',
                     color:picker.qualityId===q.id?'#1A1A1A':IC,
-                    outline:`1.5px solid ${picker.qualityId===q.id?AC:BC}`}}>
+                    outline:`2px solid ${picker.qualityId===q.id?AC:BC}`}}>
                   {q.l}
                 </button>
               ))}
             </div>
 
-            {/* Mode avancé : extensions + basse */}
-            {adv&&(<>
-              {secLbl('Extensions')}
-              <div style={{display:'flex',alignItems:'center',gap:5,overflowX:'auto',marginBottom:2}}>
-                {EXTENSIONS.map(e=>{
-                  const active=(picker.extensions||[]).includes(e.id);
-                  return(
-                    <button key={e.id} onClick={()=>cpkExt(e.id)}
-                      style={{...B,height:30,borderRadius:7,padding:'0 9px',fontSize:11,fontWeight:700,
-                        whiteSpace:'nowrap',flexShrink:0,
-                        background:active?'#3A9BD5':'transparent',
-                        color:active?'#FFFFFF':IC,
-                        outline:`1.5px solid ${active?'#3A9BD5':BC}`}}>
-                      {e.label}
-                    </button>
-                  );
-                })}
-                {(picker.extensions||[]).length>0&&(
-                  <button onClick={()=>{
-                    const root=picker.letter+(picker.acc==='#'?'#':picker.acc==='b'?'b':'');
-                    const chord=buildChordStr(root,picker.qualityId,[],bassStr);
-                    const newBeats=(picker.localBeats||[]).map((b,i)=>i!==sbi?b:{...b,c:chord});
-                    const np={...picker,extensions:[],localBeats:newBeats};
-                    setPicker(np);applyMeasureLive(np);
-                  }} style={{...B,height:30,borderRadius:7,padding:'0 9px',fontSize:10,fontWeight:600,
-                    whiteSpace:'nowrap',flexShrink:0,background:'transparent',color:'#C0392B',
-                    outline:`1.5px solid #C0392B`}}>✕ Effacer</button>
-                )}
-              </div>
-              {secLbl('Basse')}
-              <div style={{display:'flex',alignItems:'center',gap:5,overflowX:'auto'}}>
-                {LETTERS.map(l=>(
-                  <button key={l} onClick={()=>cpkBassNote(l)}
-                    style={{...B,width:32,height:32,borderRadius:8,fontSize:15,fontWeight:700,
-                      background:picker.bass===l?'#F39C12':'transparent',
-                      color:picker.bass===l?'#1A1A1A':IC,
-                      outline:`1.5px solid ${picker.bass===l?'#F39C12':BC}`,flexShrink:0}}>
-                    {l}
+            {DIV}
+
+            {/* ── EXTENSIONS ── */}
+            {LBL('Extensions')}
+            <div style={{display:'flex',gap:5,overflowX:'auto',marginBottom:0,alignItems:'center'}}>
+              {EXTENSIONS.map(e=>{
+                const active=(picker.extensions||[]).includes(e.id);
+                return(
+                  <button key={e.id} onClick={()=>cpkExt(e.id)}
+                    style={{...B,height:34,borderRadius:8,padding:'0 10px',fontSize:12,fontWeight:700,
+                      whiteSpace:'nowrap',flexShrink:0,
+                      background:active?'#2A5A80':'transparent',
+                      color:active?'#8DCFFF':IC,
+                      outline:`2px solid ${active?'#3A7AA0':BC}`}}>
+                    {e.label}
+                  </button>
+                );
+              })}
+              {(picker.extensions||[]).length>0&&(
+                <button onClick={cpkClearExt}
+                  style={{...B,height:34,borderRadius:8,padding:'0 10px',fontSize:11,fontWeight:700,
+                    whiteSpace:'nowrap',flexShrink:0,background:'transparent',
+                    color:'#C0392B',outline:`2px solid #4A2020`}}>
+                  ✕
+                </button>
+              )}
+            </div>
+
+            {DIV}
+
+            {/* ── BASSE ── */}
+            {LBL('Basse',(picker.bass?{color:'#C89A40'}:{}))}
+            <div style={{display:'flex',alignItems:'center',gap:5,overflowX:'auto',marginBottom:0}}>
+              {LETTERS.map(l=>noteBtn(l,picker.bass===l,()=>cpkBassNote(l),'#C89A40'))}
+              {picker.bass&&(<>
+                <div style={{width:1,height:24,background:BC,flexShrink:0,margin:'0 3px'}}/>
+                {[{v:'b',l:'♭'},{v:'',l:'♮'},{v:'#',l:'♯'}].map(a=>(
+                  <button key={a.v} onClick={()=>cpkBassAcc(a.v)}
+                    style={{...B,width:34,height:34,borderRadius:9,fontSize:14,fontWeight:800,
+                      background:picker.bassAcc===a.v?'#C89A40':'transparent',
+                      color:picker.bassAcc===a.v?'#1A1A1A':IC,
+                      outline:`2px solid ${picker.bassAcc===a.v?'#C89A40':BC}`,flexShrink:0}}>
+                    {a.l}
                   </button>
                 ))}
-                {picker.bass&&(<>
-                  <div style={{width:1,height:18,background:BC,flexShrink:0,margin:'0 1px'}}/>
-                  {[{v:'b',l:'♭'},{v:'',l:'♮'},{v:'#',l:'♯'}].map(a=>(
-                    <button key={a.v} onClick={()=>cpkBassAcc(a.v)}
-                      style={{...B,width:30,height:30,borderRadius:8,fontSize:13,fontWeight:700,
-                        background:picker.bassAcc===a.v?'#F39C12':'transparent',
-                        color:picker.bassAcc===a.v?'#1A1A1A':IC,
-                        outline:`1.5px solid ${picker.bassAcc===a.v?'#F39C12':BC}`,flexShrink:0}}>
-                      {a.l}
+              </>)}
+            </div>
+
+            {DIV}
+
+            {/* ── SIGNES, VOLTA, ANNOTATION, SECTION ── */}
+            <div style={{display:'flex',gap:5}}>
+              <button onClick={()=>cpkToggleSub('signs')} style={subTabStyle('signs')}>
+                {curSigns.length>0?curSigns.map(s=>SIGN_TYPES.find(x=>x.id===s)?.sym).join(' '):'⊕ Signes'}
+              </button>
+              <button onClick={()=>cpkToggleSub('volta')} style={subTabStyle('volta')}>
+                {curVolta!==null?`${curVolta||'?'}.`:'Volta'}
+              </button>
+              <button onClick={()=>cpkToggleSub('annotation')} style={subTabStyle('annotation')}>
+                {curText||'✏ Note'}
+              </button>
+              <button onClick={()=>cpkToggleSub('section')} style={subTabStyle('section')}>
+                § {cur.sections[picker.si]?.name||'Section'}
+              </button>
+            </div>
+
+            {/* Sous-panneaux */}
+            {cpkSub==='signs'&&(
+              <div style={{marginTop:8,padding:'10px 12px',background:'rgba(42,90,42,0.18)',
+                borderRadius:10,border:'1.5px solid rgba(60,120,60,0.3)'}}>
+                <div style={{fontSize:9,color:'#6AAA6A',fontWeight:700,marginBottom:7,letterSpacing:0.5}}>
+                  Au-dessus du temps {sbi+1}
+                </div>
+                <div style={{display:'flex',gap:5,flexWrap:'wrap'}}>
+                  {SIGN_TYPES.map(st=>{
+                    const active=curSigns.includes(st.id);
+                    return(
+                      <button key={st.id} onClick={()=>cpkUpdBeat({s:active?curSigns.filter(x=>x!==st.id):[...curSigns,st.id]})}
+                        style={{...B,height:32,borderRadius:8,padding:'0 10px',fontSize:11,fontWeight:700,
+                          background:active?'#2A5A2A':'transparent',color:active?'#A0E0A0':IC,
+                          outline:`1.5px solid ${active?'#3A8A3A':BC}`,whiteSpace:'nowrap'}}>
+                        {st.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+            {cpkSub==='volta'&&(
+              <div style={{marginTop:8,padding:'10px 12px',background:'rgba(30,30,50,0.5)',
+                borderRadius:10,border:'1.5px solid #3A3A5A'}}>
+                <div style={{fontSize:9,color:'#8A8ABE',fontWeight:700,marginBottom:7}}>
+                  Crochet — temps {sbi+1}
+                </div>
+                <div style={{display:'flex',gap:5,flexWrap:'wrap',marginBottom:isCustomVolta?8:0}}>
+                  {[{v:null,l:'Aucun'},...['1','2','3'].map(v=>({v,l:`${v}.`})),{v:'',l:'Perso.'}].map(opt=>{
+                    const isAct=opt.v===null?curVolta===null:(opt.v===''?isCustomVolta:curVolta===opt.v&&!isCustomVolta);
+                    return(
+                      <button key={String(opt.v)} onClick={()=>{
+                          if(opt.v===null)cpkUpdBeat({v:null});
+                          else if(opt.v===''&&!isCustomVolta)cpkUpdBeat({v:''});
+                          else if(opt.v!=='')cpkUpdBeat({v:opt.v});
+                        }}
+                        style={{...B,height:32,borderRadius:8,padding:'0 10px',fontSize:opt.v&&opt.v!==''?13:11,fontWeight:700,
+                          background:isAct?'#2A2A5A':'transparent',color:isAct?'#AAAAEE':IC,
+                          outline:`1.5px solid ${isAct?'#4A4A8A':BC}`,whiteSpace:'nowrap'}}>
+                        {opt.l}
+                      </button>
+                    );
+                  })}
+                </div>
+                {isCustomVolta&&(
+                  <input value={curVolta||''} onChange={e=>cpkUpdBeat({v:e.target.value})}
+                    placeholder="Ex : A, Bis…"
+                    style={{width:'100%',background:'#2A2830',border:'1.5px solid #4A4860',
+                      borderRadius:8,padding:'8px 12px',fontSize:12,color:AC,outline:'none',
+                      boxSizing:'border-box',fontFamily:'inherit'}}/>
+                )}
+              </div>
+            )}
+            {cpkSub==='annotation'&&(
+              <div style={{marginTop:8,padding:'10px 12px',background:'rgba(60,40,20,0.4)',
+                borderRadius:10,border:'1.5px solid #5A3E20'}}>
+                <div style={{fontSize:9,color:'#B07840',fontWeight:700,marginBottom:7}}>
+                  Annotation — temps {sbi+1}
+                </div>
+                <div style={{display:'flex',gap:5,flexWrap:'wrap',marginBottom:8}}>
+                  {TEXT_SUGG.map(s=>(
+                    <button key={s} onClick={()=>cpkUpdBeat({t:curText===s?'':s})}
+                      style={{...B,height:30,borderRadius:8,padding:'0 9px',fontSize:10,fontWeight:700,
+                        background:curText===s?'#5A3A10':'transparent',color:curText===s?'#F0B060':IC,
+                        outline:`1.5px solid ${curText===s?'#8A5A20':BC}`,whiteSpace:'nowrap'}}>
+                      {s}
                     </button>
                   ))}
-                </>)}
+                </div>
+                <input value={curText} onChange={e=>cpkUpdBeat({t:e.target.value})}
+                  placeholder="Solo, Intro, Refrain…"
+                  style={{width:'100%',background:'#2A2010',border:'1.5px solid #5A3E20',
+                    borderRadius:8,padding:'8px 12px',fontSize:12,color:AC,outline:'none',
+                    boxSizing:'border-box',fontFamily:'inherit'}}/>
               </div>
-            </>)}
+            )}
+            {cpkSub==='section'&&(
+              <div style={{marginTop:8,padding:'10px 12px',background:'rgba(30,28,26,0.6)',
+                borderRadius:10,border:'1.5px solid #4A4845'}}>
+                <div style={{display:'flex',gap:5,flexWrap:'wrap',marginBottom:8}}>
+                  {['A','B','C','D','E','F','G','V','Intro','Outro','Bridge','Coda'].map(n=>{
+                    const secName=cur.sections[picker.si]?.name||'';
+                    return(
+                      <button key={n} onClick={()=>renameSectionAtPicker(n)}
+                        style={{...B,height:30,borderRadius:8,padding:'0 10px',fontSize:11,fontWeight:700,
+                          background:secName===n?AC:'transparent',color:secName===n?'#1A1A1A':IC,
+                          outline:`1.5px solid ${secName===n?AC:BC}`,whiteSpace:'nowrap'}}>
+                        {n}
+                      </button>
+                    );
+                  })}
+                </div>
+                <input defaultValue={cur.sections[picker.si]?.name||''} key={picker.si}
+                  onBlur={e=>{if(e.target.value.trim()&&e.target.value.trim()!==(cur.sections[picker.si]?.name||''))renameSectionAtPicker(e.target.value.trim());}}
+                  onKeyDown={e=>{if(e.key==='Enter'&&e.target.value.trim())renameSectionAtPicker(e.target.value.trim());}}
+                  placeholder="Nom libre…"
+                  style={{width:'100%',background:'#242220',border:'1.5px solid #4A4845',
+                    borderRadius:8,padding:'8px 12px',fontSize:12,color:AC,outline:'none',
+                    boxSizing:'border-box',fontFamily:'inherit'}}/>
+              </div>
+            )}
+
           </div>
         );
       })()}
