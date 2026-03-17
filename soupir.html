@@ -158,7 +158,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='v32.2';
+const APP_VERSION='v32.3';
 const CHORD_FONT="'Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -2812,7 +2812,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
         onSelect={ts=>{setLibrary(lib=>lib.map(p=>p.id!==piece.id?p:{...p,timeSig:ts}));setShowTimeSig(false);}}
         onClose={()=>setShowTimeSig(false)}/>}
 
-      {picker.visible&&(picker.isGrande||picker.advanced)&&<ChordPicker picker={picker}
+      {picker.visible&&picker.isGrande&&<ChordPicker picker={picker}
         onChange={(upd)=>{
           // Synchronise localBeats[selectedBeat].c avec l'état de l'éditeur (root/quality/ext/bass)
           const prevSbi=picker.selectedBeat??0;
@@ -2834,41 +2834,65 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
           }
         }}
         onConfirm={confirmMeasure}
-        onCancel={picker.isGrande
-          ?()=>setPicker(pk=>({...pk,visible:false}))
-          :()=>setPicker(pk=>({...pk,advanced:false}))}
+        onCancel={()=>setPicker(pk=>({...pk,visible:false}))}
         sectionName={cur.sections[picker.si]?.name||''}
         onRenameSection={renameSectionAtPicker}
         prefs={prefs} displayKey={displayKey} displayMode={displayMode} autoHarmonize={!!prefs?.autoHarmonize}/>}
 
       {/* ── Compact ChordPicker flottant (Option B) ── */}
-      {editMode&&picker.visible&&!picker.isGrande&&!picker.advanced&&(()=>{
+      {editMode&&picker.visible&&!picker.isGrande&&(()=>{
         const sbi=picker.selectedBeat??0;
+        const adv=!!picker.advanced;
+        const bassStr=(picker.bass||'')+((picker.bass&&picker.bassAcc)?picker.bassAcc:'');
         function cpkNote(newL,newA){
           const root=newL+(newA==='#'?'#':newA==='b'?'b':'');
-          const bass=(picker.bass||'')+((picker.bass&&picker.bassAcc)?picker.bassAcc:'');
-          const chord=buildChordStr(root,picker.qualityId,picker.extensions||[],bass);
+          const chord=buildChordStr(root,picker.qualityId,picker.extensions||[],bassStr);
           const newBeats=(picker.localBeats||[]).map((b,i)=>i!==sbi?b:{...b,c:chord});
           const np={...picker,letter:newL,acc:newA,localBeats:newBeats};
           setPicker(np);applyMeasureLive(np);
         }
         function cpkQual(qid){
           const root=picker.letter+(picker.acc==='#'?'#':picker.acc==='b'?'b':'');
-          const bass=(picker.bass||'')+((picker.bass&&picker.bassAcc)?picker.bassAcc:'');
-          const chord=buildChordStr(root,qid,picker.extensions||[],bass);
+          const chord=buildChordStr(root,qid,picker.extensions||[],bassStr);
           const newBeats=(picker.localBeats||[]).map((b,i)=>i!==sbi?b:{...b,c:chord});
           const np={...picker,qualityId:qid,localBeats:newBeats};
           setPicker(np);applyMeasureLive(np);
         }
+        function cpkExt(eid){
+          const exts=picker.extensions||[];
+          const newExts=exts.includes(eid)?exts.filter(x=>x!==eid):[...exts,eid];
+          const root=picker.letter+(picker.acc==='#'?'#':picker.acc==='b'?'b':'');
+          const chord=buildChordStr(root,picker.qualityId,newExts,bassStr);
+          const newBeats=(picker.localBeats||[]).map((b,i)=>i!==sbi?b:{...b,c:chord});
+          const np={...picker,extensions:newExts,localBeats:newBeats};
+          setPicker(np);applyMeasureLive(np);
+        }
+        function cpkBassNote(newBL){
+          const newBassStr=picker.bass===newBL?'':(newBL+(picker.bassAcc==='#'?'#':picker.bassAcc==='b'?'b':''));
+          const newBass=picker.bass===newBL?'':newBL;
+          const newBassAcc=picker.bass===newBL?'':picker.bassAcc||'';
+          const root=picker.letter+(picker.acc==='#'?'#':picker.acc==='b'?'b':'');
+          const chord=buildChordStr(root,picker.qualityId,picker.extensions||[],newBassStr);
+          const newBeats=(picker.localBeats||[]).map((b,i)=>i!==sbi?b:{...b,c:chord});
+          const np={...picker,bass:newBass,bassAcc:newBassAcc,localBeats:newBeats};
+          setPicker(np);applyMeasureLive(np);
+        }
+        function cpkBassAcc(newBA){
+          const newBassStr=(picker.bass||'')+(newBA==='#'?'#':newBA==='b'?'b':'');
+          const root=picker.letter+(picker.acc==='#'?'#':picker.acc==='b'?'b':'');
+          const chord=buildChordStr(root,picker.qualityId,picker.extensions||[],newBassStr);
+          const newBeats=(picker.localBeats||[]).map((b,i)=>i!==sbi?b:{...b,c:chord});
+          const np={...picker,bassAcc:newBA,localBeats:newBeats};
+          setPicker(np);applyMeasureLive(np);
+        }
         function cpkBeat(bi){
-          const ib=bi;
-          const initChord=(picker.localBeats||[])[ib]?.c||'';
+          const initChord=(picker.localBeats||[])[bi]?.c||'';
           const fc=(initChord&&!isSpec(initChord)&&initChord!=='%')?initChord:'C';
           const parsed=parseChordFull(fc);
           const{letter:nl,acc:na}=rootToLetterAcc(parsed.root);
           const bR=parsed.bass||'';
           const{letter:bL,acc:bA}=bR?rootToLetterAcc(bR):{letter:'',acc:''};
-          setPicker(pk=>({...pk,selectedBeat:ib,letter:nl,acc:na,
+          setPicker(pk=>({...pk,selectedBeat:bi,letter:nl,acc:na,
             qualityId:parsed.qualityId,extensions:parsed.extensions,bass:bL,bassAcc:bA}));
         }
         const CQUALITIES=[
@@ -2877,75 +2901,137 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
           {id:'dim',l:'dim'},{id:'aug',l:'+'},{id:'sus4',l:'sus4'},{id:'sus2',l:'sus2'},
           {id:'hdim',l:'ø'},{id:'dim7',l:'o7'},{id:'maj6',l:'6'},{id:'min6',l:'m6'},{id:'5',l:'5'},
         ];
-        const btnBase={cursor:'pointer',fontFamily:'inherit',border:'none',padding:0,
+        const B={cursor:'pointer',fontFamily:'inherit',border:'none',padding:0,
           display:'flex',alignItems:'center',justifyContent:'center'};
-        const activeClr='#F2EDE4',inactiveClr='#A09A90',borderInactive='#4A4540';
+        const AC='#F2EDE4',IC='#A09A90',BC='#4A4540';
+        const secLbl=(t)=>(
+          <div style={{fontSize:8,fontWeight:700,color:'#6A6460',textTransform:'uppercase',
+            letterSpacing:1.2,marginBottom:4,marginTop:6}}>{t}</div>
+        );
+        // Accord en cours d'affichage
+        const root=picker.letter+(picker.acc==='#'?'#':picker.acc==='b'?'b':'');
+        const dispChord=root?applyPrefs(buildChordStr(root,picker.qualityId,picker.extensions||[],bassStr),prefs):'—';
         return(
           <div style={{position:'absolute',bottom:0,left:0,right:0,zIndex:150,
-            background:'rgba(26,24,22,0.95)',backdropFilter:'blur(18px)',WebkitBackdropFilter:'blur(18px)',
-            borderRadius:'14px 14px 0 0',padding:'9px 10px 12px',
-            boxShadow:'0 -3px 20px rgba(0,0,0,0.35)'}}>
-            {/* Rangée 1 : beats + lettres + altérations + avancé + fermer */}
-            <div style={{display:'flex',alignItems:'center',gap:4,marginBottom:7,flexWrap:'nowrap',overflowX:'auto'}}>
-              {/* Beat tabs */}
+            background:'rgba(26,24,22,0.97)',backdropFilter:'blur(20px)',WebkitBackdropFilter:'blur(20px)',
+            borderRadius:'16px 16px 0 0',padding:'11px 12px 16px',
+            boxShadow:'0 -4px 24px rgba(0,0,0,0.4)'}}>
+
+            {/* Ligne d'accord + toggle avancé + fermer */}
+            <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:9}}>
+              <span style={{fontSize:22,fontWeight:900,color:AC,letterSpacing:'-0.5px',flex:1,lineHeight:1}}>
+                {dispChord}
+              </span>
+              <button onClick={()=>setPicker(pk=>({...pk,advanced:!pk.advanced}))}
+                style={{...B,height:26,borderRadius:100,padding:'0 10px',fontSize:10,fontWeight:700,
+                  background:adv?AC:'transparent',color:adv?'#1A1A1A':IC,
+                  outline:`1.5px solid ${adv?AC:BC}`,flexShrink:0}}>
+                {adv?'Compact':'⋯ Plus'}
+              </button>
+              <button onClick={()=>setPicker(pk=>({...pk,visible:false}))}
+                style={{...B,height:26,borderRadius:100,padding:'0 12px',fontSize:10,fontWeight:700,
+                  background:AC,color:'#1A1A1A',flexShrink:0}}>✕</button>
+            </div>
+
+            {/* Rangée 1 : beats + lettres + altérations */}
+            <div style={{display:'flex',alignItems:'center',gap:5,marginBottom:8,overflowX:'auto'}}>
               {(picker.localBeats||[]).map((_b,bi)=>(
                 <button key={bi} onClick={()=>cpkBeat(bi)}
-                  style={{...btnBase,width:22,height:22,borderRadius:5,fontSize:9,fontWeight:700,
-                    background:sbi===bi?activeClr:'transparent',
-                    color:sbi===bi?'#1A1A1A':inactiveClr,
-                    outline:`1.5px solid ${sbi===bi?activeClr:borderInactive}`,
-                    flexShrink:0}}>
+                  style={{...B,width:28,height:28,borderRadius:7,fontSize:10,fontWeight:700,
+                    background:sbi===bi?AC:'transparent',color:sbi===bi?'#1A1A1A':IC,
+                    outline:`1.5px solid ${sbi===bi?AC:BC}`,flexShrink:0}}>
                   {bi+1}
                 </button>
               ))}
-              <div style={{width:1,height:16,background:'#4A4540',flexShrink:0,margin:'0 1px'}}/>
-              {/* Lettres */}
+              <div style={{width:1,height:18,background:BC,flexShrink:0,margin:'0 1px'}}/>
               {LETTERS.map(l=>(
                 <button key={l} onClick={()=>cpkNote(l,picker.acc)}
-                  style={{...btnBase,width:25,height:25,borderRadius:6,fontSize:13,fontWeight:700,
-                    background:picker.letter===l?activeClr:'transparent',
-                    color:picker.letter===l?'#1A1A1A':inactiveClr,
-                    outline:`1.5px solid ${picker.letter===l?activeClr:borderInactive}`,
-                    flexShrink:0}}>
+                  style={{...B,width:32,height:32,borderRadius:8,fontSize:15,fontWeight:700,
+                    background:picker.letter===l?AC:'transparent',color:picker.letter===l?'#1A1A1A':IC,
+                    outline:`1.5px solid ${picker.letter===l?AC:BC}`,flexShrink:0}}>
                   {l}
                 </button>
               ))}
-              <div style={{width:1,height:16,background:'#4A4540',flexShrink:0,margin:'0 1px'}}/>
-              {/* Altérations */}
+              <div style={{width:1,height:18,background:BC,flexShrink:0,margin:'0 1px'}}/>
               {[{v:'b',l:'♭'},{v:'',l:'♮'},{v:'#',l:'♯'}].map(a=>(
                 <button key={a.v} onClick={()=>cpkNote(picker.letter,a.v)}
-                  style={{...btnBase,width:25,height:25,borderRadius:6,fontSize:12,fontWeight:700,
-                    background:picker.acc===a.v?activeClr:'transparent',
-                    color:picker.acc===a.v?'#1A1A1A':inactiveClr,
-                    outline:`1.5px solid ${picker.acc===a.v?activeClr:borderInactive}`,
-                    flexShrink:0}}>
+                  style={{...B,width:30,height:30,borderRadius:8,fontSize:13,fontWeight:700,
+                    background:picker.acc===a.v?AC:'transparent',color:picker.acc===a.v?'#1A1A1A':IC,
+                    outline:`1.5px solid ${picker.acc===a.v?AC:BC}`,flexShrink:0}}>
                   {a.l}
                 </button>
               ))}
-              <div style={{flex:1,minWidth:4}}/>
-              {/* Avancé */}
-              <button onClick={()=>setPicker(pk=>({...pk,advanced:true}))}
-                style={{...btnBase,height:25,borderRadius:100,padding:'0 8px',fontSize:10,fontWeight:600,
-                  background:'transparent',color:inactiveClr,
-                  outline:`1.5px solid ${borderInactive}`,flexShrink:0}}>⋯</button>
-              {/* Fermer */}
-              <button onClick={()=>setPicker(pk=>({...pk,visible:false}))}
-                style={{...btnBase,height:25,borderRadius:100,padding:'0 10px',fontSize:10,fontWeight:700,
-                  background:activeClr,color:'#1A1A1A',flexShrink:0}}>✕</button>
             </div>
+
             {/* Rangée 2 : qualités */}
-            <div style={{display:'flex',alignItems:'center',gap:4,overflowX:'auto',paddingBottom:1}}>
+            <div style={{display:'flex',alignItems:'center',gap:5,overflowX:'auto',
+              paddingBottom:adv?0:2,marginBottom:adv?6:0}}>
               {CQUALITIES.map(q=>(
                 <button key={q.id} onClick={()=>cpkQual(q.id)}
-                  style={{...btnBase,height:26,borderRadius:6,padding:'0 7px',fontSize:10,fontWeight:700,
+                  style={{...B,height:32,borderRadius:7,padding:'0 10px',fontSize:12,fontWeight:700,
                     whiteSpace:'nowrap',flexShrink:0,
-                    background:picker.qualityId===q.id?activeClr:'transparent',
-                    color:picker.qualityId===q.id?'#1A1A1A':inactiveClr,
-                    outline:`1.5px solid ${picker.qualityId===q.id?activeClr:borderInactive}`}}>
+                    background:picker.qualityId===q.id?AC:'transparent',
+                    color:picker.qualityId===q.id?'#1A1A1A':IC,
+                    outline:`1.5px solid ${picker.qualityId===q.id?AC:BC}`}}>
                   {q.l}
                 </button>
               ))}
             </div>
+
+            {/* Mode avancé : extensions + basse */}
+            {adv&&(<>
+              {secLbl('Extensions')}
+              <div style={{display:'flex',alignItems:'center',gap:5,overflowX:'auto',marginBottom:2}}>
+                {EXTENSIONS.map(e=>{
+                  const active=(picker.extensions||[]).includes(e.id);
+                  return(
+                    <button key={e.id} onClick={()=>cpkExt(e.id)}
+                      style={{...B,height:30,borderRadius:7,padding:'0 9px',fontSize:11,fontWeight:700,
+                        whiteSpace:'nowrap',flexShrink:0,
+                        background:active?'#3A9BD5':'transparent',
+                        color:active?'#FFFFFF':IC,
+                        outline:`1.5px solid ${active?'#3A9BD5':BC}`}}>
+                      {e.label}
+                    </button>
+                  );
+                })}
+                {(picker.extensions||[]).length>0&&(
+                  <button onClick={()=>{
+                    const root=picker.letter+(picker.acc==='#'?'#':picker.acc==='b'?'b':'');
+                    const chord=buildChordStr(root,picker.qualityId,[],bassStr);
+                    const newBeats=(picker.localBeats||[]).map((b,i)=>i!==sbi?b:{...b,c:chord});
+                    const np={...picker,extensions:[],localBeats:newBeats};
+                    setPicker(np);applyMeasureLive(np);
+                  }} style={{...B,height:30,borderRadius:7,padding:'0 9px',fontSize:10,fontWeight:600,
+                    whiteSpace:'nowrap',flexShrink:0,background:'transparent',color:'#C0392B',
+                    outline:`1.5px solid #C0392B`}}>✕ Effacer</button>
+                )}
+              </div>
+              {secLbl('Basse')}
+              <div style={{display:'flex',alignItems:'center',gap:5,overflowX:'auto'}}>
+                {LETTERS.map(l=>(
+                  <button key={l} onClick={()=>cpkBassNote(l)}
+                    style={{...B,width:32,height:32,borderRadius:8,fontSize:15,fontWeight:700,
+                      background:picker.bass===l?'#F39C12':'transparent',
+                      color:picker.bass===l?'#1A1A1A':IC,
+                      outline:`1.5px solid ${picker.bass===l?'#F39C12':BC}`,flexShrink:0}}>
+                    {l}
+                  </button>
+                ))}
+                {picker.bass&&(<>
+                  <div style={{width:1,height:18,background:BC,flexShrink:0,margin:'0 1px'}}/>
+                  {[{v:'b',l:'♭'},{v:'',l:'♮'},{v:'#',l:'♯'}].map(a=>(
+                    <button key={a.v} onClick={()=>cpkBassAcc(a.v)}
+                      style={{...B,width:30,height:30,borderRadius:8,fontSize:13,fontWeight:700,
+                        background:picker.bassAcc===a.v?'#F39C12':'transparent',
+                        color:picker.bassAcc===a.v?'#1A1A1A':IC,
+                        outline:`1.5px solid ${picker.bassAcc===a.v?'#F39C12':BC}`,flexShrink:0}}>
+                      {a.l}
+                    </button>
+                  ))}
+                </>)}
+              </div>
+            </>)}
           </div>
         );
       })()}
