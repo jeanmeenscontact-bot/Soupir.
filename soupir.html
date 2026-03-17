@@ -158,7 +158,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='v33.3';
+const APP_VERSION='v33.4';
 const CHORD_FONT="'Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -1191,7 +1191,7 @@ function StaffSectionView({section,onUpdate,onDelete,editMode=true,prefs}){
 
   function renderPrefix(){
     return(<g>
-      {clef==='treble'&&<text x={2} y={69} fontSize="56" fontFamily="serif" fill={INK}>𝄞</text>}
+      {clef==='treble'&&<text x={2} y={65} fontSize="46" fontFamily="serif" fill={INK}>𝄞</text>}
       {clef==='bass'  &&<text x={2} y={63} fontSize="38" fontFamily="serif" fill={INK}>𝄢</text>}
       {showKey&&clef!=='none'&&ks.t==='s'&&Array.from({length:ks.n}).map((_,i)=>(
         <text key={i} x={CLEF_W+i*10} y={SHP_Y_S[i]} fontSize="15" fontFamily="serif" fill={INK}>♯</text>
@@ -2628,7 +2628,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                                 <div key="gm-sep"
                                   style={{width:20,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',cursor:editMode?'pointer':'default'}}
                                   onClick={editMode?(e)=>{e.stopPropagation();setBarlinePick({si,mi,side:'right'});}:undefined}>
-                                  <div style={{width:0,alignSelf:'stretch',borderLeft:`1.5px dashed ${isDark?'rgba(255,255,255,0.25)':'rgba(0,0,0,0.18)'}`}}/>
+                                  {editMode&&<div style={{width:0,alignSelf:'stretch',borderLeft:`1.5px dashed ${isDark?'rgba(255,255,255,0.25)':'rgba(0,0,0,0.18)'}`}}/>}
                                 </div>,
                                 beatEl
                               ];
@@ -2707,9 +2707,9 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
               {row.cells.length<GCOLS&&Array.from({length:GCOLS-row.cells.length}).map((_,pi)=>(
                 <React.Fragment key={`pad${pi}`}>
                   {pi===0&&isLastOfSection?(
-                    <div style={{flex:1,minHeight:barH,display:'flex',alignItems:'center',justifyContent:'flex-start',paddingLeft:14}}>
+                    <div style={{flex:1,minHeight:barH,display:'flex',alignItems:'center'}}>
                       <button onClick={()=>{addMeasureAtEnd(lastRealSi);setCurrentPage(Math.ceil((allRows.length+1)/rowsPerPage)-1);}}
-                        style={{width:26,height:26,background:'rgba(0,0,0,0.06)',border:'none',borderRadius:'50%',
+                        style={{width:26,height:26,marginLeft:14,background:'rgba(0,0,0,0.06)',border:'none',borderRadius:'50%',
                           fontSize:18,cursor:'pointer',color:'#8A847C',display:'flex',alignItems:'center',
                           justifyContent:'center',fontWeight:300,padding:0,lineHeight:1}}>+</button>
                     </div>
@@ -2733,9 +2733,9 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
             {Array.from({length:GCOLS}).map((_,ci)=>(
               <React.Fragment key={ci}>
                 {ci===0&&addSiFiller!=null?(
-                  <div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'flex-start',paddingLeft:42}}>
+                  <div style={{flex:1,display:'flex',alignItems:'center'}}>
                     <button onClick={()=>{addMeasureAtEnd(addSiFiller);setCurrentPage(Math.ceil((allRows.length+1)/rowsPerPage)-1);}}
-                      style={{width:26,height:26,background:'rgba(0,0,0,0.06)',border:'none',borderRadius:'50%',
+                      style={{width:26,height:26,marginLeft:42,background:'rgba(0,0,0,0.06)',border:'none',borderRadius:'50%',
                         fontSize:18,cursor:'pointer',color:'#8A847C',display:'flex',alignItems:'center',
                         justifyContent:'center',fontWeight:300,padding:0,lineHeight:1}}>+</button>
                   </div>
