@@ -136,7 +136,7 @@ function autoHarmonizeTriad(letter,acc,key,mode='maj'){
 }
 
 // ─── PREFS SYSTEM ─────────────────────────────────────────────────────────────
-const DEFAULT_PREFS={minor:'m',dim:'°',aug:'+',maj7:'maj7',hdim:'ø',accentColor:'black',autoHarmonize:true};
+const DEFAULT_PREFS={minor:'m',dim:'°',aug:'+',maj7:'maj7',hdim:'ø',accentColor:'black',autoHarmonize:true,darkMode:false};
 function loadPrefs(){try{const s=localStorage.getItem('soupir_prefs');return s?{...DEFAULT_PREFS,...JSON.parse(s)}:DEFAULT_PREFS;}catch{return DEFAULT_PREFS;}}
 function savePrefs(p){try{localStorage.setItem('soupir_prefs',JSON.stringify(p));}catch{}}
 function applyPrefs(chord,prefs){
@@ -158,7 +158,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='v32.4';
+const APP_VERSION='v32.7';
 const CHORD_FONT="'Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -1474,26 +1474,28 @@ function PreferencesScreen({prefs,onUpdate,onBack}){
     {key:'aug',label:'Augmenté',opts:[['+','C+'],['aug','Caug']],desc:'Notation augmenté'},
     {key:'autoHarmonize',label:'Auto-harmonisation',opts:[['true','Activée'],['false','Désactivée']],desc:'Qualité automatique selon la gamme'},
     {key:'accentColor',label:'Couleur des signes',opts:[['black','Noir'],['red','Rouge']],desc:'Couleur des reprises et coda'},
+    {key:'darkMode',label:'Thème',opts:[['false','☀ Clair'],['true','🌙 Sombre']],desc:"Thème de couleur de l'interface"},
   ];
-  return(<div style={{height:'100vh',display:'flex',flexDirection:'column',background:'#F2F0EB'}}>
-    <div style={{padding:'18px 24px 14px',borderBottom:'1px solid #D0CAC0',
-      display:'flex',alignItems:'center',gap:14,background:'rgba(255,255,255,0.9)'}}>
+  const dk=!!prefs?.darkMode;
+  return(<div style={{height:'100vh',display:'flex',flexDirection:'column',background:dk?'#1A1816':'#F2F0EB'}}>
+    <div style={{padding:'18px 24px 14px',borderBottom:`1px solid ${dk?'#3A3634':'#D0CAC0'}`,
+      display:'flex',alignItems:'center',gap:14,background:dk?'rgba(28,26,24,0.98)':'rgba(255,255,255,0.9)'}}>
       <button onClick={onBack}
-        style={{background:'transparent',border:'none',color:'#1A1A1A',fontSize:20,
+        style={{background:'transparent',border:'none',color:dk?'#F2EDE4':'#1A1A1A',fontSize:20,
           cursor:'pointer',padding:'4px',fontFamily:'inherit'}}>←</button>
-      <span style={{fontSize:18,fontWeight:800,letterSpacing:'-0.4px'}}>Préférences</span>
+      <span style={{fontSize:18,fontWeight:800,letterSpacing:'-0.4px',color:dk?'#F2EDE4':'#1A1A1A'}}>Préférences</span>
     </div>
     <div style={{flex:1,overflowY:'auto',padding:'20px'}}>
       {rows.map(row=>(
         <div key={row.key} style={{marginBottom:24}}>
-          <div style={{fontSize:14,fontWeight:700,marginBottom:3}}>{row.label}</div>
-          <div style={{fontSize:11,color:'#8A847C',marginBottom:10}}>{row.desc}</div>
+          <div style={{fontSize:14,fontWeight:700,marginBottom:3,color:dk?'#F2EDE4':'#1A1A1A'}}>{row.label}</div>
+          <div style={{fontSize:11,color:dk?'#8A8480':'#8A847C',marginBottom:10}}>{row.desc}</div>
           <div style={{display:'flex',gap:10}}>
             {row.opts.map(([val,example])=>(
-              <button key={val} onClick={()=>onUpdate({...prefs,[row.key]:row.key==='autoHarmonize'?val==='true':val})}
-                style={{flex:1,background:String(prefs[row.key])===val?'#1A1A1A':'#FFFFFF',
-                  color:String(prefs[row.key])===val?'#F2EDE4':'#1A1A1A',
-                  border:`1.5px solid ${String(prefs[row.key])===val?'#1A1A1A':'#D0CAC0'}`,
+              <button key={val} onClick={()=>onUpdate({...prefs,[row.key]:(row.key==='autoHarmonize'||row.key==='darkMode')?val==='true':val})}
+                style={{flex:1,background:String(prefs[row.key])===val?(dk?'#F2EDE4':'#1A1A1A'):(dk?'#2A2826':'#FFFFFF'),
+                  color:String(prefs[row.key])===val?(dk?'#1A1A1A':'#F2EDE4'):(dk?'#F2EDE4':'#1A1A1A'),
+                  border:`1.5px solid ${String(prefs[row.key])===val?(dk?'#F2EDE4':'#1A1A1A'):(dk?'#4A4845':'#D0CAC0')}`,
                   borderRadius:12,padding:'14px 12px',cursor:'pointer',fontFamily:'inherit',
                   display:'flex',flexDirection:'column',alignItems:'center',gap:5,transition:'all 0.12s'}}>
                 <span style={{fontSize:18,fontWeight:900}}>{example}</span>
@@ -2217,6 +2219,20 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
     }));
   }
 
+  function setMeasureLabel(si,mi,label){
+    setLibrary(lib=>lib.map(p=>{
+      if(p.id!==piece.id)return p;
+      return{...p,sections:p.sections.map((s,sI)=>{
+        if(sI!==si)return s;
+        return{...s,measures:s.measures.map((mm,mI)=>{
+          if(mI!==mi)return mm;
+          if(!label){const{label:_,...rest}=mm;return rest;}
+          return{...mm,label};
+        })};
+      })};
+    }));
+  }
+
   function getDisp(chord){
     if(!degreeMode)return applyPrefs(chord,prefs);
     return chordToDeg(chord,displayKey)||applyPrefs(chord,prefs)+'✱';
@@ -2252,7 +2268,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
           const idem=chord==='%';
           const isDia=!spec&&!idem&&hasChord&&chordToDeg(chord,displayKey)!==null;
           const disp=spec?chord:(idem?'%':getDisp(chord));
-          const chColor=idem?'#C7C2BC':(degreeMode&&!spec?(isDia?'#1A1A1A':'#8A3020'):'#1A1A1A');
+          const chColor=idem?'#C7C2BC':(degreeMode&&!spec?(isDia?TH.text:'#8A3020'):TH.text);
           // Réduction de police pour les accords longs (évite débordement)
           const dispLen=disp?disp.replace(/[♭♯%]/g,'xx').length:0;
           const lenScale=dispLen>=8?0.76:dispLen>=7?0.83:dispLen>=6?0.90:dispLen>=5?0.95:1;
@@ -2276,8 +2292,8 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
               {hasSigns&&(
                 <div style={{position:'absolute',top:hasVolta?VOLTA_H+1:2,left:0,right:0,
                   display:'flex',justifyContent:'center',pointerEvents:'none',zIndex:2}}>
-                  <span style={{fontSize:8,color:SIGN_COLOR,fontWeight:900,
-                    background:SIGN_COLOR+'18',borderRadius:2,padding:'1px 3px',lineHeight:1}}>
+                  <span style={{fontSize:15,color:SIGN_COLOR,fontWeight:900,
+                    background:SIGN_COLOR+'18',borderRadius:3,padding:'1px 4px',lineHeight:1}}>
                     {beat.s.map(s=>{const st=SIGN_TYPES.find(x=>x.id===s);return st?st.sym:s;}).join(' ')}
                   </span>
                 </div>
@@ -2314,86 +2330,102 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
     );
   }
 
-  return(<div className="app-screen" style={{display:'flex',flexDirection:'column',background:'#F2F0EB'}}>
+  const isDark=!!prefs?.darkMode;
+  const TH={
+    bg:isDark?'#1A1816':'#F2F0EB',
+    topBar:isDark?'rgba(26,24,22,0.97)':'rgba(255,255,255,0.88)',
+    border:isDark?'#3A3634':'#D0CCC4',
+    infoBg:isDark?'rgba(22,20,18,0.98)':'rgba(252,250,246,0.95)',
+    gridBg:isDark?'#1E1C1A':'#FFFFFF',
+    rowBorder:isDark?'rgba(255,255,255,0.05)':'rgba(0,0,0,0.07)',
+    fillerBg:isDark?'#161412':'#FAFAFA',
+    text:isDark?'#F2EDE4':'#1A1A1A',
+    subText:isDark?'#8A8480':'#8A847C',
+    btnBg:isDark?'#2A2826':'#F5F2EC',
+    btnBorder:isDark?'#4A4845':'#D0CAC0',
+    modeSwBg:isDark?'#2A2826':'#E2DDD6',
+    modeSwActive:isDark?'#3A3836':'#FFFFFF',
+  };
+  return(<div className="app-screen" style={{display:'flex',flexDirection:'column',background:TH.bg}}>
 
     {/* TOP BAR */}
-    <div style={{background:'rgba(255,255,255,0.88)',backdropFilter:'blur(20px)',WebkitBackdropFilter:'blur(20px)',
-      borderBottom:'0.5px solid #D0CCC4',height:52,
+    <div style={{background:TH.topBar,backdropFilter:'blur(20px)',WebkitBackdropFilter:'blur(20px)',
+      borderBottom:`0.5px solid ${TH.border}`,height:52,
       display:fullscreen?'none':'flex',alignItems:'center',padding:'0 12px',gap:7,flexShrink:0}}>
       <button onClick={onBack}
-        style={{background:'transparent',border:'none',color:'#1A1A1A',fontSize:20,cursor:'pointer',padding:'4px 6px 4px 0',fontFamily:'inherit',flexShrink:0}}>←</button>
+        style={{background:'transparent',border:'none',color:TH.text,fontSize:20,cursor:'pointer',padding:'4px 6px 4px 0',fontFamily:'inherit',flexShrink:0}}>←</button>
       <div style={{display:'flex',alignItems:'center',gap:5,flexShrink:0}}>
         <SoupirLogo size={16}/><span style={{fontSize:14,fontWeight:900,letterSpacing:'-0.5px'}}>Soupir.</span>
       </div>
-      <div style={{width:1,height:16,background:'#D0CAC0',flexShrink:0}}/>
-      <span style={{fontSize:13,fontWeight:700,flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{cur.title}</span>
+      <div style={{width:1,height:16,background:TH.btnBorder,flexShrink:0}}/>
+      <span style={{fontSize:13,fontWeight:700,flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',color:TH.text}}>{cur.title}</span>
       <button onClick={()=>setShowTimeSig(true)} className="icon-btn"
-        style={{background:'#F5F2EC',border:'1.5px solid #D0CAC0',borderRadius:100,padding:'3px 10px',cursor:'pointer',flexShrink:0,fontFamily:'inherit'}}>
+        style={{background:TH.btnBg,border:`1.5px solid ${TH.btnBorder}`,borderRadius:100,padding:'3px 10px',cursor:'pointer',flexShrink:0,fontFamily:'inherit',color:TH.text}}>
         <span style={{fontSize:12,fontWeight:800}}>{timeSig}</span>
       </button>
       <button onClick={()=>setShowKeyPicker(true)} className="icon-btn"
-        style={{display:'flex',alignItems:'center',gap:3,background:'#F5F2EC',border:'1.5px solid #D0CAC0',borderRadius:100,padding:'3px 10px',cursor:'pointer',flexShrink:0}}>
-        <span style={{fontSize:9,color:'#8A847C',fontWeight:600}}>Ton.</span>
-        <span style={{fontSize:12,fontWeight:800}}>{displayKey}{displayMode==='min'?'m':''}</span>
+        style={{display:'flex',alignItems:'center',gap:3,background:TH.btnBg,border:`1.5px solid ${TH.btnBorder}`,borderRadius:100,padding:'3px 10px',cursor:'pointer',flexShrink:0}}>
+        <span style={{fontSize:9,color:TH.subText,fontWeight:600}}>Ton.</span>
+        <span style={{fontSize:12,fontWeight:800,color:TH.text}}>{displayKey}{displayMode==='min'?'m':''}</span>
       </button>
       <button onClick={()=>setDegreeMode(d=>!d)}
-        style={{background:degreeMode?'#1A1A1A':'transparent',border:'1.5px solid #1A1A1A',color:degreeMode?'#F2EDE4':'#1A1A1A',
+        style={{background:degreeMode?TH.text:'transparent',border:`1.5px solid ${TH.text}`,color:degreeMode?(isDark?'#1A1A1A':'#F2EDE4'):TH.text,
           padding:'3px 9px',borderRadius:100,fontSize:10,fontWeight:700,cursor:'pointer',whiteSpace:'nowrap',flexShrink:0,fontFamily:'inherit'}}>
         {degreeMode?'Degrés':'Acc.'}
       </button>
-      <div style={{display:'flex',alignItems:'center',gap:4,background:'#F5F2EC',border:'1.5px solid #D0CAC0',borderRadius:100,padding:'3px 7px',flexShrink:0}}>
+      <div style={{display:'flex',alignItems:'center',gap:4,background:TH.btnBg,border:`1.5px solid ${TH.btnBorder}`,borderRadius:100,padding:'3px 7px',flexShrink:0}}>
         <div style={{display:'flex',gap:2}}>
           {[0,1,2,3].map(i=>(<div key={i} style={{width:4,height:4,borderRadius:'50%',transition:'all 0.06s',
-            background:metroOn&&beat===i?(i===0?'#1A1A1A':'#6B6560'):'#C0BAB0',
+            background:metroOn&&beat===i?(i===0?TH.text:'#6B6560'):'#C0BAB0',
             transform:metroOn&&beat===i?'scale(1.35)':'scale(1)'}}/>))}
         </div>
         <input type="number" value={bpm} min={40} max={300} onChange={e=>setBpm(Number(e.target.value))}
-          style={{width:30,background:'transparent',border:'none',color:'#1A1A1A',fontSize:11,fontWeight:700,textAlign:'center',outline:'none',fontFamily:'inherit'}}/>
+          style={{width:30,background:'transparent',border:'none',color:TH.text,fontSize:11,fontWeight:700,textAlign:'center',outline:'none',fontFamily:'inherit'}}/>
         <button onClick={()=>setMetroOn(m=>!m)}
-          style={{background:metroOn?'#1A1A1A':'transparent',border:`1.5px solid ${metroOn?'#1A1A1A':'#C0BAB0'}`,
-            color:metroOn?'#F2EDE4':'#8A847C',width:18,height:18,borderRadius:'50%',cursor:'pointer',
+          style={{background:metroOn?TH.text:'transparent',border:`1.5px solid ${metroOn?TH.text:TH.btnBorder}`,
+            color:metroOn?(isDark?'#1A1A1A':'#F2EDE4'):TH.subText,width:18,height:18,borderRadius:'50%',cursor:'pointer',
             fontSize:7,display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'inherit'}}>
           {metroOn?'■':'▶'}
         </button>
       </div>
       <button onClick={()=>setShowDegrees(v=>!v)}
-        style={{background:showDegrees?'#1A1A1A':'transparent',border:`1.5px solid ${showDegrees?'#1A1A1A':'#D0CAC0'}`,
-          color:showDegrees?'#F2EDE4':'#8A847C',height:26,borderRadius:100,cursor:'pointer',
+        style={{background:showDegrees?TH.text:'transparent',border:`1.5px solid ${showDegrees?TH.text:TH.btnBorder}`,
+          color:showDegrees?(isDark?'#1A1A1A':'#F2EDE4'):TH.subText,height:26,borderRadius:100,cursor:'pointer',
           fontSize:9,fontWeight:700,padding:'0 7px',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontFamily:'inherit',whiteSpace:'nowrap'}}>Gamme</button>
     </div>
 
     {/* CONTENT — page plein écran, zéro scroll */}
-    <div style={{flex:1,overflow:'hidden',position:'relative',background:'#F2F0EB',display:'flex',flexDirection:'column'}}>
+    <div style={{flex:1,overflow:'hidden',position:'relative',background:TH.bg,display:'flex',flexDirection:'column'}}>
 
       {/* Bandeau titre + sélecteur Lecture/Édition */}
-      <div style={{display:fullscreen?'none':'flex',alignItems:'center',padding:'0 10px',gap:8,borderBottom:'0.5px solid #D0CCC4',
-        background:'rgba(252,250,246,0.95)',height:INFO_H,flexShrink:0}}>
-        <span style={{fontSize:13,fontWeight:800,letterSpacing:'-0.4px',color:'#1C1C1E',flex:1,
+      <div style={{display:fullscreen?'none':'flex',alignItems:'center',padding:'0 10px',gap:8,borderBottom:`0.5px solid ${TH.border}`,
+        background:TH.infoBg,height:INFO_H,flexShrink:0}}>
+        <span style={{fontSize:13,fontWeight:800,letterSpacing:'-0.4px',color:TH.text,flex:1,
           overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{cur.title}</span>
         {degreeMode&&<span style={{fontSize:9,fontWeight:700,color:'#4A3F2F',background:'#F5DDD8',
           borderRadius:4,padding:'1px 5px',flexShrink:0}}>Degrés</span>}
         {/* Bouton dessin */}
         <button onClick={()=>setDrawMode(d=>!d)}
-          style={{background:drawMode?'#1A1A1A':'transparent',
-            border:`1.5px solid ${drawMode?'#1A1A1A':'#D0CAC0'}`,
+          style={{background:drawMode?TH.text:'transparent',
+            border:`1.5px solid ${drawMode?TH.text:TH.btnBorder}`,
             borderRadius:100,padding:'3px 10px',fontSize:12,cursor:'pointer',
-            fontFamily:'inherit',color:drawMode?'#F2EDE4':'#8A847C',
+            fontFamily:'inherit',color:drawMode?(isDark?'#1A1A1A':'#F2EDE4'):TH.subText,
             fontWeight:700,flexShrink:0,transition:'all 0.12s'}}>
           ✎
         </button>
         {/* Sélecteur Lecture / Édition */}
-        <div style={{display:'flex',background:'#E2DDD6',borderRadius:8,padding:2,gap:1,flexShrink:0}}>
+        <div style={{display:'flex',background:TH.modeSwBg,borderRadius:8,padding:2,gap:1,flexShrink:0}}>
           <button onClick={()=>{setEditMode(false);setBarsVisible(true);}}
-            style={{background:!editMode?'#FFFFFF':'transparent',border:'none',
+            style={{background:!editMode?TH.modeSwActive:'transparent',border:'none',
               borderRadius:6,padding:'3px 9px',fontSize:10,fontWeight:700,
-              cursor:'pointer',fontFamily:'inherit',color:!editMode?'#1A1A1A':'#8A847C',
+              cursor:'pointer',fontFamily:'inherit',color:!editMode?TH.text:TH.subText,
               boxShadow:!editMode?'0 1px 3px rgba(0,0,0,0.12)':'none',transition:'all 0.12s'}}>
             👁 Lire
           </button>
           <button onClick={()=>{setEditMode(true);setBarsVisible(true);}}
             style={{background:editMode?'#1A1A1A':'transparent',border:'none',
               borderRadius:6,padding:'3px 9px',fontSize:10,fontWeight:700,
-              cursor:'pointer',fontFamily:'inherit',color:editMode?'#F2EDE4':'#8A847C',
+              cursor:'pointer',fontFamily:'inherit',color:editMode?'#F2EDE4':TH.subText,
               boxShadow:editMode?'0 1px 3px rgba(0,0,0,0.12)':'none',transition:'all 0.12s'}}>
             ✏ Éditer
           </button>
@@ -2402,7 +2434,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
 
       {/* Grille pages */}
       <div onClick={!editMode&&!drawMode?()=>setBarsVisible(v=>!v):undefined}
-        style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden',background:'#FFFFFF',
+        style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden',background:TH.gridBg,
           position:'relative',cursor:!editMode&&!drawMode?'pointer':undefined}}>
         {/* Pre-pass : détecter les rows dont la section se termine à pleine capacité
             → le "+" doit apparaître au début de la row suivante, ou dans la 1re ligne vide */}
@@ -2429,7 +2461,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
           if(row.rowType==='staff'){
             const item=row.cells[0];
             return(
-              <div key={ri} style={{flexShrink:0,overflow:'auto',borderBottom:'0.5px solid #D0CCC4'}}>
+              <div key={ri} style={{flexShrink:0,overflow:'auto',borderBottom:`0.5px solid ${TH.border}`}}>
                 <StaffSectionView section={item.section}
                   editMode={editMode}
                   onUpdate={ns=>updateStaffSection(item.si,ns)}
@@ -2440,7 +2472,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
           if(row.rowType==='tab'){
             const item=row.cells[0];
             return(
-              <div key={ri} style={{flexShrink:0,overflow:'auto',borderBottom:'0.5px solid #D0CCC4'}}>
+              <div key={ri} style={{flexShrink:0,overflow:'auto',borderBottom:`0.5px solid ${TH.border}`}}>
                 <TabSectionView section={item.section}
                   editMode={editMode}
                   onUpdate={ns=>updateTabSection(item.si,ns)}
@@ -2461,7 +2493,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
           const addSiAtStart=editMode?row._addMeasureSi:null;
           return(
             <div key={ri} style={{flex:1,display:'flex',alignItems:'stretch',position:'relative',
-              borderBottom:'0.5px solid rgba(0,0,0,0.07)',minHeight:0,overflow:'visible'}}>
+              borderBottom:`0.5px solid ${TH.rowBorder}`,minHeight:0,overflow:'visible'}}>
               {/* Barre gauche — avec badge "+" si la section précédente se termine ici */}
               <div style={{position:'relative',display:'flex',flexShrink:0}}>
                 <Barline
@@ -2512,13 +2544,6 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                             minWidth:0,overflow:'hidden',
                             background:editMode&&picker.visible&&picker.isGrande&&picker.si===si&&picker.mi===mi?'rgba(58,155,213,0.09)':'transparent',
                             transition:'background 0.12s'}}>
-                          {sectionStart&&(
-                            <div onClick={editMode?(e)=>{e.stopPropagation();setSectionRenameOverlay({si,name:sectionName});}:undefined}
-                              style={{position:'absolute',top:3,left:ci===0?28:4,zIndex:5,
-                              background:'#C0392B',color:'white',borderRadius:3,
-                              fontSize:7,fontWeight:900,padding:'1px 4px',lineHeight:1.5,
-                              letterSpacing:0.5,cursor:editMode?'pointer':'default'}}>{sectionName}</div>
-                          )}
                           {/* 8 colonnes de temps (positionnement par quart) */}
                           {allBeats.map((beat,bi)=>{
                             const chord=beat.c||'';
@@ -2529,7 +2554,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                             const spec=isSpec(chord);const idem=chord==='%';
                             const isDia=!spec&&!idem&&hasChord&&chordToDeg(chord,displayKey)!==null;
                             const disp=spec?chord:(idem?'%':getDisp(chord));
-                            const chColor=idem?'#C7C2BC':(degreeMode&&!spec?(isDia?'#1A1A1A':'#8A3020'):'#1A1A1A');
+                            const chColor=idem?'#C7C2BC':(degreeMode&&!spec?(isDia?TH.text:'#8A3020'):TH.text);
                             const gDispLen=disp?disp.replace(/[♭♯%]/g,'xx').length:0;
                             const gLenScale=gDispLen>=8?0.76:gDispLen>=7?0.83:gDispLen>=6?0.90:gDispLen>=5?0.95:1;
                             const gEffFs=Math.round(chFs*gLenScale);
@@ -2548,8 +2573,8 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                                 {hasSigns&&(
                                   <div style={{position:'absolute',top:hasVolta?VOLTA_H+1:2,left:0,right:0,
                                     display:'flex',justifyContent:'center',pointerEvents:'none',zIndex:2}}>
-                                    <span style={{fontSize:7,color:SIGN_COLOR,fontWeight:900,
-                                      background:SIGN_COLOR+'18',borderRadius:2,padding:'1px 2px',lineHeight:1}}>
+                                    <span style={{fontSize:13,color:SIGN_COLOR,fontWeight:900,
+                                      background:SIGN_COLOR+'18',borderRadius:3,padding:'1px 4px',lineHeight:1}}>
                                       {beat.s.map(s=>{const st=SIGN_TYPES.find(x=>x.id===s);return st?st.sym:s;}).join(' ')}
                                     </span>
                                   </div>
@@ -2626,14 +2651,15 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                     <React.Fragment key={`${si}-${mi}`}>
                       <div style={{flex:1,position:'relative',display:'flex',flexDirection:'row',
                         minWidth:0,overflow:'hidden'}}>
-                        {sectionStart&&(
-                          <div onClick={editMode?(e)=>{e.stopPropagation();setSectionRenameOverlay({si,name:sectionName});}:undefined}
-                            style={{position:'absolute',top:3,left:ci===0?28:4,zIndex:5,
-                            background:'#C0392B',color:'white',borderRadius:3,
-                            fontSize:7,fontWeight:900,padding:'1px 4px',lineHeight:1.5,
-                            letterSpacing:0.5,cursor:editMode?'pointer':'default'}}>{sectionName}</div>
+                        {measure.label&&(
+                          <div style={{position:'absolute',top:3,left:ci===0?28:4,zIndex:6,
+                            background:'#1A3060',color:'#90BEFF',borderRadius:3,
+                            fontSize:7,fontWeight:900,padding:'1px 5px',lineHeight:1.5,
+                            letterSpacing:0.5,pointerEvents:'none'}}>
+                            {measure.label}
+                          </div>
                         )}
-                        
+
                         {isSplit?(
                           <>
                             {renderHalf(measure,'a',si,mi,num)}
@@ -2676,7 +2702,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
           const addSiFiller=ei===0&&editMode?pageRows._addSiForFiller:null;
           return(
           <div key={`e${ei}`} style={{flex:1,display:'flex',alignItems:'stretch',
-            borderBottom:'0.5px solid rgba(0,0,0,0.04)',background:'#FAFAFA',minHeight:0}}>
+            borderBottom:`0.5px solid ${TH.rowBorder}`,background:TH.fillerBg,minHeight:0}}>
             {Array.from({length:GCOLS}).map((_,ci)=>(
               <React.Fragment key={ci}>
                 {ci===0&&addSiFiller!=null?(
@@ -3065,8 +3091,8 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
               <button onClick={()=>cpkToggleSub('annotation')} style={subTabStyle('annotation')}>
                 {curText||'✏ Note'}
               </button>
-              <button onClick={()=>cpkToggleSub('section')} style={subTabStyle('section')}>
-                § {cur.sections[picker.si]?.name||'Section'}
+              <button onClick={()=>cpkToggleSub('partie')} style={subTabStyle('partie')}>
+                ¶ {(cur.sections[picker.si]?.measures[picker.mi]?.label)||'Partie'}
               </button>
             </div>
 
@@ -3147,27 +3173,29 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                     boxSizing:'border-box',fontFamily:'inherit'}}/>
               </div>
             )}
-            {cpkSub==='section'&&(
-              <div style={{marginTop:8,padding:'10px 12px',background:'rgba(30,28,26,0.6)',
-                borderRadius:10,border:'1.5px solid #4A4845'}}>
+            {cpkSub==='partie'&&(
+              <div style={{marginTop:8,padding:'10px 12px',background:'rgba(20,30,55,0.55)',
+                borderRadius:10,border:'1.5px solid #2A4070'}}>
+                <div style={{fontSize:9,color:'#7090C0',fontWeight:700,marginBottom:7,letterSpacing:0.5}}>
+                  Étiquette de partie — mesure {picker.mi+1}
+                </div>
                 <div style={{display:'flex',gap:5,flexWrap:'wrap',marginBottom:8}}>
                   {['A','B','C','D','E','F','G','V','Intro','Outro','Bridge','Coda'].map(n=>{
-                    const secName=cur.sections[picker.si]?.name||'';
+                    const curLabel=(cur.sections[picker.si]?.measures[picker.mi]?.label)||'';
                     return(
-                      <button key={n} onClick={()=>renameSectionAtPicker(n)}
+                      <button key={n} onClick={()=>setMeasureLabel(picker.si,picker.mi,curLabel===n?'':n)}
                         style={{...B,height:30,borderRadius:8,padding:'0 10px',fontSize:11,fontWeight:700,
-                          background:secName===n?AC:'transparent',color:secName===n?'#1A1A1A':IC,
-                          outline:`1.5px solid ${secName===n?AC:BC}`,whiteSpace:'nowrap'}}>
+                          background:curLabel===n?'#1A3060':'transparent',color:curLabel===n?'#90BEFF':IC,
+                          outline:`1.5px solid ${curLabel===n?'#2A5090':BC}`,whiteSpace:'nowrap'}}>
                         {n}
                       </button>
                     );
                   })}
                 </div>
-                <input defaultValue={cur.sections[picker.si]?.name||''} key={picker.si}
-                  onBlur={e=>{if(e.target.value.trim()&&e.target.value.trim()!==(cur.sections[picker.si]?.name||''))renameSectionAtPicker(e.target.value.trim());}}
-                  onKeyDown={e=>{if(e.key==='Enter'&&e.target.value.trim())renameSectionAtPicker(e.target.value.trim());}}
-                  placeholder="Nom libre…"
-                  style={{width:'100%',background:'#242220',border:'1.5px solid #4A4845',
+                <input value={(cur.sections[picker.si]?.measures[picker.mi]?.label)||''}
+                  onChange={e=>setMeasureLabel(picker.si,picker.mi,e.target.value)}
+                  placeholder="Nom libre (Verse, Chorus…)"
+                  style={{width:'100%',background:'#1A1E28',border:'1.5px solid #2A4070',
                     borderRadius:8,padding:'8px 12px',fontSize:12,color:AC,outline:'none',
                     boxSizing:'border-box',fontFamily:'inherit'}}/>
               </div>
