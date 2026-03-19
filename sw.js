@@ -1,4 +1,4 @@
-const CACHE = 'soupir-v33.6';
+const CACHE = 'soupir-v33.7';
 const ASSETS = [
   './soupir.html',
   './manifest.json',
@@ -28,15 +28,16 @@ self.addEventListener('activate', e => {
 
 self.addEventListener('fetch', e => {
   e.respondWith(
-    caches.match(e.request).then(cached => {
-      if (cached) return cached;
-      return fetch(e.request).then(res => {
-        if (res && res.status === 200 && res.type !== 'opaque') {
-          const clone = res.clone();
-          caches.open(CACHE).then(cache => cache.put(e.request, clone));
-        }
-        return res;
-      }).catch(() => cached);
-    })
+    caches.open(CACHE).then(cache =>
+      cache.match(e.request).then(cached => {
+        if (cached) return cached;
+        return fetch(e.request).then(res => {
+          if (res && res.status === 200 && res.type !== 'opaque') {
+            cache.put(e.request, res.clone());
+          }
+          return res;
+        }).catch(() => cached);
+      })
+    )
   );
 });
