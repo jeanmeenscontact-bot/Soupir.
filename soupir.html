@@ -158,7 +158,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='v33.7';
+const APP_VERSION='v33.8';
 const CHORD_FONT="'Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -3008,12 +3008,24 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
         }
         function cpkToggleSub(s){setPicker(pk=>({...pk,cpkSub:pk.cpkSub===s?null:s}));}
         // ── Constantes ─────────────────────────────────────────────────────────
-        const CQUALITIES=[
-          {id:'maj',l:'M'},{id:'min',l:'m'},{id:'dom7',l:'7'},{id:'min7',l:'m7'},
-          {id:'maj7',l:'M7'},{id:'mMaj7',l:prefs?.minor==='-'?'−Δ':'mΔ'},
-          {id:'dim',l:'dim'},{id:'aug',l:'+'},{id:'sus4',l:'sus4'},{id:'sus2',l:'sus2'},
-          {id:'hdim',l:'ø'},{id:'dim7',l:'o7'},{id:'maj6',l:'6'},{id:'min6',l:'m6'},{id:'5',l:'5'},
-        ];
+        // ── 2-step quality: base → septième ────────────────────────────────────
+        const CQ2BASE={
+          'maj':'maj','dom7':'maj','maj7':'maj','maj6':'maj',
+          'min':'min','min7':'min','mMaj7':'min','min6':'min',
+          'dim':'dim','hdim':'dim','dim7':'dim',
+          'aug':'aug','sus4':'sus4','sus2':'sus2','5':'5',
+        };
+        const cqBase=CQ2BASE[picker.qualityId]||'maj';
+        const CSEVENTH={
+          'maj':[{id:'none',lbl:'—'},{id:'dom7',lbl:'7'},{id:'maj7',lbl:'Δ'},{id:'maj6',lbl:'6'}],
+          'min':[{id:'none',lbl:'—'},{id:'min7',lbl:'7'},{id:'mMaj7',lbl:prefs?.minor==='-'?'−Δ':'mΔ'},{id:'min6',lbl:'6'}],
+          'dim':[{id:'none',lbl:'—'},{id:'hdim',lbl:'ø'},{id:'dim7',lbl:'°7'}],
+          'aug':[{id:'none',lbl:'—'},{id:'dom7',lbl:'7'},{id:'maj7',lbl:'Δ'}],
+          'sus4':[{id:'none',lbl:'—'},{id:'dom7',lbl:'7'}],
+          'sus2':[{id:'none',lbl:'—'}],
+          '5':[{id:'none',lbl:'—'}],
+        };
+        const cSeventhOpts=CSEVENTH[cqBase]||[{id:'none',lbl:'—'}];
         const B={cursor:'pointer',fontFamily:'inherit',border:'none',padding:0,
           display:'flex',alignItems:'center',justifyContent:'center'};
         const AC=isDark?'#F2EDE4':'#1A1A1A';
@@ -3096,20 +3108,62 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
 
             {DIV}
 
-            {/* ── QUALITÉ ── */}
+            {/* ── QUALITÉ (étape 1) ── */}
             {LBL('Qualité')}
-            <div style={{display:'flex',gap:5,overflowX:'auto',marginBottom:0}}>
-              {CQUALITIES.map(q=>(
+            {/* Ligne 1a : 3 qualités principales */}
+            <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:6,marginBottom:6}}>
+              {[
+                {id:'maj',lbl:'Majeur'},
+                {id:'min',lbl:'mineur'},
+                {id:'dim',lbl:prefs?.dim==='°'?'°':'dim'},
+              ].map(q=>(
                 <button key={q.id} onClick={()=>cpkQual(q.id)}
-                  style={{...B,height:36,borderRadius:8,padding:'0 12px',fontSize:13,fontWeight:800,
-                    whiteSpace:'nowrap',flexShrink:0,
-                    background:picker.qualityId===q.id?AC:'transparent',
-                    color:picker.qualityId===q.id?ACtxt:IC,
-                    outline:`2px solid ${picker.qualityId===q.id?AC:BC}`}}>
-                  {q.l}
+                  style={{...B,height:40,borderRadius:10,fontSize:13,fontWeight:800,
+                    background:cqBase===q.id?AC:'transparent',
+                    color:cqBase===q.id?ACtxt:IC,
+                    outline:`2px solid ${cqBase===q.id?AC:BC}`}}>
+                  {q.lbl}
                 </button>
               ))}
             </div>
+            {/* Ligne 1b : qualités secondaires */}
+            <div style={{display:'flex',gap:5,marginBottom:0}}>
+              {[
+                {id:'aug',lbl:prefs?.aug==='+'?'+':'aug'},
+                {id:'sus4',lbl:'sus4'},
+                {id:'sus2',lbl:'sus2'},
+                {id:'5',lbl:'5'},
+              ].map(q=>(
+                <button key={q.id} onClick={()=>cpkQual(q.id)}
+                  style={{...B,height:32,borderRadius:8,padding:'0 10px',fontSize:12,fontWeight:700,
+                    whiteSpace:'nowrap',flexShrink:0,
+                    background:cqBase===q.id?AC:'transparent',
+                    color:cqBase===q.id?ACtxt:IC,
+                    opacity:cqBase===q.id?1:0.65,
+                    outline:`2px solid ${cqBase===q.id?AC:BC}`}}>
+                  {q.lbl}
+                </button>
+              ))}
+            </div>
+            {/* Étape 2 : septième/variante */}
+            {cSeventhOpts.length>1&&(<>
+              {LBL('+ Septième',{marginTop:10})}
+              <div style={{display:'flex',gap:5,marginBottom:0}}>
+                {cSeventhOpts.map(opt=>{
+                  const isActive=opt.id==='none'?picker.qualityId===cqBase:picker.qualityId===opt.id;
+                  return(
+                    <button key={opt.id} onClick={()=>cpkQual(opt.id==='none'?cqBase:opt.id)}
+                      style={{...B,height:36,borderRadius:8,padding:'0 14px',fontSize:13,fontWeight:800,
+                        whiteSpace:'nowrap',flexShrink:0,
+                        background:isActive?AC:'transparent',
+                        color:isActive?ACtxt:IC,
+                        outline:`2px solid ${isActive?AC:BC}`}}>
+                      {opt.lbl}
+                    </button>
+                  );
+                })}
+              </div>
+            </>)}
 
             {DIV}
 
