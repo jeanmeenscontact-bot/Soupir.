@@ -1,4 +1,4 @@
-const CACHE = 'soupir-v33.9';
+const CACHE = 'soupir-v33.10';
 const ASSETS = [
   './soupir.html',
   './manifest.json',
