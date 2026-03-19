@@ -158,7 +158,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='v33.8';
+const APP_VERSION='v33.9';
 const CHORD_FONT="'Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -562,7 +562,7 @@ function ChordPicker({picker,onChange,onConfirm,onCancel,onStructure,sectionName
       </div>
 
       <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:6,marginBottom:14}}>
-        {[{v:'',l:'♮ naturel'},{v:'#',l:'♯ dièse'},{v:'b',l:'♭ bémol'}].map(a=>(
+        {[{v:'',l:'♮'},{v:'#',l:'♯'},{v:'b',l:'♭'}].map(a=>(
           <button key={a.v} className={`pill-btn${picker.acc===a.v?' active-pill':''}`}
             style={{...pill(picker.acc===a.v,'#4A3F2F'),padding:'8px 0',fontSize:13}}
             onClick={()=>onChange({...picker,acc:a.v,...(autoHarmonize?autoHarmonizeTriad(picker.letter,a.v,displayKey,displayMode):{})})}  >{a.l}</button>
@@ -652,7 +652,7 @@ function ChordPicker({picker,onChange,onConfirm,onCancel,onStructure,sectionName
       </div>
       {picker.bass&&(
         <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:6,marginBottom:10}}>
-          {[{v:'',l:'♮ naturel'},{v:'#',l:'♯ dièse'},{v:'b',l:'♭ bémol'}].map(a=>(
+          {[{v:'',l:'♮'},{v:'#',l:'♯'},{v:'b',l:'♭'}].map(a=>(
             <button key={a.v} className={`pill-btn${picker.bassAcc===a.v?' active-pill':''}`}
               style={{...pill(picker.bassAcc===a.v,'#4A3F2F'),padding:'8px 0',fontSize:13}}
               onClick={()=>onChange({...picker,bassAcc:a.v})}>{a.l}</button>
@@ -3030,11 +3030,11 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
           display:'flex',alignItems:'center',justifyContent:'center'};
         const AC=isDark?'#F2EDE4':'#1A1A1A';
         const ACtxt=isDark?'#1A1A1A':'#F2EDE4';
-        const IC=isDark?'#7A7470':'#2A2826';
+        const IC=isDark?'#F2EDE4':'#1A1A1A';
         const BC=isDark?'#3A3634':'#C0BAB0';
         const DIV=<div style={{height:1,background:isDark?'#302E2C':'#D8D2C8',margin:'8px 0'}}/>;
         const LBL=(t,extra)=>(
-          <div style={{fontSize:9,fontWeight:800,color:isDark?'#5A5654':'#9A9490',textTransform:'uppercase',
+          <div style={{fontSize:9,fontWeight:800,color:isDark?'#B0AAA4':'#5A5450',textTransform:'uppercase',
             letterSpacing:1.4,marginBottom:6,...extra}}>{t}</div>
         );
         const noteBtn=(l,active,onClick,accentClr)=>(
