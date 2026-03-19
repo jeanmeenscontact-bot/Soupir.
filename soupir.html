@@ -158,7 +158,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='v33.4';
+const APP_VERSION='v33.5';
 const CHORD_FONT="'Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -414,6 +414,23 @@ function ChordPicker({picker,onChange,onConfirm,onCancel,onStructure,sectionName
       letterSpacing:1.4,marginBottom:8,marginTop:4}}>{t}</div>
   );
 
+  // ── Qualité 2 étapes (base → septième) ─────────────────────────────────────
+  const Q2BASE={'maj':'maj','dom7':'maj','maj7':'maj','maj6':'maj',
+    'min':'min','min7':'min','mMaj7':'min','min6':'min',
+    'dim':'dim','hdim':'dim','dim7':'dim',
+    'aug':'aug','sus4':'sus4','sus2':'sus2','5':'5'};
+  const baseQuality=Q2BASE[picker.qualityId]||'maj';
+  const SEVENTH_OPTS={
+    'maj':[{id:'none',lbl:'—'},{id:'dom7',lbl:'7'},{id:'maj7',lbl:'Δ'},{id:'maj6',lbl:'6'}],
+    'min':[{id:'none',lbl:'—'},{id:'min7',lbl:'7'},{id:'mMaj7',lbl:'Δ'},{id:'min6',lbl:'6'}],
+    'dim':[{id:'none',lbl:'—'},{id:'hdim',lbl:'ø'},{id:'dim7',lbl:'°7'}],
+    'aug':[{id:'none',lbl:'—'},{id:'dom7',lbl:'7'},{id:'maj7',lbl:'Δ'}],
+    'sus4':[{id:'none',lbl:'—'},{id:'dom7',lbl:'7'}],
+    'sus2':[{id:'none',lbl:'—'}],
+    '5':[{id:'none',lbl:'—'}],
+  };
+  const seventhOpts=SEVENTH_OPTS[baseQuality]||[{id:'none',lbl:'—'}];
+
   // Rendu d'une rangée de slots (start..end exclu)
   const renderBeatRow=(from,to,rowLabel)=>(
     <div>
@@ -553,26 +570,39 @@ function ChordPicker({picker,onChange,onConfirm,onCancel,onStructure,sectionName
       </div>
 
       {secLbl('Qualité')}
-      {['Triades','Septièmes','Autres'].map(g=>{
-        const qs=QUALITIES.filter(q=>q.group===g);
-        const labels={'maj':'Maj','min':prefs?.minor==='-'?'−':'m','dim':prefs?.dim==='°'?'°':'dim',
-          'aug':prefs?.aug==='+'?'+':'aug','sus4':'sus4','sus2':'sus2','dom7':'7',
-          'maj7':prefs?.maj7==='Δ'?'Δ':'maj7','min7':prefs?.minor==='-'?'−7':'m7',
-          'mMaj7':prefs?.minor==='-'?'−Δ':'mΔ','hdim':prefs?.hdim==='ø'?'ø':'m7b5',
-          'dim7':prefs?.dim==='°'?'°7':'dim7','maj6':'6','min6':prefs?.minor==='-'?'−6':'m6','5':'5'};
-        return(<div key={g} style={{marginBottom:10}}>
-          <div style={{fontSize:9,color:'#B0AA9F',letterSpacing:0.8,marginBottom:6,fontWeight:600}}>{g.toUpperCase()}</div>
-          <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
-            {qs.map(q=>(
-              <button key={q.id} className={`pill-btn${picker.qualityId===q.id?' active-pill':''}`}
-                style={{...smPill(picker.qualityId===q.id)}}
-                onClick={()=>onChange({...picker,qualityId:q.id})}>
-                {labels[q.id]||q.suffix||'Maj'}
+      {/* Étape 1 : qualité de base */}
+      <div style={{display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:6,marginBottom:8}}>
+        {[
+          {id:'maj',lbl:'Maj'},
+          {id:'min',lbl:prefs?.minor==='-'?'−':'m'},
+          {id:'dim',lbl:prefs?.dim==='°'?'°':'dim'},
+          {id:'aug',lbl:prefs?.aug==='+'?'+':'aug'},
+          {id:'sus4',lbl:'sus4'},
+          {id:'sus2',lbl:'sus2'},
+        ].map(q=>(
+          <button key={q.id}
+            style={{...smPill(baseQuality===q.id),padding:'10px 0',fontSize:13,textAlign:'center'}}
+            onClick={()=>onChange({...picker,qualityId:q.id})}>
+            {q.lbl}
+          </button>
+        ))}
+      </div>
+      {/* Étape 2 : ajouter une septième */}
+      {seventhOpts.length>1&&(<>
+        <div style={{fontSize:9,color:'#B0AA9F',letterSpacing:0.8,marginBottom:6,fontWeight:600}}>+ SEPTIÈME</div>
+        <div style={{display:'flex',gap:6,marginBottom:10}}>
+          {seventhOpts.map(opt=>{
+            const isActive=opt.id==='none'?picker.qualityId===baseQuality:picker.qualityId===opt.id;
+            return(
+              <button key={opt.id}
+                style={{...smPill(isActive,'#4A3F2F'),minWidth:42,textAlign:'center'}}
+                onClick={()=>onChange({...picker,qualityId:opt.id==='none'?baseQuality:opt.id})}>
+                {opt.lbl}
               </button>
-            ))}
-          </div>
-        </div>);
-      })}
+            );
+          })}
+        </div>
+      </>)}
 
       {secLbl('Extensions & altérations')}
       <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:6}}>
@@ -2294,7 +2324,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
           return(
             <div key={bi}
               onClick={editMode?(e)=>{e.stopPropagation();openMeasurePicker(si,mi,half,e,bi);}:undefined}
-              style={{flex:1,minWidth:0,overflow:'hidden',position:'relative',cursor:editMode?'pointer':'default'}}>
+              style={{flex:1,minWidth:0,overflow:'visible',position:'relative',cursor:editMode?'pointer':'default'}}>
               {/* Crochet de volta — absolu */}
               {hasVolta&&(
                 <div style={{position:'absolute',top:0,left:0,right:0,height:VOLTA_H,
@@ -2320,7 +2350,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
               {hasChord&&(
                 <span style={{position:'absolute',left:0,top:'50%',transform:'translateY(-50%)',
                   background:degreeMode&&!isDia&&!spec&&!idem?'#F5DDD8':'transparent',
-                  borderRadius:4,lineHeight:1,display:'inline-flex',alignItems:'center'}}>
+                  borderRadius:4,lineHeight:1,display:'inline-flex',alignItems:'center',zIndex:1,whiteSpace:'nowrap'}}>
                   {spec?(<span style={{fontSize:effectiveFs,fontWeight:700,color:chColor,letterSpacing:'0.05em',lineHeight:1}}>{disp}</span>)
                   :idem?(<span style={{fontSize:Math.round(effectiveFs*1.1),fontWeight:200,color:chColor,letterSpacing:'0.08em',lineHeight:1}}>%</span>)
                   :degreeMode?(<DegreeText deg={disp} fs={effectiveFs} color={chColor} weight={500}/>)
@@ -2707,14 +2737,15 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
               {row.cells.length<GCOLS&&Array.from({length:GCOLS-row.cells.length}).map((_,pi)=>(
                 <React.Fragment key={`pad${pi}`}>
                   {pi===0&&isLastOfSection?(
-                    <div style={{flex:1,minHeight:barH,display:'flex',alignItems:'center'}}>
+                    <div style={{flex:1,minHeight:barH,minWidth:0,overflow:'hidden',position:'relative'}}>
                       <button onClick={()=>{addMeasureAtEnd(lastRealSi);setCurrentPage(Math.ceil((allRows.length+1)/rowsPerPage)-1);}}
-                        style={{width:26,height:26,marginLeft:14,background:'rgba(0,0,0,0.06)',border:'none',borderRadius:'50%',
+                        style={{position:'absolute',left:14,top:'50%',transform:'translateY(-50%)',
+                          width:26,height:26,background:'rgba(0,0,0,0.06)',border:'none',borderRadius:'50%',
                           fontSize:18,cursor:'pointer',color:'#8A847C',display:'flex',alignItems:'center',
                           justifyContent:'center',fontWeight:300,padding:0,lineHeight:1}}>+</button>
                     </div>
                   ):(
-                    <div style={{flex:1,minHeight:barH}}/>
+                    <div style={{flex:1,minHeight:barH,minWidth:0,overflow:'hidden'}}/>
                   )}
                   <Barline type="none" minH={barH} accentColor={INK_ACCENT}/>
                 </React.Fragment>
@@ -2733,14 +2764,15 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
             {Array.from({length:GCOLS}).map((_,ci)=>(
               <React.Fragment key={ci}>
                 {ci===0&&addSiFiller!=null?(
-                  <div style={{flex:1,display:'flex',alignItems:'center'}}>
+                  <div style={{flex:1,minWidth:0,overflow:'hidden',position:'relative'}}>
                     <button onClick={()=>{addMeasureAtEnd(addSiFiller);setCurrentPage(Math.ceil((allRows.length+1)/rowsPerPage)-1);}}
-                      style={{width:26,height:26,marginLeft:42,background:'rgba(0,0,0,0.06)',border:'none',borderRadius:'50%',
+                      style={{position:'absolute',left:42,top:'50%',transform:'translateY(-50%)',
+                        width:26,height:26,background:'rgba(0,0,0,0.06)',border:'none',borderRadius:'50%',
                         fontSize:18,cursor:'pointer',color:'#8A847C',display:'flex',alignItems:'center',
                         justifyContent:'center',fontWeight:300,padding:0,lineHeight:1}}>+</button>
                   </div>
                 ):(
-                  <div style={{flex:1}}/>
+                  <div style={{flex:1,minWidth:0,overflow:'hidden'}}/>
                 )}
                 <Barline type="none" minH={barH} accentColor={INK_ACCENT}/>
               </React.Fragment>
