@@ -158,7 +158,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='v33.10';
+const APP_VERSION='1.34';
 const CHORD_FONT="'Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -2093,16 +2093,18 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
     setPicker({visible:true,si,mi,half,
       letter,acc,qualityId:parsed.qualityId,extensions:parsed.extensions,
       bass:bL,bassAcc:bA,
-      localBeats,selectedBeat});
+      localBeats,selectedBeat,
+      timeSig:measureData.timeSig||null});
   }
 
   // Applique les beats en temps réel sans fermer le picker (compact mode)
   function applyMeasureLive(pk){
-    const{si,mi,half,localBeats}=pk||picker;
+    const{si,mi,half,localBeats,timeSig}=pk||picker;
     const clean=bs=>bs.map(b=>({c:b.c||'',s:b.s||[],v:b.v||null,t:b.t||''}));
     const safeC=bs=>{const c=bs.map(b=>b.c).filter(c=>c);return c.length?c:[''];};
     const cleanBeats=clean(localBeats||[mkBeat(),mkBeat(),mkBeat(),mkBeat()]);
     const safeChords=safeC(cleanBeats);
+    const tsVal=timeSig||null;
     setLibrary(lib=>lib.map(p=>{
       if(p.id!==piece.id)return p;
       return{...p,sections:p.sections.map((s,sI)=>{
@@ -2110,7 +2112,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
         return{...s,measures:s.measures.map((mm,mI)=>{
           if(mI!==mi)return mm;
           if(half==='b'&&mm.split2){return{...mm,split2:{...mm.split2,beats:cleanBeats,chords:safeChords}};}
-          return{...mm,beats:cleanBeats,chords:safeChords};
+          return{...mm,beats:cleanBeats,chords:safeChords,timeSig:tsVal};
         })};
       })};
     }));
@@ -2695,11 +2697,19 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                       <React.Fragment key={`${si}-${mi}`}>
                         <div style={{flex:1,position:'relative',display:'flex',flexDirection:'row',
                           minWidth:0,overflow:'hidden'}}>
+                          {measure.timeSig&&(
+                            <div style={{position:'absolute',top:3,right:4,zIndex:6,
+                              background:isDark?'#2A1A40':'#EDE0FF',color:isDark?'#C8A8FF':'#5A2A9A',
+                              borderRadius:3,fontSize:7,fontWeight:900,padding:'1px 5px',lineHeight:1.5,
+                              letterSpacing:0.3,pointerEvents:'none'}}>
+                              {measure.timeSig}
+                            </div>
+                          )}
 
                           {isSplitCont?(
                             <>
                               {renderHalf(measure,'a',si,mi,num)}
-                              <div style={{width:1.5,background:'rgba(0,0,0,0.15)',flexShrink:0,alignSelf:'stretch'}}/>
+                              <div style={{width:1.5,background:INK_ACCENT,flexShrink:0,alignSelf:'stretch'}}/>
                               {renderHalf(measure,'b',si,mi,null)}
                             </>
                           ):(
@@ -2725,11 +2735,19 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                             {measure.label}
                           </div>
                         )}
+                        {measure.timeSig&&(
+                          <div style={{position:'absolute',top:3,right:4,zIndex:6,
+                            background:isDark?'#2A1A40':'#EDE0FF',color:isDark?'#C8A8FF':'#5A2A9A',
+                            borderRadius:3,fontSize:7,fontWeight:900,padding:'1px 5px',lineHeight:1.5,
+                            letterSpacing:0.3,pointerEvents:'none'}}>
+                            {measure.timeSig}
+                          </div>
+                        )}
 
                         {isSplit?(
                           <>
                             {renderHalf(measure,'a',si,mi,num)}
-                            <div style={{width:1.5,background:'rgba(0,0,0,0.15)',flexShrink:0,alignSelf:'stretch'}}/>
+                            <div style={{width:1.5,background:INK_ACCENT,flexShrink:0,alignSelf:'stretch'}}/>
                             {renderHalf(measure,'b',si,mi,null)}
                           </>
                         ):(
@@ -3007,6 +3025,17 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
           setPicker(np);applyMeasureLive(np);
         }
         function cpkToggleSub(s){setPicker(pk=>({...pk,cpkSub:pk.cpkSub===s?null:s}));}
+        const defaultBeats=parseInt((cur.timeSig||'4/4').split('/')[0])||4;
+        function cpkSetTimeSig(n){
+          const bl=picker.localBeats||[];
+          const newBeats=n>bl.length
+            ?[...bl,...Array.from({length:n-bl.length},()=>mkBeat())]
+            :bl.slice(0,n);
+          const newTs=n===defaultBeats?null:`${n}/4`;
+          const np={...picker,localBeats:newBeats,timeSig:newTs,
+            selectedBeat:Math.min(picker.selectedBeat||0,n-1)};
+          setPicker(np);applyMeasureLive(np);
+        }
         // ── Constantes ─────────────────────────────────────────────────────────
         // ── 2-step quality: base → septième ────────────────────────────────────
         const CQ2BASE={
@@ -3116,6 +3145,32 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                   {a.l}
                 </button>
               ))}
+            </div>
+
+            {DIV}
+
+            {/* ── SIGNATURE ── */}
+            {LBL('Signature')}
+            <div style={{display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:4,marginBottom:0}}>
+              {[2,3,4,5,6,7].map(n=>{
+                const nBeats=(picker.localBeats||[]).length||defaultBeats;
+                const isActive=nBeats===n;
+                const isDefault=n===defaultBeats;
+                return(
+                  <button key={n} onClick={()=>cpkSetTimeSig(n)}
+                    style={{...B,height:36,borderRadius:8,fontSize:13,fontWeight:800,
+                      background:isActive?AC:'transparent',
+                      color:isActive?ACtxt:IC,
+                      outline:`2px solid ${isActive?AC:BC}`,
+                      position:'relative'}}>
+                    {n}
+                    {isDefault&&!isActive&&(
+                      <span style={{position:'absolute',top:3,right:4,fontSize:7,
+                        opacity:0.45,lineHeight:1}}>✦</span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
 
             {DIV}
