@@ -158,7 +158,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='v33.5';
+const APP_VERSION='v33.6';
 const CHORD_FONT="'Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -570,18 +570,29 @@ function ChordPicker({picker,onChange,onConfirm,onCancel,onStructure,sectionName
       </div>
 
       {secLbl('Qualité')}
-      {/* Étape 1 : qualité de base */}
-      <div style={{display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:6,marginBottom:8}}>
+      {/* Étape 1a : 3 qualités principales — grands boutons */}
+      <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:8,marginBottom:8}}>
         {[
-          {id:'maj',lbl:'Maj'},
-          {id:'min',lbl:prefs?.minor==='-'?'−':'m'},
+          {id:'maj',lbl:'Majeur'},
+          {id:'min',lbl:'mineur'},
           {id:'dim',lbl:prefs?.dim==='°'?'°':'dim'},
+        ].map(q=>(
+          <button key={q.id}
+            style={{...pill(baseQuality===q.id),padding:'12px 0',fontSize:14}}
+            onClick={()=>onChange({...picker,qualityId:q.id})}>
+            {q.lbl}
+          </button>
+        ))}
+      </div>
+      {/* Étape 1b : qualités secondaires — petits boutons */}
+      <div style={{display:'flex',gap:6,marginBottom:12}}>
+        {[
           {id:'aug',lbl:prefs?.aug==='+'?'+':'aug'},
           {id:'sus4',lbl:'sus4'},
           {id:'sus2',lbl:'sus2'},
         ].map(q=>(
           <button key={q.id}
-            style={{...smPill(baseQuality===q.id),padding:'10px 0',fontSize:13,textAlign:'center'}}
+            style={{...smPill(baseQuality===q.id),opacity:baseQuality===q.id?1:0.6}}
             onClick={()=>onChange({...picker,qualityId:q.id})}>
             {q.lbl}
           </button>
@@ -589,13 +600,13 @@ function ChordPicker({picker,onChange,onConfirm,onCancel,onStructure,sectionName
       </div>
       {/* Étape 2 : ajouter une septième */}
       {seventhOpts.length>1&&(<>
-        <div style={{fontSize:9,color:'#B0AA9F',letterSpacing:0.8,marginBottom:6,fontWeight:600}}>+ SEPTIÈME</div>
+        <div style={{fontSize:9,color:'#B0AA9F',letterSpacing:0.8,marginBottom:6,fontWeight:600,marginTop:2}}>+ SEPTIÈME</div>
         <div style={{display:'flex',gap:6,marginBottom:10}}>
           {seventhOpts.map(opt=>{
             const isActive=opt.id==='none'?picker.qualityId===baseQuality:picker.qualityId===opt.id;
             return(
               <button key={opt.id}
-                style={{...smPill(isActive,'#4A3F2F'),minWidth:42,textAlign:'center'}}
+                style={{...smPill(isActive,'#4A3F2F'),minWidth:48,textAlign:'center'}}
                 onClick={()=>onChange({...picker,qualityId:opt.id==='none'?baseQuality:opt.id})}>
                 {opt.lbl}
               </button>
