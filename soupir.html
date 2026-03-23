@@ -158,7 +158,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='1.35';
+const APP_VERSION='1.36';
 const CHORD_FONT="'Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -3064,20 +3064,40 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
         const IC=isDark?'#F2EDE4':'#1A1A1A';
         const BC=isDark?'#3A3634':'#C0BAB0';
         // ── Palette groupes ─────────────────────────────────────────────────────
-        const CRYTHME=isDark?'#7AACDC':'#3A6A9A';   // Rythme  — bleu ardoise
-        const CHARM  =isDark?'#DCA060':'#96601A';   // Harmonique — ambre chaud
-        const CANNOT =isDark?'#6ABE8A':'#2A7A56';   // Annotations — sauge
+        const CRYTHME=isDark?'#7AACDC':'#3A6A9A';
+        const CHARM  =isDark?'#DCA060':'#96601A';
+        const CANNOT =isDark?'#6ABE8A':'#2A7A56';
         // ── Helpers ─────────────────────────────────────────────────────────────
-        const LBL=(t,extra)=>(
-          <div style={{fontSize:9,fontWeight:800,color:isDark?'#B0AAA4':'#5A5450',textTransform:'uppercase',
-            letterSpacing:1.4,marginBottom:6,...extra}}>{t}</div>
+        const LBL=(t,clr)=>(
+          <div style={{fontSize:9,fontWeight:900,color:clr||BC,textTransform:'uppercase',
+            letterSpacing:1.5,marginBottom:7}}>{t}</div>
         );
+        // Séparateur de groupe : ligne + badge centré
         const GRP=(label,clr)=>(
-          <div style={{display:'flex',alignItems:'center',gap:7,marginBottom:10}}>
-            <div style={{width:3,height:13,borderRadius:2,background:clr,flexShrink:0}}/>
-            <div style={{fontSize:9,fontWeight:900,color:clr,textTransform:'uppercase',
-              letterSpacing:1.6}}>{label}</div>
+          <div style={{display:'flex',alignItems:'center',gap:0,margin:'16px 0 12px'}}>
+            <div style={{flex:1,height:1,background:`${clr}30`}}/>
+            <div style={{
+              padding:'4px 16px',margin:'0 0',
+              background:isDark?`${clr}18`:`${clr}12`,
+              border:`1px solid ${clr}40`,borderRadius:20,
+              fontSize:9,fontWeight:900,color:clr,
+              textTransform:'uppercase',letterSpacing:2,whiteSpace:'nowrap'}}>
+              {label}
+            </div>
+            <div style={{flex:1,height:1,background:`${clr}30`}}/>
           </div>
+        );
+        // Bouton accordéon (basse, extensions)
+        const AccordBtn=(key,label,hasContent,accentClr)=>(
+          <button onClick={()=>cpkToggleSub(key)}
+            style={{...B,width:'100%',height:36,borderRadius:9,padding:'0 14px',
+              justifyContent:'space-between',fontSize:12,fontWeight:700,
+              background:hasSub(key)?(isDark?`${accentClr}22`:`${accentClr}14`):'transparent',
+              color:hasContent?accentClr:IC,
+              outline:`1.5px solid ${hasSub(key)||hasContent?accentClr:BC}`}}>
+            <span>{label}</span>
+            <span style={{fontSize:9,opacity:0.7}}>{hasSub(key)?'▲':'▼'}</span>
+          </button>
         );
         const noteBtn=(l,active,onClick,accentClr)=>(
           <button key={l} onClick={onClick}
@@ -3099,13 +3119,13 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
           <div style={{position:'absolute',bottom:0,left:0,right:0,zIndex:150,
             background:isDark?'rgba(22,20,18,0.98)':'rgba(252,250,247,0.98)',
             backdropFilter:'blur(22px)',WebkitBackdropFilter:'blur(22px)',
-            borderRadius:'18px 18px 0 0',padding:'14px 14px 22px',
+            borderRadius:'18px 18px 0 0',padding:'14px 14px 24px',
             boxShadow:isDark?'0 -6px 32px rgba(0,0,0,0.5)':'0 -6px 32px rgba(0,0,0,0.12)',
             maxHeight:'88vh',overflowY:'auto'}}>
 
             {/* ── En-tête : accord + fermer ── */}
-            <div style={{display:'flex',alignItems:'center',marginBottom:16}}>
-              <span style={{fontSize:28,fontWeight:900,color:AC,letterSpacing:'-0.5px',flex:1,lineHeight:1}}>
+            <div style={{display:'flex',alignItems:'center',marginBottom:4}}>
+              <span style={{fontSize:30,fontWeight:900,color:AC,letterSpacing:'-0.5px',flex:1,lineHeight:1}}>
                 {dispChord}
               </span>
               <button onClick={()=>setPicker(pk=>({...pk,visible:false,cpkSub:null}))}
@@ -3117,14 +3137,14 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
             {GRP('Rythme', CRYTHME)}
 
             {/* Temps */}
-            {LBL('Temps',{color:CRYTHME})}
-            <div style={{display:'flex',gap:6,marginBottom:8}}>
+            {LBL('Temps', CRYTHME)}
+            <div style={{display:'flex',gap:5,marginBottom:8}}>
               {(picker.localBeats||[]).map((_b,bi)=>{
                 const bc=(picker.localBeats||[])[bi]?.c||'';
                 const filled=bc&&!isSpec(bc)&&bc!=='%';
                 return(
                   <button key={bi} onClick={()=>cpkBeat(bi)}
-                    style={{...B,flex:1,height:38,borderRadius:9,fontSize:12,fontWeight:800,
+                    style={{...B,flex:1,height:40,borderRadius:9,fontSize:12,fontWeight:800,
                       background:sbi===bi?CRYTHME:(filled?(isDark?'#2E2C2A':'#E8E4DE'):'transparent'),
                       color:sbi===bi?'#F2EDE4':(filled?(isDark?'#C0BAB0':'#6A6460'):IC),
                       outline:`2px solid ${sbi===bi?CRYTHME:(filled?'#4A4845':BC)}`}}>
@@ -3134,22 +3154,22 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
               })}
             </div>
 
-            {/* Signature — bouton */}
-            <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:0}}>
-              {LBL('Signature',{color:CRYTHME,marginBottom:0,flex:1})}
+            {/* Signature */}
+            <div style={{display:'flex',alignItems:'center',gap:8}}>
+              {LBL('Signature', CRYTHME)}
+              <div style={{flex:1}}/>
               <button onClick={()=>cpkToggleSub('sig')}
-                style={{...B,height:30,borderRadius:8,padding:'0 12px',fontSize:12,fontWeight:800,
-                  background:hasSub('sig')?CRYTHME:(picker.timeSig?isDark?'rgba(122,172,220,0.2)':'rgba(58,106,154,0.12)':'transparent'),
+                style={{...B,height:28,borderRadius:7,padding:'0 11px',fontSize:12,fontWeight:800,
+                  background:hasSub('sig')?CRYTHME:(picker.timeSig?isDark?'rgba(122,172,220,0.18)':'rgba(58,106,154,0.1)':'transparent'),
                   color:hasSub('sig')?'#F2EDE4':picker.timeSig?CRYTHME:IC,
-                  outline:`1.5px solid ${hasSub('sig')||picker.timeSig?CRYTHME:BC}`,
-                  flexShrink:0}}>
+                  outline:`1.5px solid ${hasSub('sig')||picker.timeSig?CRYTHME:BC}`,flexShrink:0}}>
                 {picker.timeSig||pieceTs} {hasSub('sig')?'▲':'▼'}
               </button>
             </div>
             {hasSub('sig')&&(
               <div style={{marginTop:8,padding:'10px 12px',
-                background:isDark?'rgba(58,100,154,0.25)':'rgba(180,210,245,0.35)',
-                borderRadius:10,border:`1.5px solid ${CRYTHME}55`}}>
+                background:isDark?'rgba(58,100,154,0.22)':'rgba(180,210,245,0.3)',
+                borderRadius:10,border:`1.5px solid ${CRYTHME}40`}}>
                 <div style={{display:'flex',gap:5,flexWrap:'wrap'}}>
                   {TIME_SIGS.map(ts=>{
                     const curTs=picker.timeSig||pieceTs;
@@ -3157,10 +3177,9 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                     return(
                       <button key={ts} onClick={()=>cpkSetTimeSig(ts)}
                         style={{...B,height:34,borderRadius:8,padding:'0 14px',fontSize:13,fontWeight:800,
-                          background:isAct?CRYTHME:'transparent',
-                          color:isAct?'#F2EDE4':IC,
+                          background:isAct?CRYTHME:'transparent',color:isAct?'#F2EDE4':IC,
                           outline:`1.5px solid ${isAct?CRYTHME:BC}`,whiteSpace:'nowrap'}}>
-                        {ts}{ts===pieceTs&&!isAct&&<span style={{fontSize:7,marginLeft:2,opacity:0.5}}>✦</span>}
+                        {ts}{ts===pieceTs&&!isAct&&<span style={{fontSize:7,marginLeft:2,opacity:0.4}}>✦</span>}
                       </button>
                     );
                   })}
@@ -3169,15 +3188,14 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
             )}
 
             {/* ══ HARMONIQUE ══════════════════════════════════════════════════ */}
-            <div style={{marginTop:14}}/>
             {GRP('Harmonique', CHARM)}
 
             {/* Fondamentale */}
-            {LBL('Fondamentale',{color:CHARM})}
+            {LBL('Fondamentale', CHARM)}
             <div style={{display:'grid',gridTemplateColumns:`repeat(${LETTERS.length},1fr)`,gap:4,marginBottom:4}}>
               {LETTERS.map(l=>(
                 <button key={l} onClick={()=>cpkNote(l,picker.acc)}
-                  style={{...B,height:38,borderRadius:9,fontSize:16,fontWeight:800,
+                  style={{...B,height:42,borderRadius:9,fontSize:16,fontWeight:800,
                     background:picker.letter===l?CHARM:'transparent',
                     color:picker.letter===l?'#1A1A1A':IC,
                     outline:`2px solid ${picker.letter===l?CHARM:BC}`}}>
@@ -3185,10 +3203,10 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                 </button>
               ))}
             </div>
-            <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:4,marginBottom:10}}>
+            <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:4,marginBottom:12}}>
               {[{v:'b',l:'♭'},{v:'',l:'♮'},{v:'#',l:'♯'}].map(a=>(
                 <button key={a.v} onClick={()=>cpkNote(picker.letter,a.v)}
-                  style={{...B,height:36,borderRadius:9,fontSize:16,fontWeight:800,
+                  style={{...B,height:38,borderRadius:9,fontSize:16,fontWeight:800,
                     background:picker.acc===a.v?CHARM:'transparent',
                     color:picker.acc===a.v?'#1A1A1A':IC,
                     outline:`2px solid ${picker.acc===a.v?CHARM:BC}`}}>
@@ -3198,15 +3216,11 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
             </div>
 
             {/* Qualité */}
-            {LBL('Qualité',{color:CHARM})}
+            {LBL('Qualité', CHARM)}
             <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:6,marginBottom:6}}>
-              {[
-                {id:'maj',lbl:'Majeur'},
-                {id:'min',lbl:'mineur'},
-                {id:'dim',lbl:prefs?.dim==='°'?'°':'dim'},
-              ].map(q=>(
+              {[{id:'maj',lbl:'Majeur'},{id:'min',lbl:'mineur'},{id:'dim',lbl:prefs?.dim==='°'?'°':'dim'}].map(q=>(
                 <button key={q.id} onClick={()=>cpkQual(q.id)}
-                  style={{...B,height:40,borderRadius:10,fontSize:13,fontWeight:800,
+                  style={{...B,height:44,borderRadius:10,fontSize:14,fontWeight:800,
                     background:cqBase===q.id?CHARM:'transparent',
                     color:cqBase===q.id?'#1A1A1A':IC,
                     outline:`2px solid ${cqBase===q.id?CHARM:BC}`}}>
@@ -3214,26 +3228,21 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                 </button>
               ))}
             </div>
-            <div style={{display:'flex',gap:5,marginBottom:0}}>
-              {[
-                {id:'aug',lbl:prefs?.aug==='+'?'+':'aug'},
-                {id:'sus4',lbl:'sus4'},
-                {id:'sus2',lbl:'sus2'},
-                {id:'5',lbl:'5'},
-              ].map(q=>(
+            <div style={{display:'flex',gap:5,marginBottom:0,flexWrap:'wrap'}}>
+              {[{id:'aug',lbl:prefs?.aug==='+'?'+':'aug'},{id:'sus4',lbl:'sus4'},{id:'sus2',lbl:'sus2'},{id:'5',lbl:'5'}].map(q=>(
                 <button key={q.id} onClick={()=>cpkQual(q.id)}
-                  style={{...B,height:32,borderRadius:8,padding:'0 10px',fontSize:12,fontWeight:700,
+                  style={{...B,height:32,borderRadius:8,padding:'0 12px',fontSize:12,fontWeight:700,
                     whiteSpace:'nowrap',flexShrink:0,
                     background:cqBase===q.id?CHARM:'transparent',
                     color:cqBase===q.id?'#1A1A1A':IC,
-                    opacity:cqBase===q.id?1:0.65,
+                    opacity:cqBase===q.id?1:0.6,
                     outline:`2px solid ${cqBase===q.id?CHARM:BC}`}}>
                   {q.lbl}
                 </button>
               ))}
             </div>
             {cSeventhOpts.length>1&&(<>
-              {LBL('+ Septième',{color:CHARM,marginTop:10})}
+              {LBL('+ Septième',CHARM)}
               <div style={{display:'flex',gap:5,marginBottom:0}}>
                 {cSeventhOpts.map(opt=>{
                   const isActive=opt.id==='none'?picker.qualityId===cqBase:picker.qualityId===opt.id;
@@ -3251,55 +3260,73 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
               </div>
             </>)}
 
-            {/* Extensions */}
-            <div style={{marginTop:8}}/>
-            {LBL('Extensions',{color:CHARM})}
-            <div style={{display:'flex',gap:5,overflowX:'auto',marginBottom:0,alignItems:'center'}}>
-              {EXTENSIONS.map(e=>{
-                const active=(picker.extensions||[]).includes(e.id);
-                return(
-                  <button key={e.id} onClick={()=>cpkExt(e.id)}
-                    style={{...B,height:34,borderRadius:8,padding:'0 10px',fontSize:12,fontWeight:700,
-                      whiteSpace:'nowrap',flexShrink:0,
-                      background:active?CHARM:'transparent',
-                      color:active?'#1A1A1A':IC,
-                      outline:`2px solid ${active?CHARM:BC}`}}>
-                    {e.label}
-                  </button>
-                );
-              })}
-              {(picker.extensions||[]).length>0&&(
-                <button onClick={cpkClearExt}
-                  style={{...B,height:34,borderRadius:8,padding:'0 10px',fontSize:11,fontWeight:700,
-                    whiteSpace:'nowrap',flexShrink:0,background:'transparent',
-                    color:'#C0392B',outline:`2px solid #4A2020`}}>
-                  ✕
-                </button>
+            {/* Basse — accordéon */}
+            <div style={{marginTop:10}}>
+              {AccordBtn('bass',
+                picker.bass?`Basse : ${picker.bass}${picker.bassAcc||''}`:'+ Basse',
+                !!picker.bass,'#C89A40')}
+              {hasSub('bass')&&(
+                <div style={{marginTop:6,padding:'10px',
+                  background:isDark?'rgba(200,154,64,0.1)':'rgba(200,154,64,0.07)',
+                  borderRadius:10,border:'1.5px solid rgba(200,154,64,0.3)'}}>
+                  <div style={{display:'flex',alignItems:'center',gap:4,overflowX:'auto',marginBottom:picker.bass?6:0}}>
+                    {LETTERS.map(l=>noteBtn(l,picker.bass===l,()=>cpkBassNote(l),'#C89A40'))}
+                  </div>
+                  {picker.bass&&(
+                    <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:4}}>
+                      {[{v:'b',l:'♭'},{v:'',l:'♮'},{v:'#',l:'♯'}].map(a=>(
+                        <button key={a.v} onClick={()=>cpkBassAcc(a.v)}
+                          style={{...B,height:36,borderRadius:9,fontSize:16,fontWeight:800,
+                            background:picker.bassAcc===a.v?'#C89A40':'transparent',
+                            color:picker.bassAcc===a.v?'#1A1A1A':IC,
+                            outline:`2px solid ${picker.bassAcc===a.v?'#C89A40':BC}`}}>
+                          {a.l}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Extensions — accordéon */}
+            <div style={{marginTop:6}}>
+              {AccordBtn('ext',
+                (picker.extensions||[]).length>0
+                  ?EXTENSIONS.filter(e=>(picker.extensions||[]).includes(e.id)).map(e=>e.label).join(' · ')
+                  :'+ Extensions',
+                (picker.extensions||[]).length>0,CHARM)}
+              {hasSub('ext')&&(
+                <div style={{marginTop:6,padding:'10px',
+                  background:isDark?`${CHARM}10`:`${CHARM}08`,
+                  borderRadius:10,border:`1.5px solid ${CHARM}30`}}>
+                  <div style={{display:'flex',gap:5,flexWrap:'wrap',alignItems:'center'}}>
+                    {EXTENSIONS.map(e=>{
+                      const active=(picker.extensions||[]).includes(e.id);
+                      return(
+                        <button key={e.id} onClick={()=>cpkExt(e.id)}
+                          style={{...B,height:34,borderRadius:8,padding:'0 10px',fontSize:12,fontWeight:700,
+                            whiteSpace:'nowrap',flexShrink:0,
+                            background:active?CHARM:'transparent',
+                            color:active?'#1A1A1A':IC,
+                            outline:`2px solid ${active?CHARM:BC}`}}>
+                          {e.label}
+                        </button>
+                      );
+                    })}
+                    {(picker.extensions||[]).length>0&&(
+                      <button onClick={cpkClearExt}
+                        style={{...B,height:34,borderRadius:8,padding:'0 10px',fontSize:11,fontWeight:700,
+                          whiteSpace:'nowrap',flexShrink:0,background:'transparent',
+                          color:'#C0392B',outline:`2px solid #4A2020`}}>✕</button>
+                    )}
+                  </div>
+                </div>
               )}
             </div>
 
             {/* ══ ANNOTATIONS ══════════════════════════════════════════════════ */}
-            <div style={{marginTop:14}}/>
             {GRP('Annotations', CANNOT)}
-
-            {/* Basse */}
-            {LBL('Basse',{color:picker.bass?'#C89A40':CANNOT})}
-            <div style={{display:'flex',alignItems:'center',gap:5,overflowX:'auto',marginBottom:8}}>
-              {LETTERS.map(l=>noteBtn(l,picker.bass===l,()=>cpkBassNote(l),'#C89A40'))}
-              {picker.bass&&(<>
-                <div style={{width:1,height:24,background:BC,flexShrink:0,margin:'0 2px'}}/>
-                {[{v:'b',l:'♭'},{v:'',l:'♮'},{v:'#',l:'♯'}].map(a=>(
-                  <button key={a.v} onClick={()=>cpkBassAcc(a.v)}
-                    style={{...B,width:34,height:34,borderRadius:9,fontSize:14,fontWeight:800,
-                      background:picker.bassAcc===a.v?'#C89A40':'transparent',
-                      color:picker.bassAcc===a.v?'#1A1A1A':IC,
-                      outline:`2px solid ${picker.bassAcc===a.v?'#C89A40':BC}`,flexShrink:0}}>
-                    {a.l}
-                  </button>
-                ))}
-              </>)}
-            </div>
-            {/* Sous-panneaux */}
             <div style={{display:'flex',alignItems:'center',gap:5,overflowX:'auto',marginBottom:0}}>
               <button onClick={()=>cpkToggleSub('signs')} style={subTabStyle('signs')}>
                 {curSigns.length>0?curSigns.map(s=>SIGN_TYPES.find(x=>x.id===s)?.sym).join(' '):'⊕ Signes'}
