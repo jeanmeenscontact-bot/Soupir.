@@ -158,7 +158,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='1.42';
+const APP_VERSION='1.43';
 const CHORD_FONT="'Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -1060,7 +1060,7 @@ function ChordText({chord,fs=30,color='#1C1C1E',weight=500}){
           <span style={{display:'flex',flexDirection:'column',alignItems:'flex-start',lineHeight:1,gap:1,
             paddingLeft:0,paddingTop:acc?0:sfxTop}}>
             {acc&&<span style={{fontSize:accFs,fontWeight:weight,lineHeight:1}}>{acc}</span>}
-            {suffix&&<span style={{fontSize:sfxFs,fontWeight:600,lineHeight:1,
+            {suffix&&<span style={{fontSize:sfxFs,fontWeight:400,lineHeight:1,
               color:color==='#1C1C1E'?'#525252':color,paddingTop:acc?1:0}}>{suffix}</span>}
           </span>
         )}
@@ -1070,18 +1070,17 @@ function ChordText({chord,fs=30,color='#1C1C1E',weight=500}){
   if(!bassStr)return(
     <span style={{display:'inline-flex',alignItems:'flex-start',gap:0,lineHeight:1,color}}>{renderMain}</span>
   );
-  // Avec basse : accord principal à gauche, /B plus petit aligné en bas à droite (iReal Pro)
+  // Avec basse : ancré sur la hauteur du root (marginTop fixe), ne bouge pas avec les extensions
   const bassRoot=parseRoot(bassStr);
   const bassLetter=bassRoot?bassRoot[0]:(bassStr[0]||'');
   const bassRawAcc=bassRoot?bassRoot.slice(1):'';
   const bassAccDisp=bassRawAcc==='b'?'♭':bassRawAcc==='#'?'♯':'';
   const bassFs=Math.round(fs*0.46);
-  const bassShift=Math.round(fs*0.08);
   return(
-    <span style={{display:'inline-flex',alignItems:'flex-end',gap:1,lineHeight:1,color,fontFamily:CF}}>
+    <span style={{display:'inline-flex',alignItems:'flex-start',gap:1,lineHeight:1,color,fontFamily:CF}}>
       <span style={{display:'inline-flex',alignItems:'flex-start',gap:0,lineHeight:1}}>{renderMain}</span>
       <span style={{display:'inline-flex',alignItems:'baseline',gap:0,lineHeight:1,
-        position:'relative',top:bassShift}}>
+        marginTop:Math.round(fs*0.54)}}>
         <span style={{fontSize:Math.round(bassFs*0.75),fontWeight:400,lineHeight:1,color:color==='#1C1C1E'?'#8A8A8A':color}}>/</span>
         <span style={{fontSize:bassFs,fontWeight:weight,lineHeight:1,color:color==='#1C1C1E'?'#525252':color}}>{bassLetter}{bassAccDisp}</span>
       </span>
