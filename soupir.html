@@ -158,7 +158,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='1.43';
+const APP_VERSION='1.44';
 const CHORD_FONT="'Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -1070,17 +1070,18 @@ function ChordText({chord,fs=30,color='#1C1C1E',weight=500}){
   if(!bassStr)return(
     <span style={{display:'inline-flex',alignItems:'flex-start',gap:0,lineHeight:1,color}}>{renderMain}</span>
   );
-  // Avec basse : ancré sur la hauteur du root (marginTop fixe), ne bouge pas avec les extensions
+  // Avec basse : position absolue en bas à droite — ne bouge jamais quelle que soit la qualité/extensions
   const bassRoot=parseRoot(bassStr);
   const bassLetter=bassRoot?bassRoot[0]:(bassStr[0]||'');
   const bassRawAcc=bassRoot?bassRoot.slice(1):'';
   const bassAccDisp=bassRawAcc==='b'?'♭':bassRawAcc==='#'?'♯':'';
   const bassFs=Math.round(fs*0.46);
   return(
-    <span style={{display:'inline-flex',alignItems:'flex-start',gap:1,lineHeight:1,color,fontFamily:CF}}>
-      <span style={{display:'inline-flex',alignItems:'flex-start',gap:0,lineHeight:1}}>{renderMain}</span>
-      <span style={{display:'inline-flex',alignItems:'baseline',gap:0,lineHeight:1,
-        marginTop:Math.round(fs*0.54)}}>
+    <span style={{display:'inline-block',position:'relative',lineHeight:1,color,fontFamily:CF,
+      paddingRight:Math.round(bassFs*1.4),paddingBottom:Math.round(bassFs*0.6)}}>
+      {renderMain}
+      <span style={{position:'absolute',bottom:0,right:0,
+        display:'inline-flex',alignItems:'baseline',gap:0,lineHeight:1}}>
         <span style={{fontSize:Math.round(bassFs*0.75),fontWeight:400,lineHeight:1,color:color==='#1C1C1E'?'#8A8A8A':color}}>/</span>
         <span style={{fontSize:bassFs,fontWeight:weight,lineHeight:1,color:color==='#1C1C1E'?'#525252':color}}>{bassLetter}{bassAccDisp}</span>
       </span>
