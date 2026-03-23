@@ -158,7 +158,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='1.50';
+const APP_VERSION='1.51';
 const CHORD_FONT="'Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -1030,7 +1030,7 @@ function ChordText({chord,fs=30,color='#1C1C1E',weight=500}){
     const bR=parseRoot(bassOnly);
     const bL=bR?bR[0]:(bassOnly[0]||'');
     const bAcc=(bR&&bR.length>1)?bR.slice(1):'';
-    const bAccDisp=bAcc==='b'?'♭':bAcc==='#'?'♯':'';
+    const bAccDisp=bAcc; // format brut : 'b', '#' ou ''
     const bFs=Math.round(fs*0.72);
     return(
       <span style={{display:'inline-flex',alignItems:'flex-start',gap:0,lineHeight:1,color,fontFamily:CF}}>
@@ -1044,7 +1044,17 @@ function ChordText({chord,fs=30,color='#1C1C1E',weight=500}){
   const si=chord.lastIndexOf('/');
   const bassStr=si>0?chord.slice(si+1):'';
   const mainChord=si>0?chord.slice(0,si):chord;
-  const root=parseRoot(mainChord);
+  const rawRoot=parseRoot(mainChord);
+  // Désambiguïsation : si l'altération de la racine + reste correspond à un suffixe d'extension connu
+  // et que le reste seul ne démarre aucun suffixe de qualité → l'altération appartient à l'extension
+  const root=(()=>{
+    if(!rawRoot||rawRoot.length<2)return rawRoot;
+    const a=rawRoot[1];
+    const rest=mainChord.slice(rawRoot.length);
+    const isExt=EXTENSIONS.some(e=>e.suffix.length>=2&&(a+rest).startsWith(e.suffix));
+    const hasQual=QUALITIES.some(q=>q.suffix!==''&&rest.startsWith(q.suffix));
+    return(isExt&&!hasQual)?rawRoot[0]:rawRoot;
+  })();
   const accFs=Math.round(fs*0.52);
   const sfxFs=Math.round(fs*0.44);
   const sfxTop=Math.round(fs*0.20);
@@ -1070,7 +1080,7 @@ function ChordText({chord,fs=30,color='#1C1C1E',weight=500}){
   const bassRoot=bassStr?parseRoot(bassStr):null;
   const bassLetter=bassRoot?bassRoot[0]:(bassStr?bassStr[0]||'':'');
   const bassRawAcc=bassRoot?bassRoot.slice(1):'';
-  const bassAccDisp=bassRawAcc==='b'?'♭':bassRawAcc==='#'?'♯':'';
+  const bassAccDisp=bassRawAcc; // format brut : 'b', '#' ou ''
   const bassFs=Math.round(fs*0.46);
   const bassTop=Math.round(fs*0.80);   // légèrement remonté
   const bassLeft=Math.round(fs*0.28);  // légèrement à droite
