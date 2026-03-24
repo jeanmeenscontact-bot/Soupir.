@@ -158,7 +158,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='1.62';
+const APP_VERSION='1.63';
 const CHORD_FONT="'Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -229,7 +229,7 @@ const mkTabSection=(name='Tablature',instrument='guitar')=>{
 };
 
 const LIBRARY_INIT=[
-  {id:1,title:'Autumn Leaves',key:'Bb',bpm:112,style:'Jazz standard',timeSig:'4/4',sections:[
+  {id:1,title:'Autumn Leaves',composer:'Joseph Kosma',key:'Bb',bpm:112,style:'Jazz standard',timeSig:'4/4',sections:[
     {name:'A',startBar:'repeat-start',measures:[
       mk(['Cm7','F7']),mk(['Bbmaj7']),mk(['Ebmaj7']),mk(['Am7b5','D7']),
       mk(['Gm7']),mk(['Gm7']),mk(['Am7b5','D7'],'normal',['toCoda'],'1'),mk(['Gm7'],'repeat-end'),
@@ -239,13 +239,13 @@ const LIBRARY_INIT=[
       mk(['Fm7','Bb7']),mk(['Ebmaj7']),mk(['Am7b5','D7']),mk(['Gm7'],'final',['fine']),
     ]},
   ]},
-  {id:2,title:'Misty',key:'Eb',bpm:88,style:'Jazz ballad',timeSig:'4/4',sections:[
+  {id:2,title:'Misty',composer:'Erroll Garner',key:'Eb',bpm:88,style:'Jazz ballad',timeSig:'4/4',sections:[
     {name:'A',startBar:'normal',measures:[
       mk(['Ebmaj7']),mk(['Bbm7','Eb7']),mk(['Abmaj7']),mk(['Abm7','Db7']),
       mk(['Ebmaj7','Cm7']),mk(['Fm7','Bb7']),mk(['Ebmaj7']),mk(['Ebmaj7'],'final'),
     ]},
   ]},
-  {id:3,title:'So What',key:'D',bpm:136,style:'Modal jazz',timeSig:'4/4',sections:[
+  {id:3,title:'So What',composer:'Miles Davis',key:'D',bpm:136,style:'Modal jazz',timeSig:'4/4',sections:[
     {name:'A',startBar:'repeat-start',measures:[
       mk(['Dm7']),mk(['Dm7']),mk(['Dm7']),mk(['Dm7']),
       mk(['Dm7']),mk(['Dm7']),mk(['Dm7']),mk(['Dm7'],'repeat-end'),
@@ -1918,7 +1918,9 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
   const drawSvgRef=useRef(null);
   const drawUndoRef=useRef([]);
   const metroRef=useRef(null),beatRef=useRef(0);
+  const barsHideRef=useRef(null);
   const undoStack=useRef([]);
+  const [showPieceInfo,setShowPieceInfo]=useState(false);
 
   const cur=library.find(p=>p.id===piece.id)||piece;
   const timeSig=cur.timeSig||'4/4';
@@ -1933,6 +1935,13 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
     else{clearInterval(metroRef.current);setBeat(0);beatRef.current=0;}
     return()=>clearInterval(metroRef.current);
   },[metroOn,bpm]);
+
+  // ── Affichage temporaire des barres en mode lecture (auto-masque 3s) ─────────
+  function showBarsTemp(){
+    clearTimeout(barsHideRef.current);
+    setBarsVisible(true);
+    barsHideRef.current=setTimeout(()=>setBarsVisible(false),3000);
+  }
 
   // ── Fonctions dessin global ──────────────────────────────────────────────────
   function getPageDrawings(){return(cur.drawings||{})[safePage]||[];}
@@ -2492,11 +2501,47 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
     {/* CONTENT — page plein écran, zéro scroll */}
     <div style={{flex:1,overflow:'hidden',position:'relative',background:TH.bg,display:'flex',flexDirection:'column'}}>
 
+      {/* ── Overlay titre + compositeur (fullscreen uniquement) ── */}
+      {fullscreen&&(
+        <div style={{position:'absolute',top:0,left:0,right:0,zIndex:10,
+          padding:'10px 16px 8px',pointerEvents:'none',
+          background:`linear-gradient(to bottom,${isDark?'rgba(26,24,22,0.55)':'rgba(255,255,255,0.55)'} 0%,transparent 100%)`}}>
+          <div style={{fontSize:14,fontWeight:800,color:TH.text,opacity:0.55,
+            letterSpacing:'-0.3px',lineHeight:1.2,
+            overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{cur.title}</div>
+          {cur.composer&&<div style={{fontSize:10,fontWeight:500,color:TH.subText,opacity:0.55,
+            marginTop:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{cur.composer}</div>}
+        </div>
+      )}
+
+      {/* ── Métronome visuel (dot pulsant, fullscreen + metroOn) ── */}
+      {!editMode&&metroOn&&(
+        <div style={{position:'absolute',bottom:14,right:14,zIndex:20,
+          display:'flex',alignItems:'center',gap:5,pointerEvents:'none'}}>
+          {[0,1,2,3].map(i=>(
+            <div key={i} style={{
+              width: beat===i&&metroOn ? (i===0?14:10) : (i===0?10:7),
+              height: beat===i&&metroOn ? (i===0?14:10) : (i===0?10:7),
+              borderRadius:'50%',
+              background: beat===i ? (i===0?(isDark?'#F2EDE4':'#1A1A1A'):(isDark?'#9A9490':'#6B6560')) : (isDark?'rgba(255,255,255,0.18)':'rgba(0,0,0,0.15)'),
+              transition:'all 0.07s ease',
+              flexShrink:0
+            }}/>
+          ))}
+        </div>
+      )}
+
       {/* Bandeau titre + sélecteur Lecture/Édition */}
       <div style={{display:fullscreen?'none':'flex',alignItems:'center',padding:'0 10px',gap:8,borderBottom:`0.5px solid ${TH.border}`,
         background:TH.infoBg,height:INFO_H,flexShrink:0}}>
-        <span style={{fontSize:13,fontWeight:800,letterSpacing:'-0.4px',color:TH.text,flex:1,
-          overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{cur.title}</span>
+        <button onClick={()=>setShowPieceInfo(true)}
+          style={{background:'transparent',border:'none',padding:0,cursor:'pointer',fontFamily:'inherit',
+            flex:1,textAlign:'left',overflow:'hidden'}}>
+          <span style={{fontSize:13,fontWeight:800,letterSpacing:'-0.4px',color:TH.text,
+            overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',display:'block'}}>{cur.title}</span>
+          {cur.composer&&<span style={{fontSize:10,fontWeight:500,color:TH.subText,
+            overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',display:'block'}}>{cur.composer}</span>}
+        </button>
         {degreeMode&&<span style={{fontSize:9,fontWeight:700,color:'#4A3F2F',background:'#F5DDD8',
           borderRadius:4,padding:'1px 5px',flexShrink:0}}>Degrés</span>}
         {/* Bouton dessin */}
@@ -2510,14 +2555,14 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
         </button>
         {/* Sélecteur Lecture / Édition */}
         <div style={{display:'flex',background:TH.modeSwBg,borderRadius:8,padding:2,gap:1,flexShrink:0}}>
-          <button onClick={()=>{setEditMode(false);setBarsVisible(true);}}
+          <button onClick={()=>{setEditMode(false);setBarsVisible(false);clearTimeout(barsHideRef.current);}}
             style={{background:!editMode?TH.modeSwActive:'transparent',border:'none',
               borderRadius:6,padding:'3px 9px',fontSize:10,fontWeight:700,
               cursor:'pointer',fontFamily:'inherit',color:!editMode?TH.text:TH.subText,
               boxShadow:!editMode?'0 1px 3px rgba(0,0,0,0.12)':'none',transition:'all 0.12s'}}>
             👁 Lire
           </button>
-          <button onClick={()=>{setEditMode(true);setBarsVisible(true);}}
+          <button onClick={()=>{setEditMode(true);setBarsVisible(true);clearTimeout(barsHideRef.current);}}
             style={{background:editMode?'#1A1A1A':'transparent',border:'none',
               borderRadius:6,padding:'3px 9px',fontSize:10,fontWeight:700,
               cursor:'pointer',fontFamily:'inherit',color:editMode?'#F2EDE4':TH.subText,
@@ -2528,7 +2573,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
       </div>
 
       {/* Grille pages */}
-      <div onClick={!editMode&&!drawMode?()=>setBarsVisible(v=>!v):undefined}
+      <div onClick={!editMode&&!drawMode?showBarsTemp:undefined}
         style={{flex:1,display:'flex',flexDirection:'column',overflow:'auto',background:TH.gridBg,
           position:'relative',cursor:!editMode&&!drawMode?'pointer':undefined}}>
         {/* Pre-pass : détecter les rows dont la section se termine à pleine capacité
@@ -2959,6 +3004,30 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
       {showTimeSig&&<TimeSigPicker current={timeSig}
         onSelect={ts=>{setLibrary(lib=>lib.map(p=>p.id!==piece.id?p:{...p,timeSig:ts}));setShowTimeSig(false);}}
         onClose={()=>setShowTimeSig(false)}/>}
+
+      {/* ── Fiche morceau : titre + compositeur ── */}
+      {showPieceInfo&&(<Sheet onClose={()=>setShowPieceInfo(false)}>
+        <div style={{padding:'14px 20px 36px'}}>
+          <div style={{fontSize:10,fontWeight:700,color:'#8A847C',textTransform:'uppercase',letterSpacing:1.4,marginBottom:14}}>Infos du morceau</div>
+          <div style={{marginBottom:12}}>
+            <div style={{fontSize:10,fontWeight:600,color:'#8A847C',marginBottom:5}}>Titre</div>
+            <input defaultValue={cur.title}
+              onBlur={e=>{const v=e.target.value.trim();if(v)setLibrary(lib=>lib.map(p=>p.id!==piece.id?p:{...p,title:v}));}}
+              onKeyDown={e=>{if(e.key==='Enter'){const v=e.target.value.trim();if(v){setLibrary(lib=>lib.map(p=>p.id!==piece.id?p:{...p,title:v}));setShowPieceInfo(false);}}}}
+              style={{width:'100%',padding:'10px 14px',border:'1.5px solid #D0CAC0',borderRadius:12,
+                fontSize:16,fontWeight:700,fontFamily:'inherit',background:'#FAF8F4',color:'#1A1A1A',outline:'none'}}/>
+          </div>
+          <div>
+            <div style={{fontSize:10,fontWeight:600,color:'#8A847C',marginBottom:5}}>Compositeur</div>
+            <input defaultValue={cur.composer||''}
+              placeholder="Nom du compositeur…"
+              onBlur={e=>{setLibrary(lib=>lib.map(p=>p.id!==piece.id?p:{...p,composer:e.target.value.trim()}));}}
+              onKeyDown={e=>{if(e.key==='Enter'){setLibrary(lib=>lib.map(p=>p.id!==piece.id?p:{...p,composer:e.target.value.trim()}));setShowPieceInfo(false);}}}
+              style={{width:'100%',padding:'10px 14px',border:'1.5px solid #D0CAC0',borderRadius:12,
+                fontSize:14,fontFamily:'inherit',background:'#FAF8F4',color:'#1A1A1A',outline:'none'}}/>
+          </div>
+        </div>
+      </Sheet>)}
 
       {picker.visible&&picker.isGrande&&<ChordPicker picker={picker}
         onChange={(upd)=>{
@@ -3627,7 +3696,7 @@ function App(){
   function selectPiece(p){setPieceId(p.id);setDisplayKey(p.key);setView('editor');}
   function createPiece(){
     const newId=Date.now();
-    const newPiece={id:newId,title:'Nouveau morceau',key:'C',bpm:120,style:'',timeSig:'4/4',
+    const newPiece={id:newId,title:'Nouveau morceau',composer:'',key:'C',bpm:120,style:'',timeSig:'4/4',
       sections:[{name:'A',type:'grid',startBar:'normal',
         measures:[mk(['C']),mk(['C']),mk(['C']),mk(['C'])]}]};
     setLibrary(lib=>[...lib,newPiece]);
