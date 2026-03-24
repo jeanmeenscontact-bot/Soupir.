@@ -158,7 +158,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='1.65';
+const APP_VERSION='1.66';
 const CHORD_FONT="'Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -1539,7 +1539,7 @@ function parseMusicXML(xmlString){
     // ── Métadonnées ────────────────────────────────────────────────────────────
     const title=doc.querySelector('work-title')?.textContent?.trim()||'Nouveau morceau';
     const composer=doc.querySelector('creator[type="composer"]')?.textContent?.trim()||'';
-    // iReal Pro stocke le style comme "lyricist" dans MusicXML
+    // iReal Pro stocke le style dans "lyricist"
     const style=doc.querySelector('creator[type="lyricist"]')?.textContent?.trim()||'';
 
     // ── Tonalité ───────────────────────────────────────────────────────────────
@@ -1558,29 +1558,74 @@ function parseMusicXML(xmlString){
     const timeSig=`${beatsStr}/${beatTypeStr}`;
     const divisions=parseInt(doc.querySelector('divisions')?.textContent||'768');
 
-    // ── Mapping qualité ────────────────────────────────────────────────────────
+    // ── step+alter → note string ───────────────────────────────────────────────
+    function noteStr(step,alter){
+      const a=typeof alter==='number'?alter:parseFloat(alter||'0');
+      return step+(a>0.5?'#':a<-0.5?'b':'');
+    }
+
+    // ── Mapping qualité (iReal Pro + MusicXML standard) ────────────────────────
     function kindToQualityId(kindType,kindText){
-      // iReal Pro utilise des codes courts dans l'attribut text
-      const IREAL={'*m*':'min','*m*7':'min7','^':'maj7','^7':'maj7',
-        '-':'min','-7':'min7','-^7':'mMaj7',
-        'h':'hdim','h7':'hdim','o':'dim','o7':'dim7',
-        '+':'aug','s':'sus4','sus':'sus4','sus4':'sus4',
-        '2':'sus2','sus2':'sus2','7':'dom7',
-        '6':'maj6','m6':'min6','5':'5'};
-      if(kindText&&IREAL[kindText]!==undefined)return IREAL[kindText];
-      // Types standard MusicXML
-      const MX={'major':'maj','minor':'min','dominant':'dom7',
+      // Table couvrant les codes iReal Pro ET les notations texte courantes
+      const TM={
+        // iReal Pro spécifiques
+        '*m*':'min','*m*7':'min7',
+        '^':'maj7','^7':'maj7','Δ':'maj7','Δ7':'maj7',
+        '-':'min','-7':'min7','-^7':'mMaj7','-M7':'mMaj7',
+        'h':'hdim','h7':'hdim','ø':'hdim','ø7':'hdim',
+        'o':'dim','o7':'dim7',
+        '+':'aug',
+        's':'sus4','sus':'sus4','sus4':'sus4',
+        '2':'sus2','sus2':'sus2',
+        '7':'dom7',
+        '6':'maj6',
+        'm6':'min6',
+        '5':'5',
+        // Notations texte complémentaires
+        'm':'min','min':'min',
+        'M7':'maj7','maj7':'maj7',
+        'm7':'min7','min7':'min7',
+        'mMaj7':'mMaj7','mM7':'mMaj7',
+        'm7b5':'hdim',
+        'dim':'dim','dim7':'dim7','°':'dim','°7':'dim7',
+        'aug':'aug',
+      };
+      if(kindText&&TM[kindText]!==undefined)return TM[kindText];
+      // Types MusicXML standard
+      const MX={
+        'major':'maj','minor':'min','dominant':'dom7',
         'major-seventh':'maj7','minor-seventh':'min7','minor-major':'mMaj7',
         'half-diminished':'hdim','diminished':'dim','diminished-seventh':'dim7',
         'augmented':'aug','augmented-seventh':'aug',
         'suspended-fourth':'sus4','suspended-second':'sus2',
-        'major-sixth':'maj6','minor-sixth':'min6','power':'5'};
+        'major-sixth':'maj6','minor-sixth':'min6','power':'5',
+        // Types avec extensions intégrées → qualité de base
+        'dominant-ninth':'dom7','major-ninth':'maj7','minor-ninth':'min7',
+        'dominant-11th':'dom7','major-11th':'maj7','minor-11th':'min7',
+        'dominant-13th':'dom7','major-13th':'maj7','minor-13th':'min7',
+      };
       return MX[kindType]||'maj';
     }
 
-    // ── Root step+alter → string ───────────────────────────────────────────────
-    function rootStr(step,alter){
-      return step+(alter>0.5?'#':alter<-0.5?'b':'');
+    // ── Extensions depuis <degree> ─────────────────────────────────────────────
+    function parseDegrees(harmEl){
+      const exts=[];
+      for(const deg of harmEl.querySelectorAll('degree')){
+        const val=parseInt(deg.querySelector('degree-value')?.textContent||'0');
+        const alt=parseFloat(deg.querySelector('degree-alter')?.textContent||'0');
+        const typ=deg.querySelector('degree-type')?.textContent||'add';
+        if(typ==='subtract')continue; // suppression d'une note → ignorer
+        if(val===9 &&alt===0) exts.push('9');
+        else if(val===9 &&alt===-1)exts.push('b9');
+        else if(val===9 &&alt===1) exts.push('#9');
+        else if(val===11&&alt===0) exts.push('11');
+        else if(val===11&&alt===1) exts.push('#11');
+        else if(val===13&&alt===0) exts.push('13');
+        else if(val===13&&alt===-1)exts.push('b13');
+        else if(val===5 &&alt===-1)exts.push('b5');
+        else if(val===5 &&alt===1) exts.push('#5');
+      }
+      return exts;
     }
 
     // ── Barline element → type Soupir ──────────────────────────────────────────
@@ -1597,29 +1642,62 @@ function parseMusicXML(xmlString){
       return'normal';
     }
 
+    // ── Volta depuis <ending> ──────────────────────────────────────────────────
+    function getVolta(mEl){
+      // ending "start" sur la barre gauche OU sur la barre droite de la mesure précédente
+      const left=mEl.querySelector('barline[location="left"] ending');
+      if(left){
+        const typ=left.getAttribute('type')||'';
+        if(typ==='start'||typ==='discontinue'){
+          return left.getAttribute('number')||null;
+        }
+      }
+      return null;
+    }
+
+    // ── Nom de section via <rehearsal> ─────────────────────────────────────────
+    function getRehearsalName(mEl){
+      const r=mEl.querySelector('direction rehearsal')||mEl.querySelector('rehearsal');
+      return r?r.textContent?.trim()||null:null;
+    }
+
     // ── Parse les mesures ──────────────────────────────────────────────────────
     const rawMeasures=[];
     for(const mEl of doc.querySelectorAll('measure')){
-      const leftType=parseBarEl(mEl.querySelector('barline[location="left"]'));
-      const rightType=parseBarEl(mEl.querySelector('barline[location="right"]'));
+      const leftEl =mEl.querySelector('barline[location="left"]');
+      const rightEl=mEl.querySelector('barline[location="right"]');
+      const leftType =parseBarEl(leftEl);
+      const rightType=parseBarEl(rightEl);
+      const volta=getVolta(mEl);
+      const rehearsal=getRehearsalName(mEl);
 
       // Accords avec positions en beats
       const harmonies=[];
       let pos=0;
       for(const child of mEl.children){
         if(child.tagName==='harmony'){
-          const step=child.querySelector('root-step')?.textContent||'C';
-          const alter=parseFloat(child.querySelector('root-alter')?.textContent||'0');
-          const kindEl=child.querySelector('kind');
-          const kindType=kindEl?.textContent?.trim()||'major';
-          const kindText=kindEl?.getAttribute('text')||'';
-          const bassStep=child.querySelector('bass-step')?.textContent||'';
-          const bassAlter=parseFloat(child.querySelector('bass-alter')?.textContent||'0');
+          // Racine (via sous-élément <root> pour éviter confusion avec <bass>)
+          const rootEl=child.querySelector('root');
+          const step=rootEl?.querySelector('root-step')?.textContent||'C';
+          const alter=parseFloat(rootEl?.querySelector('root-alter')?.textContent||'0');
 
+          // Qualité
+          const kindEl=child.querySelector('kind');
+          const kindType=kindEl?.textContent?.trim()||'';
+          const kindText=kindEl?.getAttribute('text')||'';
           const qualId=kindToQualityId(kindType,kindText);
           const q=QUALITIES.find(q=>q.id===qualId);
-          const chordStr=rootStr(step,alter)+(q?q.suffix:'');
-          const bassStr=bassStep?'/'+rootStr(bassStep,bassAlter):'';
+
+          // Extensions
+          const exts=parseDegrees(child);
+
+          // Basse (via sous-élément <bass> uniquement)
+          const bassEl=child.querySelector('bass');
+          const bassStep=bassEl?.querySelector('bass-step')?.textContent||'';
+          const bassAlter=parseFloat(bassEl?.querySelector('bass-alter')?.textContent||'0');
+
+          const chordStr=noteStr(step,alter)+(q?q.suffix:'')+exts.join('');
+          const bassStr=bassStep?'/'+noteStr(bassStep,bassAlter):'';
 
           const beatPos=Math.round(pos/divisions);
           harmonies.push({beatPos,chordStr:chordStr+bassStr});
@@ -1630,26 +1708,29 @@ function parseMusicXML(xmlString){
         }
       }
 
-      // Construire le tableau de beats
-      const beatsArr=Array.from({length:numBeats},(_,i)=>mkBeat(i===0?'':'/'));
+      // Construire le tableau de beats (vides = '', pas de '/')
+      const beatsArr=Array.from({length:numBeats},()=>mkBeat(''));
       harmonies.forEach(({beatPos,chordStr})=>{
         if(beatPos<numBeats)beatsArr[beatPos]=mkBeat(chordStr);
       });
+      // Volta sur le premier beat
+      if(volta)beatsArr[0]=mkBeat(beatsArr[0].c,[],volta);
 
-      rawMeasures.push({leftType,rightType,beats:beatsArr});
+      rawMeasures.push({leftType,rightType,beats:beatsArr,rehearsal});
     }
 
     // ── Regrouper en sections ──────────────────────────────────────────────────
-    // Nouvelle section quand la barre gauche n'est pas 'normal'
+    // Nouvelle section sur : barre gauche non-normale OU marque de répétition
     const sections=[];
     let cur=null;
     let secIdx=0;
     for(const m of rawMeasures){
-      const newSec=!cur||m.leftType!=='normal';
+      const newSec=!cur||m.leftType!=='normal'||m.rehearsal;
       if(newSec){
         if(cur)sections.push(cur);
-        cur={name:String.fromCharCode(65+secIdx),type:'grid',
-          startBar:m.leftType,measures:[]};
+        // Nom : marquage rehearsal > lettre auto
+        const name=m.rehearsal||String.fromCharCode(65+secIdx);
+        cur={name,type:'grid',startBar:m.leftType,measures:[]};
         secIdx++;
       }
       cur.measures.push({beats:m.beats,barAfter:m.rightType});
