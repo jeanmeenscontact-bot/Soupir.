@@ -158,7 +158,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='1.67';
+const APP_VERSION='1.68';
 const CHORD_FONT="'Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -304,8 +304,8 @@ function Sheet({onClose,children}){
   </div>);
 }
 
-// Accord spécial (répétition / silence) — utilisé dans ChordPicker et EditorScreen
-const isSpec=(c)=>c==='/'||c==='—';
+// Accord spécial (répétition / silence / mesure répétée) — utilisé dans ChordPicker et EditorScreen
+const isSpec=(c)=>c==='/'||c==='—'||c==='%';
 
 // ─── CHORD PICKER — 4 beats + basse + signes + volta + annotation ─────────────
 function ChordPicker({picker,onChange,onConfirm,onCancel,onStructure,sectionName,onRenameSection,prefs,displayKey,displayMode='maj',autoHarmonize}){
@@ -314,7 +314,7 @@ function ChordPicker({picker,onChange,onConfirm,onCancel,onStructure,sectionName
   const localBeats=picker.localBeats||Array.from({length:nSlots},()=>mkBeat());
   const selectedBeat=picker.selectedBeat??0;
   const selBeat=localBeats[selectedBeat]||mkBeat();
-  const isSelSpec=isSpec(selBeat.c)||selBeat.c==='%';
+  const isSelSpec=isSpec(selBeat.c);
 
   const root=picker.letter+(picker.acc==='#'?'#':picker.acc==='b'?'b':'');
   const bassStr=(picker.bass||'')+((picker.bass&&picker.bassAcc)?picker.bassAcc:'');
@@ -334,7 +334,7 @@ function ChordPicker({picker,onChange,onConfirm,onCancel,onStructure,sectionName
   // ── Actions sur les beats ────────────────────────────────────────────────────
   const selectBeat=(bi)=>{
     const b=localBeats[bi]||mkBeat();
-    if(!b.c||isSpec(b.c)||b.c==='%'){
+    if(!b.c||isSpec(b.c)){
       onChange({...picker,selectedBeat:bi,letter:'C',acc:'',qualityId:'maj7',extensions:[],bass:'',bassAcc:''});
       return;
     }
@@ -493,6 +493,21 @@ function ChordPicker({picker,onChange,onConfirm,onCancel,onStructure,sectionName
       </div>
     </div>
 
+    {/* ── Raccourcis spéciaux : / — % toujours visibles ── */}
+    <div style={{padding:'8px 20px 0',borderTop:'1px solid #E8E2D8',display:'flex',gap:6}}>
+      {[{c:'/',lbl:'/',hint:'Répétition'},{c:'—',lbl:'—',hint:'Silence'},{c:'%',lbl:'%',hint:'Mesure répétée'}].map(({c,lbl,hint})=>{
+        const active=selBeat.c===c;
+        return(<button key={c} title={hint}
+          onClick={()=>{const nb=localBeats.map((b,i)=>i===selectedBeat?{...b,c}:b);onChange({...picker,localBeats:nb});}}
+          style={{flex:1,background:active?'#1A1A1A':'transparent',
+            border:`1.5px solid ${active?'#1A1A1A':'#C0BAB0'}`,
+            color:active?'#F2EDE4':'#6A6460',
+            borderRadius:10,padding:'7px 4px',cursor:'pointer',fontFamily:'inherit',
+            fontSize:16,fontWeight:700,lineHeight:1}}>
+          {lbl}
+        </button>);
+      })}
+    </div>
     {isSelSpec&&<div style={{flex:1}}/>}
     {!isSelSpec&&<div style={{overflowY:'auto',flex:1,padding:'14px 20px 6px'}}>
       {secLbl('Fondamentale')}
@@ -1685,11 +1700,21 @@ function parseMusicXML(xmlString){
       return null;
     }
 
-    // ── Nom de section via <rehearsal> ─────────────────────────────────────────
-    // Sélecteur simple : trouve <rehearsal> n'importe où dans la mesure
+    // ── Nom de section via <rehearsal> ou <words> ──────────────────────────────
+    // iReal Pro exporte parfois les noms de sections comme <words> dans une <direction>
+    const SECTION_WORDS=['Intro','Verse','Chorus','Bridge','Outro','Theme','Thème',
+      'Coda','Solo','Fin','Head','Tag','Vamp','Interlude','Pré-refrain'];
     function getRehearsalName(mEl){
+      // 1. Marquage standard <rehearsal>
       const r=mEl.querySelector('rehearsal');
-      return r?(r.textContent?.trim()||null):null;
+      if(r){const t=r.textContent?.trim();if(t)return t;}
+      // 2. Fallback <words> dans <direction-type> : short (≤3 chars) ou mot-clé connu
+      for(const w of mEl.querySelectorAll('direction-type words')){
+        const t=w.textContent?.trim();
+        if(!t)continue;
+        if(t.length<=3||SECTION_WORDS.some(k=>t.toLowerCase()===k.toLowerCase()))return t;
+      }
+      return null;
     }
 
     // ── Parse les mesures ──────────────────────────────────────────────────────
@@ -2330,11 +2355,11 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
     if(initialBeat!==null&&initialBeat>=0&&initialBeat<8){
       selectedBeat=initialBeat;
     } else {
-      const ff=localBeats.find(b=>b.c&&!isSpec(b.c)&&b.c!=='%');
+      const ff=localBeats.find(b=>b.c&&!isSpec(b.c));
       selectedBeat=ff?localBeats.indexOf(ff):0;
     }
     const initChord=localBeats[selectedBeat]?.c||'';
-    const firstChord=(initChord&&!isSpec(initChord)&&initChord!=='%')?initChord:'C';
+    const firstChord=(initChord&&!isSpec(initChord))?initChord:'C';
     const parsed=parseChordFull(firstChord);
     const{letter,acc}=rootToLetterAcc(parsed.root);
     const bR=parsed.bass||'';
@@ -2357,11 +2382,11 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
     if(initialBeat!==null&&initialBeat>=0&&initialBeat<4){
       selectedBeat=initialBeat;
     } else {
-      const firstFilled=localBeats.find(b=>b.c&&!isSpec(b.c)&&b.c!=='%');
+      const firstFilled=localBeats.find(b=>b.c&&!isSpec(b.c));
       selectedBeat=firstFilled?localBeats.indexOf(firstFilled):0;
     }
     const initChord=localBeats[selectedBeat]?.c||'';
-    const firstChord=(initChord&&!isSpec(initChord)&&initChord!=='%')?initChord:'C';
+    const firstChord=(initChord&&!isSpec(initChord))?initChord:'C';
     const parsed=parseChordFull(firstChord);
     const{letter,acc}=rootToLetterAcc(parsed.root);
     const bR=parsed.bass||'';
@@ -2921,6 +2946,17 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                             minWidth:0,overflow:'hidden',
                             background:editMode&&picker.visible&&picker.isGrande&&picker.si===si&&picker.mi===mi?'rgba(58,155,213,0.09)':'transparent',
                             transition:'background 0.12s'}}>
+                          {/* Badge nom de section — première grande mesure de chaque section */}
+                          {sectionStart&&sectionName&&(
+                            <div style={{position:'absolute',bottom:3,left:ci===0?6:4,zIndex:7,
+                              background:isDark?'rgba(60,80,120,0.85)':'rgba(30,48,96,0.82)',
+                              color:'#B8D4FF',borderRadius:3,
+                              fontSize:8,fontWeight:900,padding:'1px 5px',lineHeight:1.5,
+                              letterSpacing:0.8,pointerEvents:'none',whiteSpace:'nowrap',
+                              maxWidth:'40%',overflow:'hidden',textOverflow:'ellipsis'}}>
+                              {sectionName}
+                            </div>
+                          )}
                           {/* 8 temps : 4 + séparateur 20px + 4 → aligne le 5e accord avec une mesure seule */}
                           {allBeats.flatMap((beat,bi)=>{
                             const chord=beat.c||'';
@@ -3040,6 +3076,17 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                     <React.Fragment key={`${si}-${mi}`}>
                       <div style={{flex:1,position:'relative',display:'flex',flexDirection:'row',
                         minWidth:0,overflow:'hidden'}}>
+                        {/* Badge nom de section — première mesure de chaque section */}
+                        {sectionStart&&sectionName&&(
+                          <div style={{position:'absolute',bottom:3,left:ci===0?6:4,zIndex:7,
+                            background:isDark?'rgba(60,80,120,0.85)':'rgba(30,48,96,0.82)',
+                            color:'#B8D4FF',borderRadius:3,
+                            fontSize:8,fontWeight:900,padding:'1px 5px',lineHeight:1.5,
+                            letterSpacing:0.8,pointerEvents:'none',whiteSpace:'nowrap',
+                            maxWidth:'50%',overflow:'hidden',textOverflow:'ellipsis'}}>
+                            {sectionName}
+                          </div>
+                        )}
                         {measure.label&&(
                           <div style={{position:'absolute',top:3,left:ci===0?28:4,zIndex:6,
                             background:'#1A3060',color:'#90BEFF',borderRadius:3,
@@ -3276,7 +3323,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
             const newChord=buildChordStr(root,upd.qualityId,upd.extensions,bass);
             const newBeats=(upd.localBeats||emptyBeats).map((b,i)=>{
               if(i!==sbi)return b;
-              if(isSpec(b.c)||b.c==='%')return b;
+              if(isSpec(b.c))return b;
               return{...b,c:newChord};
             });
             setPicker({...upd,localBeats:newBeats});
@@ -3349,7 +3396,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
         }
         function cpkBeat(bi){
           const initChord=(picker.localBeats||[])[bi]?.c||'';
-          const fc=(initChord&&!isSpec(initChord)&&initChord!=='%')?initChord:'C';
+          const fc=(initChord&&!isSpec(initChord))?initChord:'C';
           const parsed=parseChordFull(fc);
           const{letter:nl,acc:na}=rootToLetterAcc(parsed.root);
           const bR=parsed.bass||'';
@@ -3496,7 +3543,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
               <div style={{display:'flex',gap:5,marginBottom:14}}>
                 {(picker.localBeats||[]).map((_b,bi)=>{
                   const bc=(picker.localBeats||[])[bi]?.c||'';
-                  const filled=bc&&!isSpec(bc)&&bc!=='%';
+                  const filled=bc&&!isSpec(bc);
                   return(
                     <button key={bi} onClick={()=>cpkBeat(bi)}
                       style={{...B,flex:1,height:40,borderRadius:9,fontSize:12,fontWeight:800,
@@ -3506,6 +3553,21 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                       {sbi===bi&&filled?applyPrefs(bc,prefs)||String(bi+1):String(bi+1)}
                     </button>
                   );
+                })}
+              </div>
+
+              {/* Accords spéciaux */}
+              {LBL('Spécial', CRYTHME)}
+              <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:5,marginBottom:14}}>
+                {[{c:'/',lbl:'/',hint:'Répétition'},{c:'—',lbl:'—',hint:'Silence'},{c:'%',lbl:'%',hint:'Mesure répétée'}].map(({c,lbl,hint})=>{
+                  const active=(picker.localBeats||[])[sbi]?.c===c;
+                  return(<button key={c} title={hint} onClick={()=>cpkUpdBeat({c})}
+                    style={{...B,height:40,borderRadius:9,fontSize:16,fontWeight:800,
+                      background:active?CRYTHME:'transparent',
+                      color:active?'#F2EDE4':IC,
+                      outline:`2px solid ${active?CRYTHME:BC}`}}>
+                    {lbl}
+                  </button>);
                 })}
               </div>
 
