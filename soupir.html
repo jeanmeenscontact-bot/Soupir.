@@ -158,7 +158,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='1.63';
+const APP_VERSION='1.64';
 const CHORD_FONT="'Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -228,54 +228,7 @@ const mkTabSection=(name='Tablature',instrument='guitar')=>{
   return{type:'tab',name,instrument,measures:Array.from({length:4},()=>mkTabMeasure(n))};
 };
 
-const LIBRARY_INIT=[
-  {id:1,title:'Autumn Leaves',composer:'Joseph Kosma',key:'Bb',bpm:112,style:'Jazz standard',timeSig:'4/4',sections:[
-    {name:'A',startBar:'repeat-start',measures:[
-      mk(['Cm7','F7']),mk(['Bbmaj7']),mk(['Ebmaj7']),mk(['Am7b5','D7']),
-      mk(['Gm7']),mk(['Gm7']),mk(['Am7b5','D7'],'normal',['toCoda'],'1'),mk(['Gm7'],'repeat-end'),
-    ]},
-    {name:'B',startBar:'normal',measures:[
-      mk(['Am7b5','D7'],'normal',['coda'],'2'),mk(['Gm7']),mk(['Gm7','C7']),mk(['Fmaj7']),
-      mk(['Fm7','Bb7']),mk(['Ebmaj7']),mk(['Am7b5','D7']),mk(['Gm7'],'final',['fine']),
-    ]},
-  ]},
-  {id:2,title:'Misty',composer:'Erroll Garner',key:'Eb',bpm:88,style:'Jazz ballad',timeSig:'4/4',sections:[
-    {name:'A',startBar:'normal',measures:[
-      mk(['Ebmaj7']),mk(['Bbm7','Eb7']),mk(['Abmaj7']),mk(['Abm7','Db7']),
-      mk(['Ebmaj7','Cm7']),mk(['Fm7','Bb7']),mk(['Ebmaj7']),mk(['Ebmaj7'],'final'),
-    ]},
-  ]},
-  {id:3,title:'So What',composer:'Miles Davis',key:'D',bpm:136,style:'Modal jazz',timeSig:'4/4',sections:[
-    {name:'A',startBar:'repeat-start',measures:[
-      mk(['Dm7']),mk(['Dm7']),mk(['Dm7']),mk(['Dm7']),
-      mk(['Dm7']),mk(['Dm7']),mk(['Dm7']),mk(['Dm7'],'repeat-end'),
-    ]},
-    {name:'B',startBar:'repeat-start',measures:[
-      mk(['Ebm7']),mk(['Ebm7']),mk(['Ebm7']),mk(['Ebm7']),
-      mk(['Dm7']),mk(['Dm7']),mk(['Dm7']),mk(['Dm7'],'repeat-end'),
-    ]},
-  ]},
-  {id:4,title:'All The Things You Are',key:'Ab',bpm:104,style:'Jazz standard',timeSig:'4/4',sections:[
-    {name:'A',startBar:'normal',measures:[
-      mk(['Fm7']),mk(['Bbm7']),mk(['Eb7']),mk(['Abmaj7']),
-      mk(['Dbmaj7']),mk(['Dm7b5','G7']),mk(['Cmaj7']),mk(['Cmaj7']),
-    ]},
-    {name:'B',startBar:'normal',measures:[
-      mk(['Cm7']),mk(['Fm7']),mk(['Bb7']),mk(['Ebmaj7']),
-      mk(['Abmaj7']),mk(['Dm7b5','G7']),mk(['Cmaj7']),mk(['Cmaj7'],'final'),
-    ]},
-  ]},
-  {id:5,title:'Take Five',key:'Eb',bpm:174,style:'Cool jazz',timeSig:'5/4',sections:[
-    {name:'A',startBar:'repeat-start',measures:[
-      mk(['Ebm7']),mk(['Bbm7']),mk(['Ebm7']),mk(['Bbm7']),
-      mk(['Ebm7']),mk(['Bbm7']),mk(['Ebm7']),mk(['Bbm7'],'repeat-end'),
-    ]},
-    {name:'B',startBar:'repeat-start',measures:[
-      mk(['Bbm7','Eb7']),mk(['Abmaj7']),mk(['Bbm7','Eb7']),mk(['Abmaj7']),
-      mk(['Bbm7','Eb7']),mk(['Abmaj7']),mk(['Bbm7']),mk(['Bbm7'],'repeat-end'),
-    ]},
-  ]},
-];
+const LIBRARY_INIT=[];
 
 // ─── LOGO ─────────────────────────────────────────────────────────────────────
 function SoupirLogo({size=90,color='#1A1A1A'}){
@@ -291,8 +244,9 @@ function SoupirLogo({size=90,color='#1A1A1A'}){
 // ─── BARLINE ─────────────────────────────────────────────────────────────────
 function Barline({type='normal',onClick,minH=106,accentColor='#1A1A1A'}){
   // type 'none' → largeur 0 (grande mesure = fusionner avec la suivante)
-  const isRepeat=['repeat-start','repeat-end','repeat-end-start'].includes(type);
-  const BW=type==='none'?0:isRepeat?22:10;
+  // BW fixe 10px pour TOUS les types : pas de décalage en changeant le type.
+  // Le contenu des barres de répétition (>10px) déborde en overflow:visible vers la gauche.
+  const BW=type==='none'?0:10;
   const INK=accentColor; // toujours la couleur passée (s'adapte au mode sombre)
   const thin={width:1.5,alignSelf:'stretch',background:INK,flexShrink:0};
   const thick={width:3.5,alignSelf:'stretch',background:INK,flexShrink:0};
@@ -326,7 +280,7 @@ function Barline({type='normal',onClick,minH=106,accentColor='#1A1A1A'}){
   return(
     <div className={onClick?'barline-hit':''}
       onClick={onClick}
-      style={{width:BW,flexShrink:0,alignSelf:'stretch',overflow:'hidden',
+      style={{width:BW,flexShrink:0,alignSelf:'stretch',overflow:'visible',
         display:'flex',alignItems:'stretch',justifyContent:'flex-end',
         cursor:onClick?'pointer':'default',transition:'opacity 0.1s'}}>
       <div style={{display:'flex',alignItems:'stretch'}}>{inner}</div>
