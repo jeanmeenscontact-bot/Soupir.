@@ -158,7 +158,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='1.66';
+const APP_VERSION='1.67';
 const CHORD_FONT="'Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -1564,34 +1564,57 @@ function parseMusicXML(xmlString){
       return step+(a>0.5?'#':a<-0.5?'b':'');
     }
 
-    // ── Mapping qualité (iReal Pro + MusicXML standard) ────────────────────────
-    function kindToQualityId(kindType,kindText){
-      // Table couvrant les codes iReal Pro ET les notations texte courantes
-      const TM={
-        // iReal Pro spécifiques
-        '*m*':'min','*m*7':'min7',
-        '^':'maj7','^7':'maj7','Δ':'maj7','Δ7':'maj7',
-        '-':'min','-7':'min7','-^7':'mMaj7','-M7':'mMaj7',
-        'h':'hdim','h7':'hdim','ø':'hdim','ø7':'hdim',
-        'o':'dim','o7':'dim7',
-        '+':'aug',
-        's':'sus4','sus':'sus4','sus4':'sus4',
-        '2':'sus2','sus2':'sus2',
-        '7':'dom7',
-        '6':'maj6',
-        'm6':'min6',
-        '5':'5',
-        // Notations texte complémentaires
-        'm':'min','min':'min',
-        'M7':'maj7','maj7':'maj7',
-        'm7':'min7','min7':'min7',
-        'mMaj7':'mMaj7','mM7':'mMaj7',
-        'm7b5':'hdim',
-        'dim':'dim','dim7':'dim7','°':'dim','°7':'dim7',
-        'aug':'aug',
-      };
-      if(kindText&&TM[kindText]!==undefined)return TM[kindText];
-      // Types MusicXML standard
+    // ── Parse une chaîne d'extensions (ex: '9','b9','#11','b9#11') ───────────────
+    function parseExtStr(s){
+      // Ordre important : les plus longs d'abord pour éviter les ambiguïtés
+      const PATS=[['add9','add9'],['b9','b9'],['#9','#9'],
+        ['b13','b13'],['#11','#11'],['b5','b5'],['#5','#5'],
+        ['13','13'],['11','11'],['9','9']];
+      const out=[];let i=0;
+      while(i<s.length){
+        let found=false;
+        for(const [p,id] of PATS){
+          if(s.slice(i).startsWith(p)){out.push(id);i+=p.length;found=true;break;}
+        }
+        if(!found)i++; // caractère inconnu → ignorer
+      }
+      return out;
+    }
+
+    // ── Parse kindText → {qualId, textExts, hasTrailing} ──────────────────────
+    // hasTrailing = true si des caractères inconnus restent après qual+extensions
+    function parseKindText(kt){
+      if(!kt)return{qualId:null,textExts:[],hasTrailing:false};
+      // Préfixes triés du plus long au plus court
+      const P=[
+        ['*m*7','min7'],['-^7','mMaj7'],['-M7','mMaj7'],
+        ['ø7','hdim'],['h7','hdim'],['o7','dim7'],['m7b5','hdim'],
+        ['^7','maj7'],['Δ7','maj7'],['M7','maj7'],['m7','min7'],
+        ['m6','min6'],['sus4','sus4'],['sus2','sus2'],
+        ['*m*','min'],['ø','hdim'],['h','hdim'],
+        ['^','maj7'],['Δ','maj7'],['o','dim'],
+        ['+','aug'],['sus','sus4'],
+        ['-7','min7'],['-','min'],
+        ['7','dom7'],['6','maj6'],['5','5'],
+        ['m','min'],
+      ];
+      for(const [prefix,qid] of P){
+        if(kt.startsWith(prefix)){
+          const rest=kt.slice(prefix.length);
+          const textExts=parseExtStr(rest);
+          // hasTrailing : true si rest contient des chars non consommés
+          const consumed=textExts.reduce((s,e)=>s+e.length,0);
+          const hasTrailing=consumed<rest.length;
+          return{qualId:qid,textExts,hasTrailing};
+        }
+      }
+      return{qualId:null,textExts:[],hasTrailing:false};
+    }
+
+    // ── qualId + extensions depuis kindType + kindText ─────────────────────────
+    function parseKindFull(kindType,kindText){
+      const {qualId:textQual,textExts,hasTrailing}=parseKindText(kindText);
+      // Table MusicXML standard + kinds avec extensions intégrées
       const MX={
         'major':'maj','minor':'min','dominant':'dom7',
         'major-seventh':'maj7','minor-seventh':'min7','minor-major':'mMaj7',
@@ -1599,12 +1622,19 @@ function parseMusicXML(xmlString){
         'augmented':'aug','augmented-seventh':'aug',
         'suspended-fourth':'sus4','suspended-second':'sus2',
         'major-sixth':'maj6','minor-sixth':'min6','power':'5',
-        // Types avec extensions intégrées → qualité de base
         'dominant-ninth':'dom7','major-ninth':'maj7','minor-ninth':'min7',
         'dominant-11th':'dom7','major-11th':'maj7','minor-11th':'min7',
         'dominant-13th':'dom7','major-13th':'maj7','minor-13th':'min7',
       };
-      return MX[kindType]||'maj';
+      const typeQual=MX[kindType]||'maj';
+      // Extensions implicites du type (ex: dominant-ninth → '9')
+      const typeExts=kindType.includes('ninth')?['9']:kindType.includes('11th')?['11']:kindType.includes('13th')?['13']:[];
+      // Qualité : si kindText entièrement parsé → on lui fait confiance
+      //           si trailing → caractère inconnu, on préfère kindType (plus fiable)
+      const qualId=(!hasTrailing&&textQual)?textQual:typeQual||textQual||'maj';
+      // Extensions : union des sources (textExts + typeExts, les degree viennent après)
+      const exts=[...new Set([...textExts,...typeExts])];
+      return{qualId,exts};
     }
 
     // ── Extensions depuis <degree> ─────────────────────────────────────────────
@@ -1614,7 +1644,7 @@ function parseMusicXML(xmlString){
         const val=parseInt(deg.querySelector('degree-value')?.textContent||'0');
         const alt=parseFloat(deg.querySelector('degree-alter')?.textContent||'0');
         const typ=deg.querySelector('degree-type')?.textContent||'add';
-        if(typ==='subtract')continue; // suppression d'une note → ignorer
+        if(typ==='subtract')continue;
         if(val===9 &&alt===0) exts.push('9');
         else if(val===9 &&alt===-1)exts.push('b9');
         else if(val===9 &&alt===1) exts.push('#9');
@@ -1656,9 +1686,10 @@ function parseMusicXML(xmlString){
     }
 
     // ── Nom de section via <rehearsal> ─────────────────────────────────────────
+    // Sélecteur simple : trouve <rehearsal> n'importe où dans la mesure
     function getRehearsalName(mEl){
-      const r=mEl.querySelector('direction rehearsal')||mEl.querySelector('rehearsal');
-      return r?r.textContent?.trim()||null:null;
+      const r=mEl.querySelector('rehearsal');
+      return r?(r.textContent?.trim()||null):null;
     }
 
     // ── Parse les mesures ──────────────────────────────────────────────────────
@@ -1681,22 +1712,24 @@ function parseMusicXML(xmlString){
           const step=rootEl?.querySelector('root-step')?.textContent||'C';
           const alter=parseFloat(rootEl?.querySelector('root-alter')?.textContent||'0');
 
-          // Qualité
+          // Qualité + extensions depuis kindType + kindText
           const kindEl=child.querySelector('kind');
           const kindType=kindEl?.textContent?.trim()||'';
           const kindText=kindEl?.getAttribute('text')||'';
-          const qualId=kindToQualityId(kindType,kindText);
-          const q=QUALITIES.find(q=>q.id===qualId);
+          const{qualId,exts:kindExts}=parseKindFull(kindType,kindText);
+          const q=QUALITIES.find(q=>q.id===qualId)||QUALITIES.find(q=>q.id==='maj');
 
-          // Extensions
-          const exts=parseDegrees(child);
+          // Extensions depuis <degree> (union, dédoublonnées)
+          const degExts=parseDegrees(child);
+          const validSuffixes=new Set(EXTENSIONS.map(e=>e.suffix));
+          const allExts=[...new Set([...kindExts,...degExts])].filter(e=>validSuffixes.has(e));
 
           // Basse (via sous-élément <bass> uniquement)
           const bassEl=child.querySelector('bass');
           const bassStep=bassEl?.querySelector('bass-step')?.textContent||'';
           const bassAlter=parseFloat(bassEl?.querySelector('bass-alter')?.textContent||'0');
 
-          const chordStr=noteStr(step,alter)+(q?q.suffix:'')+exts.join('');
+          const chordStr=noteStr(step,alter)+(q?q.suffix:'')+allExts.join('');
           const bassStr=bassStep?'/'+noteStr(bassStep,bassAlter):'';
 
           const beatPos=Math.round(pos/divisions);
