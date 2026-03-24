@@ -158,7 +158,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='1.61';
+const APP_VERSION='1.62';
 const CHORD_FONT="'Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -305,7 +305,7 @@ function Barline({type='normal',onClick,minH=106,accentColor='#1A1A1A'}){
     </div>);
   if(type==='none'){
     return(<div className={onClick?'barline-hit':''} onClick={onClick}
-      style={{width:10,flexShrink:0,alignSelf:'stretch',minHeight:minH,
+      style={{width:10,flexShrink:0,alignSelf:'stretch',
         display:'flex',alignItems:'center',justifyContent:'center',
         cursor:onClick?'pointer':'default'}}>
       {onClick&&(<div style={{width:2,height:24,background:accentColor,borderRadius:1,opacity:0.35}}/>)}
@@ -326,7 +326,7 @@ function Barline({type='normal',onClick,minH=106,accentColor='#1A1A1A'}){
   return(
     <div className={onClick?'barline-hit':''}
       onClick={onClick}
-      style={{width:BW,flexShrink:0,alignSelf:'stretch',minHeight:minH,overflow:'hidden',
+      style={{width:BW,flexShrink:0,alignSelf:'stretch',overflow:'hidden',
         display:'flex',alignItems:'stretch',justifyContent:'flex-end',
         cursor:onClick?'pointer':'default',transition:'opacity 0.1s'}}>
       <div style={{display:'flex',alignItems:'stretch'}}>{inner}</div>
@@ -2529,7 +2529,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
 
       {/* Grille pages */}
       <div onClick={!editMode&&!drawMode?()=>setBarsVisible(v=>!v):undefined}
-        style={{flex:1,display:'flex',flexDirection:'column',overflow:editMode?'auto':'hidden',background:TH.gridBg,
+        style={{flex:1,display:'flex',flexDirection:'column',overflow:'auto',background:TH.gridBg,
           position:'relative',cursor:!editMode&&!drawMode?'pointer':undefined}}>
         {/* Pre-pass : détecter les rows dont la section se termine à pleine capacité
             → le "+" doit apparaître au début de la row suivante, ou dans la 1re ligne vide */}
@@ -2589,7 +2589,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
           // "+" en début de row : provient d'une section terminée en row pleine
           const addSiAtStart=editMode?row._addMeasureSi:null;
           return(
-            <div key={ri} style={{...(editMode?{height:rowH,flexShrink:0}:{flex:1,minHeight:0}),display:'flex',alignItems:'stretch',position:'relative',
+            <div key={ri} style={{height:rowH,flexShrink:0,display:'flex',alignItems:'stretch',position:'relative',
               borderBottom:`0.5px solid ${TH.rowBorder}`,overflow:'visible',
               paddingTop:ROW_PAD,paddingBottom:ROW_PAD}}>
               {/* Barre gauche — avec badge "+" si la section précédente se termine ici */}
@@ -2820,7 +2820,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
         {Array.from({length:Math.max(0,rowsPerPage-pageRows.length)}).map((_,ei)=>{
           const addSiFiller=ei===0&&editMode?pageRows._addSiForFiller:null;
           return(
-          <div key={`e${ei}`} style={{...(editMode?{height:rowH,flexShrink:0}:{flex:1,minHeight:0}),display:'flex',alignItems:'stretch',
+          <div key={`e${ei}`} style={{height:rowH,flexShrink:0,display:'flex',alignItems:'stretch',
             borderBottom:`0.5px solid ${TH.rowBorder}`,background:TH.fillerBg,
             paddingTop:ROW_PAD,paddingBottom:ROW_PAD}}>
             <div style={{width:10,flexShrink:0}}/>
