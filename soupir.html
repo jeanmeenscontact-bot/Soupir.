@@ -158,7 +158,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='1.64';
+const APP_VERSION='1.65';
 const CHORD_FONT="'Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -248,14 +248,14 @@ function Barline({type='normal',onClick,minH=106,accentColor='#1A1A1A'}){
   // Le contenu des barres de répétition (>10px) déborde en overflow:visible vers la gauche.
   const BW=type==='none'?0:10;
   const INK=accentColor; // toujours la couleur passée (s'adapte au mode sombre)
-  const thin={width:1.5,alignSelf:'stretch',background:INK,flexShrink:0};
-  const thick={width:3.5,alignSelf:'stretch',background:INK,flexShrink:0};
+  const thin={width:1,alignSelf:'stretch',background:INK,flexShrink:0};
+  const thick={width:2.5,alignSelf:'stretch',background:INK,flexShrink:0};
   const sp=(w)=>({width:w,flexShrink:0});
   const dots=(
     <div style={{display:'flex',flexDirection:'column',justifyContent:'center',
-      gap:5,alignSelf:'center',width:4,flexShrink:0}}>
-      <div style={{width:4,height:4,borderRadius:'50%',background:INK}}/>
-      <div style={{width:4,height:4,borderRadius:'50%',background:INK}}/>
+      gap:4,alignSelf:'center',width:3,flexShrink:0}}>
+      <div style={{width:3,height:3,borderRadius:'50%',background:INK}}/>
+      <div style={{width:3,height:3,borderRadius:'50%',background:INK}}/>
     </div>);
   if(type==='none'){
     return(<div className={onClick?'barline-hit':''} onClick={onClick}
@@ -274,7 +274,7 @@ function Barline({type='normal',onClick,minH=106,accentColor='#1A1A1A'}){
     // repeat-end : :| — points+épaisse à gauche, barre fine à droite
     case 'repeat-end':       inner=<>{dots}<div style={sp(3)}/><div style={thick}/><div style={sp(2)}/><div style={thin}/></>;break;
     case 'repeat-end-start': inner=<>{dots}<div style={sp(2)}/><div style={thick}/><div style={sp(1)}/><div style={thick}/><div style={sp(2)}/>{dots}</>;break;
-    case 'final':            inner=<><div style={thin}/><div style={sp(2)}/><div style={{...thick,width:5}}/></>;break;
+    case 'final':            inner=<><div style={thin}/><div style={sp(2)}/><div style={{...thick,width:4}}/></>;break;
     default:                 inner=<div style={thin}/>;
   }
   return(
@@ -1461,7 +1461,23 @@ function HomeScreen({onNavigate}){
 }
 
 // ─── LIBRARY SCREEN ───────────────────────────────────────────────────────────
-function LibraryScreen({library,activePieceId,onSelect,onBack,onCreate}){
+function LibraryScreen({library,activePieceId,onSelect,onBack,onCreate,onImport}){
+  const fileRef=React.useRef(null);
+  const [importErr,setImportErr]=React.useState(null);
+
+  function handleFileChange(e){
+    const file=e.target.files[0];
+    if(!file)return;
+    const reader=new FileReader();
+    reader.onload=ev=>{
+      const result=parseMusicXML(ev.target.result);
+      if(result){setImportErr(null);onImport(result);}
+      else setImportErr('Fichier non reconnu. Vérifiez que c\'est bien un export MusicXML d\'iReal Pro.');
+    };
+    reader.readAsText(file);
+    e.target.value='';
+  }
+
   return(<div style={{height:'100vh',display:'flex',flexDirection:'column',background:'#F2F0EB'}}>
     <div style={{padding:'18px 24px 14px',borderBottom:'1px solid #D0CAC0',
       display:'flex',alignItems:'center',gap:14,background:'rgba(255,255,255,0.9)'}}>
@@ -1493,8 +1509,158 @@ function LibraryScreen({library,activePieceId,onSelect,onBack,onCreate}){
         <span style={{fontSize:22,color:'#C0BAB0'}}>+</span>
         <span style={{fontSize:15,color:'#8A847C',fontWeight:500}}>Nouveau morceau</span>
       </div>
+      <div onClick={()=>fileRef.current&&fileRef.current.click()}
+        style={{padding:'16px 18px',borderRadius:14,border:'1.5px dashed #C0BAB0',
+          display:'flex',alignItems:'center',gap:10,cursor:'pointer',marginTop:6,
+          background:'transparent'}}>
+        <span style={{fontSize:18,color:'#C0BAB0'}}>↑</span>
+        <span style={{fontSize:15,color:'#8A847C',fontWeight:500}}>Importer MusicXML</span>
+        <input ref={fileRef} type="file" accept=".musicxml,.xml"
+          style={{display:'none'}} onChange={handleFileChange}/>
+      </div>
+      {importErr&&(
+        <div style={{marginTop:8,padding:'10px 14px',borderRadius:10,
+          background:'#FFF0F0',border:'1px solid #F0C0C0',
+          fontSize:12,color:'#C05050',lineHeight:1.4}}>
+          {importErr}
+        </div>
+      )}
     </div>
   </div>);
+}
+
+// ─── MUSICXML IMPORTER ────────────────────────────────────────────────────────
+function parseMusicXML(xmlString){
+  try{
+    const parser=new DOMParser();
+    const doc=parser.parseFromString(xmlString,'text/xml');
+    if(doc.querySelector('parsererror'))return null;
+
+    // ── Métadonnées ────────────────────────────────────────────────────────────
+    const title=doc.querySelector('work-title')?.textContent?.trim()||'Nouveau morceau';
+    const composer=doc.querySelector('creator[type="composer"]')?.textContent?.trim()||'';
+    // iReal Pro stocke le style comme "lyricist" dans MusicXML
+    const style=doc.querySelector('creator[type="lyricist"]')?.textContent?.trim()||'';
+
+    // ── Tonalité ───────────────────────────────────────────────────────────────
+    const fifths=parseInt(doc.querySelector('key fifths')?.textContent||'0');
+    const mode=doc.querySelector('key mode')?.textContent||'major';
+    const FMAJ={'-7':'Cb','-6':'Gb','-5':'Db','-4':'Ab','-3':'Eb','-2':'Bb','-1':'F',
+      '0':'C','1':'G','2':'D','3':'A','4':'E','5':'B','6':'F#','7':'C#'};
+    const FMIN={'-7':'Ab','-6':'Eb','-5':'Bb','-4':'F','-3':'C','-2':'G','-1':'D',
+      '0':'A','1':'E','2':'B','3':'F#','4':'C#','5':'G#','6':'D#','7':'A#'};
+    const key=(mode==='minor'?FMIN:FMAJ)[String(fifths)]||'C';
+
+    // ── Chiffrage ──────────────────────────────────────────────────────────────
+    const beatsStr=doc.querySelector('time beats')?.textContent||'4';
+    const beatTypeStr=doc.querySelector('time beat-type')?.textContent||'4';
+    const numBeats=parseInt(beatsStr);
+    const timeSig=`${beatsStr}/${beatTypeStr}`;
+    const divisions=parseInt(doc.querySelector('divisions')?.textContent||'768');
+
+    // ── Mapping qualité ────────────────────────────────────────────────────────
+    function kindToQualityId(kindType,kindText){
+      // iReal Pro utilise des codes courts dans l'attribut text
+      const IREAL={'*m*':'min','*m*7':'min7','^':'maj7','^7':'maj7',
+        '-':'min','-7':'min7','-^7':'mMaj7',
+        'h':'hdim','h7':'hdim','o':'dim','o7':'dim7',
+        '+':'aug','s':'sus4','sus':'sus4','sus4':'sus4',
+        '2':'sus2','sus2':'sus2','7':'dom7',
+        '6':'maj6','m6':'min6','5':'5'};
+      if(kindText&&IREAL[kindText]!==undefined)return IREAL[kindText];
+      // Types standard MusicXML
+      const MX={'major':'maj','minor':'min','dominant':'dom7',
+        'major-seventh':'maj7','minor-seventh':'min7','minor-major':'mMaj7',
+        'half-diminished':'hdim','diminished':'dim','diminished-seventh':'dim7',
+        'augmented':'aug','augmented-seventh':'aug',
+        'suspended-fourth':'sus4','suspended-second':'sus2',
+        'major-sixth':'maj6','minor-sixth':'min6','power':'5'};
+      return MX[kindType]||'maj';
+    }
+
+    // ── Root step+alter → string ───────────────────────────────────────────────
+    function rootStr(step,alter){
+      return step+(alter>0.5?'#':alter<-0.5?'b':'');
+    }
+
+    // ── Barline element → type Soupir ──────────────────────────────────────────
+    function parseBarEl(el){
+      if(!el)return'normal';
+      const bs=el.querySelector('bar-style')?.textContent||'';
+      const rep=el.querySelector('repeat');
+      const dir=rep?.getAttribute('direction')||'';
+      if(dir==='forward')return'repeat-start';
+      if(dir==='backward')return'repeat-end';
+      if(bs==='light-light')return'double';
+      if(bs==='light-heavy')return'final';
+      if(bs==='heavy-light')return'repeat-start';
+      return'normal';
+    }
+
+    // ── Parse les mesures ──────────────────────────────────────────────────────
+    const rawMeasures=[];
+    for(const mEl of doc.querySelectorAll('measure')){
+      const leftType=parseBarEl(mEl.querySelector('barline[location="left"]'));
+      const rightType=parseBarEl(mEl.querySelector('barline[location="right"]'));
+
+      // Accords avec positions en beats
+      const harmonies=[];
+      let pos=0;
+      for(const child of mEl.children){
+        if(child.tagName==='harmony'){
+          const step=child.querySelector('root-step')?.textContent||'C';
+          const alter=parseFloat(child.querySelector('root-alter')?.textContent||'0');
+          const kindEl=child.querySelector('kind');
+          const kindType=kindEl?.textContent?.trim()||'major';
+          const kindText=kindEl?.getAttribute('text')||'';
+          const bassStep=child.querySelector('bass-step')?.textContent||'';
+          const bassAlter=parseFloat(child.querySelector('bass-alter')?.textContent||'0');
+
+          const qualId=kindToQualityId(kindType,kindText);
+          const q=QUALITIES.find(q=>q.id===qualId);
+          const chordStr=rootStr(step,alter)+(q?q.suffix:'');
+          const bassStr=bassStep?'/'+rootStr(bassStep,bassAlter):'';
+
+          const beatPos=Math.round(pos/divisions);
+          harmonies.push({beatPos,chordStr:chordStr+bassStr});
+        }
+        // Avancer la position (notes sans <chord> = notes principales)
+        if(child.tagName==='note'&&!child.querySelector('chord')){
+          pos+=parseInt(child.querySelector('duration')?.textContent||'0');
+        }
+      }
+
+      // Construire le tableau de beats
+      const beatsArr=Array.from({length:numBeats},(_,i)=>mkBeat(i===0?'':'/'));
+      harmonies.forEach(({beatPos,chordStr})=>{
+        if(beatPos<numBeats)beatsArr[beatPos]=mkBeat(chordStr);
+      });
+
+      rawMeasures.push({leftType,rightType,beats:beatsArr});
+    }
+
+    // ── Regrouper en sections ──────────────────────────────────────────────────
+    // Nouvelle section quand la barre gauche n'est pas 'normal'
+    const sections=[];
+    let cur=null;
+    let secIdx=0;
+    for(const m of rawMeasures){
+      const newSec=!cur||m.leftType!=='normal';
+      if(newSec){
+        if(cur)sections.push(cur);
+        cur={name:String.fromCharCode(65+secIdx),type:'grid',
+          startBar:m.leftType,measures:[]};
+        secIdx++;
+      }
+      cur.measures.push({beats:m.beats,barAfter:m.rightType});
+    }
+    if(cur)sections.push(cur);
+
+    return{title,composer,key,bpm:120,style,timeSig,sections};
+  }catch(e){
+    console.error('parseMusicXML:',e);
+    return null;
+  }
 }
 
 // ─── PREFERENCES SCREEN ───────────────────────────────────────────────────────
@@ -3656,8 +3822,14 @@ function App(){
     setLibrary(lib=>[...lib,newPiece]);
     setPieceId(newId);setDisplayKey('C');setView('editor');
   }
+  function importPiece(parsed){
+    const newId=Date.now();
+    const newPiece={id:newId,...parsed};
+    setLibrary(lib=>[...lib,newPiece]);
+    setPieceId(newId);setDisplayKey(parsed.key||'C');setView('editor');
+  }
   if(view==='home')    return <HomeScreen    onNavigate={v=>setView(v)}/>;
-  if(view==='library') return <LibraryScreen library={library} activePieceId={pieceId} onSelect={selectPiece} onBack={()=>setView('home')} onCreate={createPiece}/>;
+  if(view==='library') return <LibraryScreen library={library} activePieceId={pieceId} onSelect={selectPiece} onBack={()=>setView('home')} onCreate={createPiece} onImport={importPiece}/>;
   if(view==='prefs')   return <PreferencesScreen prefs={prefs} onUpdate={updatePrefs} onBack={()=>setView('home')}/>;
   if(view==='editor')  return <EditorScreen  library={library} setLibrary={setLibrary} piece={piece} displayKey={displayKey} setDisplayKey={setDisplayKey} displayMode={displayMode} setDisplayMode={setDisplayMode} onBack={()=>setView('library')} prefs={prefs}/>;
   return null;
