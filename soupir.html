@@ -158,7 +158,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='1.79';
+const APP_VERSION='1.80';
 const CHORD_FONT="'Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -1883,7 +1883,9 @@ function tokenizeIReal(str){
       toks.push({type:'timesig',value:`${str[i]}/${str[i+1]}`});i+=3;continue;
     }
     // Préfixe de qualité *q* immédiatement suivi de la racine (*m*A, *M7*F#…)
-    const mPfx=str.slice(i).match(/^\*([^*]+)\*([A-G][#b]?)/);
+    // IMPORTANT : limiter à 6 chars pour éviter le match greedy sur des '*' parasites
+    // (ex. '*}Q|...60chars...*B' → avalait toute la section si pas de limite).
+    const mPfx=str.slice(i).match(/^\*([^*]{1,6})\*([A-G][#b]?)/);
     if(mPfx){
       const qual=mPfx[1],root=mPfx[2];
       i+=mPfx[0].length;
@@ -1893,7 +1895,7 @@ function tokenizeIReal(str){
       pendingQual=null;continue;
     }
     // Préfixe de qualité flottant (*m* suivi d'une barre avant la racine)
-    const qPfxOnly=str.slice(i).match(/^\*([^*]+)\*(?![A-G])/);
+    const qPfxOnly=str.slice(i).match(/^\*([^*]{1,6})\*(?![A-G])/);
     if(qPfxOnly){pendingQual=qPfxOnly[1];i+=qPfxOnly[0].length;continue;}
     // Notation b-préfixe : bA=Ab, bB=Bb, bD=Db, bE=Eb, bG=Gb…
     // iReal Pro encode certaines bémols en mettant le 'b' AVANT la lettre de note.
