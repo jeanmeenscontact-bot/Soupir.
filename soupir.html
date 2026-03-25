@@ -158,7 +158,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='1.73';
+const APP_VERSION='1.75';
 const CHORD_FONT="'Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -1833,18 +1833,19 @@ function iRealQualToId(q){
   const MAP={
     'm':'min','min':'min','-':'min',
     'm7':'min7','-7':'min7',
-    'M7':'maj7','^7':'maj7','Δ7':'maj7','maj7':'maj7',
+    'M7':'maj7','^7':'maj7','Δ7':'maj7','maj7':'maj7','^':'maj',
     '7':'dom7','dom7':'dom7',
     'mM7':'mMaj7','-M7':'mMaj7','mMaj7':'mMaj7',
-    'm7b5':'hdim','ø7':'hdim','h7':'hdim','hdim':'hdim',
+    'm7b5':'hdim','ø7':'hdim','h7':'hdim','ø':'hdim','hdim':'hdim',
     'o':'dim','dim':'dim',
     'o7':'dim7','dim7':'dim7',
-    '+':'aug','aug':'aug',
-    'sus4':'sus4','sus':'sus4',
-    'sus2':'sus2',
-    '6':'maj6','M6':'maj6',
+    '+':'aug','aug':'aug','+7':'aug',
+    'sus4':'sus4','sus':'sus4','7sus':'dom7','7sus4':'dom7',
+    'sus2':'sus2','2':'sus2',
+    '6':'maj6','M6':'maj6','69':'maj6','6/9':'maj6',
     'm6':'min6',
     '5':'5',
+    'add9':'maj','add2':'maj',
   };
   return MAP[q]||'maj';
 }
@@ -1915,6 +1916,28 @@ function tokenizeIReal(str){
     }
     // Silence / pas d'accord
     if(str[i]==='n'){toks.push({type:'no-chord'});i++;continue;}
+    // Segno (𝄋)
+    if(str[i]==='S'){toks.push({type:'segno'});i++;continue;}
+    // Coda (⊕) — marqueur de destination
+    if(str[i]==='f'){toks.push({type:'coda'});i++;continue;}
+    // Répétition de mesure (%)
+    if(str[i]==='x'){toks.push({type:'repeat-measure'});i++;continue;}
+    // Spacer / continuation / fin de musique → ignorer
+    if(str[i]==='Y'||str[i]==='U'||str[i]==='r'||str[i]==='p'||str[i]==='l'){i++;continue;}
+    // Volta N1/N2/N3 (crochet de reprise numéroté)
+    if(str[i]==='N'&&/[0-9]/.test(str[i+1]||'')){
+      toks.push({type:'volta-n',num:str[i+1]});i+=2;continue;
+    }
+    // Annotation textuelle <D.S. al Coda>, <Fine>, etc.
+    if(str[i]==='<'){
+      const end=str.indexOf('>',i+1);
+      if(end!==-1){
+        const txt=str.slice(i+1,end).trim();
+        if(txt)toks.push({type:'text-ann',value:txt});
+        i=end+1;
+      }else i++;
+      continue;
+    }
     // Caractère inconnu → ignorer
     i++;
   }
@@ -1930,6 +1953,8 @@ function iRealTokensToSections(toks,sectionNames,timeSig){
   let sectionIdx=0;
   let repeatOpen=false;
   let voltaNum=null;
+  let pendingSigns=[];   // signes (segno, coda…) en attente d'être attachés au prochain beat
+  let pendingText='';    // annotation textuelle (D.S. al Coda, Fine…) en attente
 
   function pushMeasure(){
     if(curBeats.length>0){
@@ -1951,7 +1976,7 @@ function iRealTokensToSections(toks,sectionNames,timeSig){
   for(const tok of toks){
     if(tok.type==='section'){
       pushMeasure();pushSection();
-      repeatOpen=false;voltaNum=null;
+      repeatOpen=false;voltaNum=null;pendingSigns=[];pendingText='';
     } else if(tok.type==='bar'||tok.type==='bar-double'||tok.type==='bar-final'){
       pushMeasure();
     } else if(tok.type==='repeat-start'){
@@ -1971,13 +1996,40 @@ function iRealTokensToSections(toks,sectionNames,timeSig){
       voltaNum='1';
     } else if(tok.type==='volta2'){
       voltaNum='2';
+    } else if(tok.type==='volta-n'){
+      voltaNum=tok.num;
+    } else if(tok.type==='segno'){
+      pendingSigns.push('segno');
+    } else if(tok.type==='coda'){
+      pendingSigns.push('coda');
+    } else if(tok.type==='text-ann'){
+      pendingText=pendingText?pendingText+' / '+tok.value:tok.value;
+    } else if(tok.type==='repeat-measure'){
+      // Signe % : mesure entière répétée — un seul accord '%' sur le premier beat
+      const signs=pendingSigns.splice(0);
+      const t=pendingText;pendingText='';
+      const repBeats=[mkBeat('%',signs,voltaNum,t)];
+      voltaNum=null;
+      while(repBeats.length<numBeats)repBeats.push(mkBeat(''));
+      curMeasures.push({beats:repBeats,barAfter:'normal'});
     } else if(tok.type==='chord'){
       // Convertir qualId + ext → chordStr Soupir
       const q=QUALITIES.find(q=>q.id===tok.qualId)||QUALITIES.find(q=>q.id==='maj');
       const chordStr=tok.root+(q?q.suffix:'')+tok.ext;
-      curBeats.push(mkBeat(chordStr));
+      // Signes + texte + volta s'attachent uniquement au premier beat de la mesure
+      const isFirst=curBeats.length===0;
+      const signs=isFirst?pendingSigns.splice(0):[];
+      const v=isFirst?voltaNum:null;
+      const t=isFirst?pendingText:'';
+      if(isFirst){voltaNum=null;pendingText='';}
+      curBeats.push(mkBeat(chordStr,signs,v,t));
     } else if(tok.type==='no-chord'){
-      curBeats.push(mkBeat('—'));
+      const isFirst=curBeats.length===0;
+      const signs=isFirst?pendingSigns.splice(0):[];
+      const v=isFirst?voltaNum:null;
+      const t=isFirst?pendingText:'';
+      if(isFirst){voltaNum=null;pendingText='';}
+      curBeats.push(mkBeat('—',signs,v,t));
     }
   }
   pushMeasure();
@@ -2019,7 +2071,9 @@ function parseIRealProHTML(html){
     const chordField=fields[6]||'';
     const snM=chordField.match(/<([^>]+)>/);
     const sectionNames=snM?snM[1].trim().split(/\s+/).filter(Boolean):[];
-    const rawChord=chordField.replace(/<[^>]*>/,'').trim();
+    // On retire uniquement le tag des noms de sections ; les autres <...> restent
+    // pour que le tokeniseur les capture comme annotations textuelles.
+    const rawChord=(snM?chordField.replace(snM[0],''):chordField).trim();
 
     // 5. Décodage obfusc50
     const decoded=decodeIRealChordStr(rawChord);
