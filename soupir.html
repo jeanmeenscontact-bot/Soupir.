@@ -158,7 +158,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='1.78';
+const APP_VERSION='1.79';
 const CHORD_FONT="'Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -2031,8 +2031,9 @@ function iRealTokensToSections(toks,sectionNames,timeSig){
     } else if(tok.type==='coda'){
       pendingSigns.push('coda');
     } else if(tok.type==='q-token'){
-      // Q = Coda uniquement en tête de mesure (premier beat) ; sinon espace/filler → ignorer
-      if(curBeats.length===0)pendingSigns.push('coda');
+      // Q = Coda en fin de mesure dans iReal Pro → sera attachée au 1er beat de la mesure suivante
+      // via pendingSigns (pas de condition sur curBeats.length : Q apparaît après des accords)
+      pendingSigns.push('coda');
     } else if(tok.type==='text-ann'){
       pendingText=pendingText?pendingText+' / '+tok.value:tok.value;
     } else if(tok.type==='repeat-measure'){
