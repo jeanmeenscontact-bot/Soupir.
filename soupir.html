@@ -158,7 +158,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='1.77';
+const APP_VERSION='1.78';
 const CHORD_FONT="'Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -1957,7 +1957,13 @@ function tokenizeIReal(str){
         const txt=str.slice(i+1,end).trim();
         if(txt)toks.push({type:'text-ann',value:txt});
         i=end+1;
-      }else{i++;}
+      }else{
+        // Annotation malformée sans '>' proche (ex. <D.S. dans "I Want You Back") :
+        // sauter jusqu'au prochain délimiteur structural pour éviter les tokens parasites
+        let j=i+1;
+        while(j<str.length&&!/[|{}\[\]*]/.test(str[j]))j++;
+        i=j;
+      }
       continue;
     }
     // Caractère inconnu → ignorer
