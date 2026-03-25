@@ -158,7 +158,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='1.68';
+const APP_VERSION='1.73';
 const CHORD_FONT="'Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -1485,9 +1485,13 @@ function LibraryScreen({library,activePieceId,onSelect,onBack,onCreate,onImport}
     if(!file)return;
     const reader=new FileReader();
     reader.onload=ev=>{
-      const result=parseMusicXML(ev.target.result);
+      const text=ev.target.result;
+      // Détecter le format : iReal Pro HTML (.html) ou MusicXML (.xml/.musicxml)
+      const result=file.name.toLowerCase().endsWith('.html')
+        ?parseIRealProHTML(text)
+        :parseMusicXML(text);
       if(result){setImportErr(null);onImport(result);}
-      else setImportErr('Fichier non reconnu. Vérifiez que c\'est bien un export MusicXML d\'iReal Pro.');
+      else setImportErr('Fichier non reconnu. Formats supportés : iReal Pro (.html) et MusicXML (.musicxml / .xml).');
     };
     reader.readAsText(file);
     e.target.value='';
@@ -1529,8 +1533,11 @@ function LibraryScreen({library,activePieceId,onSelect,onBack,onCreate,onImport}
           display:'flex',alignItems:'center',gap:10,cursor:'pointer',marginTop:6,
           background:'transparent'}}>
         <span style={{fontSize:18,color:'#C0BAB0'}}>↑</span>
-        <span style={{fontSize:15,color:'#8A847C',fontWeight:500}}>Importer MusicXML</span>
-        <input ref={fileRef} type="file" accept=".musicxml,.xml"
+        <div>
+          <div style={{fontSize:15,color:'#8A847C',fontWeight:500}}>Importer</div>
+          <div style={{fontSize:11,color:'#A0A0A0',marginTop:1}}>MusicXML · iReal Pro HTML</div>
+        </div>
+        <input ref={fileRef} type="file" accept=".musicxml,.xml,.html"
           style={{display:'none'}} onChange={handleFileChange}/>
       </div>
       {importErr&&(
@@ -1798,6 +1805,244 @@ function parseMusicXML(xmlString){
     return{title,composer,key,bpm:120,style,timeSig,sections};
   }catch(e){
     console.error('parseMusicXML:',e);
+    return null;
+  }
+}
+
+// ─── iREAL PRO HTML IMPORTER ──────────────────────────────────────────────────
+
+// Décodage obfusc50 : permutation de caractères déterminée par analyse inverse
+// depuis un export iReal Pro connu (16 mesures, sections A+B avec 8 accords chacune).
+// perm[j] = position dans l'encodé dont provient le caractère décodé[j].
+// Validé : décode exactement *A[CXyQ|FXyQ|GXyQ|A*m*XyQ|D*m*XyQ|GXyQ|E*m*XyQ|CXy
+const IREAL_DECODE_PERM=[20,31,49,2,1,0,4,3,8,9,5,6,7,15,14,13,12,11,47,22,21,28,19,18,17,16,23,30,29,40,27,26,24,25,36,35,34,33,32,10,42,41,48,43,39,38,37,46,45,44];
+function decodeIRealBlock50(s){
+  return IREAL_DECODE_PERM.map(i=>s[i]).join('');
+}
+// Préfixe fixe '1r34LbKcu7' (10 chars) présent dans tous les exports iReal Pro → à ignorer
+const IREAL_PREFIX='1r34LbKcu7';
+function decodeIRealChordStr(raw){
+  const data=raw.startsWith(IREAL_PREFIX)?raw.slice(IREAL_PREFIX.length):raw;
+  let out='';let i=0;
+  while(i+50<=data.length){out+=decodeIRealBlock50(data.slice(i,i+50));i+=50;}
+  return out+data.slice(i);
+}
+
+// Mapping qualités iReal Pro → qualId Soupir
+function iRealQualToId(q){
+  const MAP={
+    'm':'min','min':'min','-':'min',
+    'm7':'min7','-7':'min7',
+    'M7':'maj7','^7':'maj7','Δ7':'maj7','maj7':'maj7',
+    '7':'dom7','dom7':'dom7',
+    'mM7':'mMaj7','-M7':'mMaj7','mMaj7':'mMaj7',
+    'm7b5':'hdim','ø7':'hdim','h7':'hdim','hdim':'hdim',
+    'o':'dim','dim':'dim',
+    'o7':'dim7','dim7':'dim7',
+    '+':'aug','aug':'aug',
+    'sus4':'sus4','sus':'sus4',
+    'sus2':'sus2',
+    '6':'maj6','M6':'maj6',
+    'm6':'min6',
+    '5':'5',
+  };
+  return MAP[q]||'maj';
+}
+
+// Tokeniseur : renvoie [{type,…}] depuis le string décodé
+function tokenizeIReal(str){
+  const toks=[];let i=0;
+  // pendingQual : qualité flottante (*m*LZA → la qualité précède la barre)
+  let pendingQual=null;
+  while(i<str.length){
+    // espaces → ignorer
+    if(str[i]===' '){i++;continue;}
+    // Marqueur de section : *A *B *C *i *v *c  (lettres standard iReal Pro)
+    // Guard (str[i+2]!=='*') : évite de confondre *m* avec section 'm'
+    if(str[i]==='*'&&i+1<str.length&&/[A-Civc]/.test(str[i+1])&&(str[i+2]||'')!=='*'){
+      toks.push({type:'section',letter:str[i+1]});i+=2;continue;
+    }
+    // Barres : LZ, ZL (normale), | (iReal alternatif), W (double), LW (finale)
+    if(str.slice(i,i+2)==='LZ'){toks.push({type:'bar'});i+=2;continue;}
+    if(str.slice(i,i+2)==='ZL'){toks.push({type:'bar'});i+=2;continue;}
+    if(str.slice(i,i+2)==='LW'){toks.push({type:'bar-final'});i+=2;continue;}
+    if(str[i]==='|'){toks.push({type:'bar'});i++;continue;}
+    if(str[i]==='W'){toks.push({type:'bar-double'});i++;continue;}
+    // Reprises
+    if(str[i]==='{'){toks.push({type:'repeat-start'});i++;continue;}
+    if(str[i]==='}'){toks.push({type:'repeat-end'});i++;continue;}
+    if(str[i]==='['){toks.push({type:'volta1'});i++;continue;}
+    if(str[i]===']'){toks.push({type:'volta2'});i++;continue;}
+    // Chiffrage : T44, T34, T54, T64, T68, T38…
+    if(str[i]==='T'&&/[0-9]/.test(str[i+1]||'')&&/[0-9]/.test(str[i+2]||'')){
+      toks.push({type:'timesig',value:`${str[i+1]}/${str[i+2]}`});i+=3;continue;
+    }
+    // Chiffrage inversé : 44T, 34T…
+    if(/[0-9]/.test(str[i])&&/[0-9]/.test(str[i+1]||'')&&str[i+2]==='T'){
+      toks.push({type:'timesig',value:`${str[i]}/${str[i+1]}`});i+=3;continue;
+    }
+    // Préfixe de qualité *q* immédiatement suivi de la racine (*m*A, *M7*F#…)
+    const mPfx=str.slice(i).match(/^\*([^*]+)\*([A-G][#b]?)/);
+    if(mPfx){
+      const qual=mPfx[1],root=mPfx[2];
+      i+=mPfx[0].length;
+      const extM=str.slice(i).match(/^([0-9b#^a-z]+?)(?=[A-G\s*{}\[\]LWZn]|$)/);
+      const ext=extM?extM[1]:'';i+=ext.length;
+      toks.push({type:'chord',root,qualId:iRealQualToId(qual),ext});
+      pendingQual=null;continue;
+    }
+    // Préfixe de qualité flottant (*m* suivi d'une barre avant la racine)
+    const qPfxOnly=str.slice(i).match(/^\*([^*]+)\*(?![A-G])/);
+    if(qPfxOnly){pendingQual=qPfxOnly[1];i+=qPfxOnly[0].length;continue;}
+    // Accord ordinaire : racine [A-G][#b]? puis qualité/extension optionnelles
+    const cM=str.slice(i).match(/^([A-G][#b]?)/);
+    if(cM){
+      const root=cM[1];i+=root.length;
+      let qualId=pendingQual?iRealQualToId(pendingQual):'maj';
+      pendingQual=null;
+      // qualité suffixe entre *…* (ex : A*m*, F#*7*)
+      const qM=str.slice(i).match(/^\*([^*]{1,4})\*/);
+      if(qM){qualId=iRealQualToId(qM[1]);i+=qM[0].length;}
+      else if(qualId==='maj'){
+        // qualité directe : m7, M7, 7, m, o, +, sus4…
+        const dqM=str.slice(i).match(/^(mM7|m7b5|m7|M7|\^7|Δ7|ø7|h7|o7|sus4|sus2|m6|m|\+|o|7|6|5)/);
+        if(dqM){qualId=iRealQualToId(dqM[1]);i+=dqM[1].length;}
+      }
+      // extensions (b9, #11, 9, 11, 13…)
+      const extM2=str.slice(i).match(/^([0-9b#^a-z]+?)(?=[A-G\s*{}\[\]LWZn]|$)/);
+      const ext=extM2?extM2[1]:'';i+=ext.length;
+      toks.push({type:'chord',root,qualId,ext});continue;
+    }
+    // Silence / pas d'accord
+    if(str[i]==='n'){toks.push({type:'no-chord'});i++;continue;}
+    // Caractère inconnu → ignorer
+    i++;
+  }
+  return toks;
+}
+
+// Convertit les tokens en sections Soupir
+function iRealTokensToSections(toks,sectionNames,timeSig){
+  const numBeats=parseInt(timeSig)||4;
+  const sections=[];
+  let curMeasures=[];
+  let curBeats=[];
+  let sectionIdx=0;
+  let repeatOpen=false;
+  let voltaNum=null;
+
+  function pushMeasure(){
+    if(curBeats.length>0){
+      // Padding jusqu'à numBeats beats
+      while(curBeats.length<numBeats)curBeats.push(mkBeat(''));
+      curMeasures.push({beats:curBeats.slice(0,numBeats),barAfter:'normal'});
+      curBeats=[];
+    }
+  }
+  function pushSection(){
+    if(curMeasures.length>0){
+      const name=sectionNames[sectionIdx]||String.fromCharCode(65+sectionIdx);
+      sections.push({name,type:'grid',startBar:repeatOpen?'repeat-start':'normal',measures:curMeasures});
+      sectionIdx++;
+      curMeasures=[];
+    }
+  }
+
+  for(const tok of toks){
+    if(tok.type==='section'){
+      pushMeasure();pushSection();
+      repeatOpen=false;voltaNum=null;
+    } else if(tok.type==='bar'||tok.type==='bar-double'||tok.type==='bar-final'){
+      pushMeasure();
+    } else if(tok.type==='repeat-start'){
+      pushMeasure();pushSection();
+      repeatOpen=true;
+    } else if(tok.type==='repeat-end'){
+      pushMeasure();
+      if(curMeasures.length>0&&sections.length>0){
+        // Marquer la dernière mesure avec repeat-end
+        const lastSec=sections[sections.length-1];
+        if(lastSec.measures.length>0){
+          lastSec.measures[lastSec.measures.length-1].barAfter='repeat-end';
+        }
+      }
+      repeatOpen=false;
+    } else if(tok.type==='volta1'){
+      voltaNum='1';
+    } else if(tok.type==='volta2'){
+      voltaNum='2';
+    } else if(tok.type==='chord'){
+      // Convertir qualId + ext → chordStr Soupir
+      const q=QUALITIES.find(q=>q.id===tok.qualId)||QUALITIES.find(q=>q.id==='maj');
+      const chordStr=tok.root+(q?q.suffix:'')+tok.ext;
+      curBeats.push(mkBeat(chordStr));
+    } else if(tok.type==='no-chord'){
+      curBeats.push(mkBeat('—'));
+    }
+  }
+  pushMeasure();
+  pushSection();
+
+  // Si aucune section → créer une section vide
+  if(sections.length===0){
+    const name=sectionNames[0]||'A';
+    sections.push({name,type:'grid',startBar:'normal',measures:[{beats:Array(numBeats).fill(null).map(()=>mkBeat('')),barAfter:'normal'}]});
+  }
+  return sections;
+}
+
+// Point d'entrée : parseur HTML iReal Pro
+function parseIRealProHTML(html){
+  try{
+    // 1. Extraire l'URL irealb://
+    const m=html.match(/href="(irealb:\/\/[^"]+)"/i);
+    if(!m)return null;
+    const rawUrl=decodeURIComponent(m[1]);
+    if(!rawUrl.startsWith('irealb://'))return null;
+
+    // 2. Découper les champs (séparés par =)
+    const payload=rawUrl.slice('irealb://'.length);
+    const fields=payload.split('=');
+    // [0]=title [1]=composer [2]=? [3]=style [4]=key [5]=? [6]=chordData+sectionNames [7]=? [8]=bpm [9]=repeat
+    const title=(fields[0]||'').replace(/_/g,' ').trim()||'Nouveau morceau';
+    const composer=(fields[1]||'').replace(/_/g,' ').trim();
+    const style=(fields[3]||'').replace(/_/g,' ').trim();
+    const keyRaw=(fields[4]||'C').trim();
+
+    // 3. Normalisation de la tonalité (W→n, A#→Bb, etc.)
+    const KEY_NORM={'Ab':'Ab','A':'A','A#':'Bb','Bb':'Bb','B':'B','Cb':'B',
+      'C':'C','C#':'C#','Db':'Db','D':'D','D#':'Eb','Eb':'Eb','E':'E','F':'F',
+      'F#':'F#','Gb':'Gb','G':'G','G#':'Ab','W':'C'};
+    const key=KEY_NORM[keyRaw]||keyRaw||'C';
+
+    // 4. Chord data + section names
+    const chordField=fields[6]||'';
+    const snM=chordField.match(/<([^>]+)>/);
+    const sectionNames=snM?snM[1].trim().split(/\s+/).filter(Boolean):[];
+    const rawChord=chordField.replace(/<[^>]*>/,'').trim();
+
+    // 5. Décodage obfusc50
+    const decoded=decodeIRealChordStr(rawChord);
+
+    // 6. Chiffrage de mesure
+    let timeSig='4/4';
+    const tsM=decoded.match(/T([2-9])([2-9])/)||decoded.match(/([2-9])([2-9])T/);
+    if(tsM)timeSig=`${tsM[1]}/${tsM[2]}`;
+
+    // 7. Tokenisation + construction des sections
+    const toks=tokenizeIReal(decoded);
+    let sections=iRealTokensToSections(toks,sectionNames,timeSig.split('/')[0]);
+
+    // 8. Associer les noms extraits aux sections (priorité aux noms du champ URL)
+    sections=sections.map((s,i)=>({...s,name:sectionNames[i]||s.name}));
+
+    // 9. BPM (0 dans iReal → 120 par défaut)
+    const bpmRaw=parseInt(fields[8]||'0');
+    const bpm=bpmRaw>0?bpmRaw:120;
+
+    return{title,composer,key,bpm,style,timeSig,sections};
+  }catch(e){
+    console.error('parseIRealProHTML:',e);
     return null;
   }
 }
@@ -2136,6 +2381,125 @@ function TabSectionView({section,onUpdate,onDelete,editMode=true,prefs}){
       )}
     </div>
   );
+}
+
+// ─── EXPORT PDF ───────────────────────────────────────────────────────────────
+let _jsPDFLoaded=false;
+async function loadJsPDF(){
+  if(_jsPDFLoaded)return;
+  await new Promise((res,rej)=>{
+    const s=document.createElement('script');
+    s.src='https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+    s.onload=()=>{_jsPDFLoaded=true;res();};s.onerror=rej;
+    document.head.appendChild(s);
+  });
+}
+
+async function exportPDF(piece,displayKey,displayMode,prefs){
+  await loadJsPDF();
+  const {jsPDF}=window.jspdf;
+  const doc=new jsPDF({unit:'mm',format:'a4'});
+  const W=210,H=297,mL=14,mR=14,mT=14;
+  const usableW=W-mL-mR;   // 182mm
+  const CPR=4;              // Mesures par rangée (Chords Per Row)
+  const mW=usableW/CPR;     // ~45.5mm par mesure
+  const mH=16;              // Hauteur d'une mesure
+  let y=mT;
+
+  // ── En-tête ──
+  doc.setFont('helvetica','bold');
+  doc.setFontSize(18);
+  doc.setTextColor(26,26,26);
+  doc.text(piece.title||'Sans titre',mL,y+6);
+  y+=9;
+  if(piece.composer){
+    doc.setFont('helvetica','italic');doc.setFontSize(10);
+    doc.setTextColor(80,80,80);
+    doc.text(piece.composer,mL,y+4);y+=6;
+  }
+  const key=(displayKey||piece.key||'C')+(displayMode==='min'?'m':'');
+  const metaStr=[`Ton. ${key}`,`${piece.bpm||120} BPM`,piece.timeSig||'4/4',piece.style||''].filter(Boolean).join('  ·  ');
+  doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(120,120,120);
+  doc.text(metaStr,mL,y+3.5);y+=6;
+  doc.setDrawColor(180,180,180);doc.setLineWidth(0.25);
+  doc.line(mL,y,W-mR,y);y+=5;
+
+  // ── Sections ──
+  const gridSections=(piece.sections||[]).filter(s=>s.type==='grid'||!s.type);
+  for(const section of gridSections){
+    const measures=section.measures||[];
+    if(!measures.length)continue;
+
+    // Nom de section
+    if(section.name){
+      if(y+mH+10>H-mT){doc.addPage();y=mT;}
+      doc.setFont('helvetica','bold');doc.setFontSize(7.5);
+      doc.setTextColor(100,100,100);
+      doc.text((section.name).toUpperCase(),mL,y+2.5);
+      y+=5;
+    }
+
+    // Rangées de mesures
+    const nRows=Math.ceil(measures.length/CPR);
+    for(let row=0;row<nRows;row++){
+      if(y+mH+2>H-mT){doc.addPage();y=mT;}
+      const rowMM=measures.slice(row*CPR,(row+1)*CPR);
+      const x0=mL;const rowY=y;
+
+      // Ligne du haut et du bas
+      doc.setDrawColor(50,50,50);doc.setLineWidth(0.2);
+      doc.line(x0,rowY,x0+rowMM.length*mW,rowY);
+      doc.line(x0,rowY+mH,x0+rowMM.length*mW,rowY+mH);
+
+      for(let mi=0;mi<rowMM.length;mi++){
+        const mm=rowMM[mi];
+        const mx=x0+mi*mW;
+        // Barline gauche
+        doc.setDrawColor(50,50,50);
+        doc.setLineWidth(mi===0?0.5:0.2);
+        doc.line(mx,rowY,mx,rowY+mH);
+
+        // Chords
+        const beats=getBeats(mm);
+        const active=beats.map((b,bi)=>({c:b.c,bi})).filter(({c})=>c&&c!=='');
+        if(!active.length)continue;
+
+        // Si mesure de répétition (signe %)
+        if(active.length===1&&active[0].c==='%'){
+          doc.setFont('helvetica','bold');doc.setFontSize(18);
+          doc.setTextColor(40,40,40);
+          const sym='%';const sw=doc.getTextWidth(sym);
+          doc.text(sym,mx+mW/2-sw/2,rowY+mH*0.67);continue;
+        }
+
+        // Positions X des accords selon le nombre
+        const xs=active.map(({bi})=>mx+2+(bi/4)*mW*0.98);
+        // FS selon nombre d'accords
+        const fs=active.length===1?13:active.length===2?11:9;
+        doc.setFont('helvetica','bold');doc.setFontSize(fs);
+        doc.setTextColor(15,15,15);
+        active.forEach(({c},k)=>{
+          const disp=applyPrefs(c,prefs)||c;
+          doc.text(disp,xs[k],rowY+mH*0.67,{maxWidth:mW*0.48});
+        });
+      }
+      // Barline droite finale
+      doc.setDrawColor(50,50,50);doc.setLineWidth(0.5);
+      const xEnd=x0+rowMM.length*mW;
+      doc.line(xEnd,rowY,xEnd,rowY+mH);
+      y+=mH;
+    }
+    y+=3;
+  }
+
+  // ── Pied de page sur dernière page ──
+  doc.setFont('helvetica','normal');doc.setFontSize(7);
+  doc.setTextColor(180,180,180);
+  doc.text('Soupir. — '+new Date().toLocaleDateString('fr-FR'),mL,H-6);
+
+  // Téléchargement
+  const safe=(piece.title||'grille').replace(/[^\w\u00C0-\u024F\s\-]/g,'').trim();
+  doc.save((safe||'grille')+'.pdf');
 }
 
 // ─── EDITOR SCREEN ────────────────────────────────────────────────────────────
@@ -2755,6 +3119,12 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
         style={{background:showDegrees?TH.text:'transparent',border:`1.5px solid ${showDegrees?TH.text:TH.btnBorder}`,
           color:showDegrees?(isDark?'#1A1A1A':'#F2EDE4'):TH.subText,height:26,borderRadius:100,cursor:'pointer',
           fontSize:9,fontWeight:700,padding:'0 7px',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontFamily:'inherit',whiteSpace:'nowrap'}}>Gamme</button>
+      <button onClick={()=>exportPDF(cur,displayKey,displayMode,prefs)}
+        title="Exporter en PDF"
+        style={{background:'transparent',border:`1.5px solid ${TH.btnBorder}`,color:TH.subText,height:26,borderRadius:100,cursor:'pointer',
+          fontSize:9,fontWeight:700,padding:'0 8px',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontFamily:'inherit',whiteSpace:'nowrap',gap:3}}>
+        <span style={{fontSize:11}}>↓</span>PDF
+      </button>
     </div>
 
     {/* CONTENT — page plein écran, zéro scroll */}
