@@ -158,7 +158,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='1.83';
+const APP_VERSION='1.84';
 const CHORD_FONT="'Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -1891,7 +1891,10 @@ function tokenizeIReal(str){
       i+=mPfx[0].length;
       const extM=str.slice(i).match(/^([0-9b#^a-z]+?)(?=[A-G\s*{}\[\]LWZn]|$)/);
       const ext=extM?extM[1]:'';i+=ext.length;
-      toks.push({type:'chord',root,qualId:iRealQualToId(qual),ext});
+      // Accord slash : Chord/Bass (ex: Db/Gb, bE/bD = Eb/Db)
+      let bass='';
+      if(str[i]==='/'){i++;const bm=str.slice(i).match(/^(b[A-G]|[A-G][#b]?)/);if(bm){let br=bm[1];if(br.startsWith('b')){const r2=br[1]+'b';br=(r2==='Fb'?'Eb':r2==='Cb'?'B':r2);}bass=br;i+=bm[0].length;}}
+      toks.push({type:'chord',root,qualId:iRealQualToId(qual),ext,bass});
       pendingQual=null;continue;
     }
     // Préfixe de qualité flottant (*m* suivi d'une barre avant la racine)
@@ -1915,7 +1918,10 @@ function tokenizeIReal(str){
       // extensions — s'arrêter avant un accord en notation b-préfixe (bG, bE…)
       const extMb=str.slice(i).match(/^([0-9b#^a-z]+?)(?=b[A-G]|[A-G\s*{}\[\]LWZn]|$)/);
       const extb=extMb?extMb[1]:'';i+=extb.length;
-      toks.push({type:'chord',root,qualId,ext:extb});continue;
+      // Accord slash : Chord/Bass (ex: Eb/Db, Db/Gb, bE/bD)
+      let bassB='';
+      if(str[i]==='/'){i++;const bm=str.slice(i).match(/^(b[A-G]|[A-G][#b]?)/);if(bm){let br=bm[1];if(br.startsWith('b')){const r2=br[1]+'b';br=(r2==='Fb'?'Eb':r2==='Cb'?'B':r2);}bassB=br;i+=bm[0].length;}}
+      toks.push({type:'chord',root,qualId,ext:extb,bass:bassB});continue;
     }
     // Accord ordinaire : racine [A-G][#b]? puis qualité/extension optionnelles
     const cM=str.slice(i).match(/^([A-G][#b]?)/);
@@ -1934,7 +1940,10 @@ function tokenizeIReal(str){
       // extensions (b9, #11, 9, 11, 13…) — s'arrêter avant un accord b-préfixe
       const extM2=str.slice(i).match(/^([0-9b#^a-z]+?)(?=b[A-G]|[A-G\s*{}\[\]LWZn]|$)/);
       const ext=extM2?extM2[1]:'';i+=ext.length;
-      toks.push({type:'chord',root,qualId,ext});continue;
+      // Accord slash : Chord/Bass (ex: G/B, Ab/Eb, Db/bG = Db/Gb)
+      let bassC='';
+      if(str[i]==='/'){i++;const bm=str.slice(i).match(/^(b[A-G]|[A-G][#b]?)/);if(bm){let br=bm[1];if(br.startsWith('b')){const r2=br[1]+'b';br=(r2==='Fb'?'Eb':r2==='Cb'?'B':r2);}bassC=br;i+=bm[0].length;}}
+      toks.push({type:'chord',root,qualId,ext,bass:bassC});continue;
     }
     // Silence / pas d'accord
     if(str[i]==='n'){toks.push({type:'no-chord'});i++;continue;}
@@ -2057,9 +2066,9 @@ function iRealTokensToSections(toks,sectionNames,timeSig){
       while(repBeats.length<numBeats)repBeats.push(mkBeat(''));
       curMeasures.push({beats:repBeats,barAfter:'normal'});
     } else if(tok.type==='chord'){
-      // Convertir qualId + ext → chordStr Soupir
+      // Convertir qualId + ext + bass → chordStr Soupir
       const q=QUALITIES.find(q=>q.id===tok.qualId)||QUALITIES.find(q=>q.id==='maj');
-      const chordStr=tok.root+(q?q.suffix:'')+tok.ext;
+      const chordStr=tok.root+(q?q.suffix:'')+tok.ext+(tok.bass?'/'+tok.bass:'');
       // Signes + texte + volta s'attachent uniquement au premier beat de la mesure
       const isFirst=curBeats.length===0;
       const signs=isFirst?pendingSigns.splice(0):[];
