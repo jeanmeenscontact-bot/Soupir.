@@ -160,7 +160,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='1.93';
+const APP_VERSION='1.94';
 const CHORD_FONT="'Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -2912,12 +2912,12 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
   const availH=(typeof window!=='undefined'?window.innerHeight:900)
     -(fullscreen?0:TOPBAR_H)-(fullscreen?0:BOTTOMBAR_H)-(fullscreen?0:INFO_H);
   const rowH=Math.max(56,Math.floor(availH/rowsPerPage));
-  const ROW_PAD=5; // espace vertical au-dessus et en dessous du contenu de chaque rangée
+  const ROW_PAD=7; // espace vertical au-dessus et en dessous du contenu de chaque rangée
   const barH=Math.max(36,rowH-ROW_PAD*2); // hauteur effective des barlines
   const totalPages=Math.max(1,Math.ceil(allRows.length/rowsPerPage));
   const safePage=Math.min(currentPage,totalPages-1);
   const pageRows=allRows.slice(safePage*rowsPerPage,(safePage+1)*rowsPerPage);
-  const chordFsBase=Math.max(13,Math.round(60*rowH/136));
+  const chordFsBase=Math.max(13,Math.round(CHORD_FS*rowH/100)); // CHORD_FS=40 → ~40px à rowH=100
 
   // Ouvre le ChordPicker pour une GRANDE MESURE — 8 beats (master 0-3 + suite 4-7)
   function openGrandeMeasurePicker(si,mi,cSi,cMi,e,initialBeat=null){
@@ -3211,8 +3211,8 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
         {hasMeasureSigns&&(
           <div style={{position:'absolute',top:hasVoltaBeat0?VOLTA_H+2:1,left:1,
             pointerEvents:'none',zIndex:3,lineHeight:1}}>
-            <span style={{fontSize:13,color:SIGN_COLOR,fontWeight:900,
-              background:SIGN_COLOR+'18',borderRadius:3,padding:'1px 4px',lineHeight:1.1,whiteSpace:'nowrap'}}>
+            <span style={{fontSize:20,color:SIGN_COLOR,fontWeight:900,
+              background:SIGN_COLOR+'18',borderRadius:4,padding:'2px 5px',lineHeight:1.1,whiteSpace:'nowrap'}}>
               {measureSignIds.map(s=>{const st=SIGN_TYPES.find(x=>x.id===s);return st?st.sym:s;}).join(' ')}
             </span>
           </div>
@@ -3545,7 +3545,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                           {/* Signes musicaux — overlay grande mesure */}
                           {(()=>{const gmSignIds=[...new Set(allBeats.flatMap(b=>b.s||[]))];const gmHasVolta=!!allBeats[0]?.v;return gmSignIds.length>0&&(
                             <div style={{position:'absolute',top:gmHasVolta?VOLTA_H+2:1,left:1,pointerEvents:'none',zIndex:3,lineHeight:1}}>
-                              <span style={{fontSize:13,color:SIGN_COLOR,fontWeight:900,background:SIGN_COLOR+'18',borderRadius:3,padding:'1px 4px',lineHeight:1.1,whiteSpace:'nowrap'}}>
+                              <span style={{fontSize:20,color:SIGN_COLOR,fontWeight:900,background:SIGN_COLOR+'18',borderRadius:4,padding:'2px 5px',lineHeight:1.1,whiteSpace:'nowrap'}}>
                                 {gmSignIds.map(s=>{const st=SIGN_TYPES.find(x=>x.id===s);return st?st.sym:s;}).join(' ')}
                               </span>
                             </div>
@@ -3672,12 +3672,13 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                         minWidth:0,overflow:'hidden'}}>
                         {/* Badge nom de section — première mesure de chaque section */}
                         {sectionStart&&sectionName&&(
-                          <div style={{position:'absolute',bottom:3,left:ci===0?6:4,zIndex:7,
-                            background:isDark?'rgba(100,55,15,0.88)':'rgba(148,72,18,0.85)',
-                            color:isDark?'#FFD4A0':'#FFE8C8',borderRadius:3,
-                            fontSize:8,fontWeight:900,padding:'1px 5px',lineHeight:1.5,
-                            letterSpacing:0.8,pointerEvents:'none',whiteSpace:'nowrap',
-                            maxWidth:'50%',overflow:'hidden',textOverflow:'ellipsis'}}>
+                          <div style={{position:'absolute',bottom:4,left:ci===0?6:4,zIndex:7,
+                            background:isDark?'rgba(100,55,15,0.88)':'rgba(148,72,18,0.82)',
+                            color:isDark?'#FFD4A0':'#FFE8C8',borderRadius:4,
+                            fontSize:10,fontWeight:800,padding:'2px 7px',lineHeight:1.4,
+                            letterSpacing:1.0,textTransform:'uppercase',
+                            pointerEvents:'none',whiteSpace:'nowrap',
+                            maxWidth:'55%',overflow:'hidden',textOverflow:'ellipsis'}}>
                             {sectionName}
                           </div>
                         )}
