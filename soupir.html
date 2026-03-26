@@ -158,7 +158,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='1.80';
+const APP_VERSION='1.81';
 const CHORD_FONT="'Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -2029,13 +2029,13 @@ function iRealTokensToSections(toks,sectionNames,timeSig){
     } else if(tok.type==='volta-n'){
       voltaNum=tok.num;
     } else if(tok.type==='segno'){
-      pendingSigns.push('segno');
+      if(!pendingSigns.includes('segno'))pendingSigns.push('segno');
     } else if(tok.type==='coda'){
-      pendingSigns.push('coda');
+      if(!pendingSigns.includes('coda'))pendingSigns.push('coda');
     } else if(tok.type==='q-token'){
       // Q = Coda en fin de mesure dans iReal Pro → sera attachée au 1er beat de la mesure suivante
       // via pendingSigns (pas de condition sur curBeats.length : Q apparaît après des accords)
-      pendingSigns.push('coda');
+      if(!pendingSigns.includes('coda'))pendingSigns.push('coda');
     } else if(tok.type==='text-ann'){
       pendingText=pendingText?pendingText+' / '+tok.value:tok.value;
     } else if(tok.type==='repeat-measure'){
@@ -2118,15 +2118,30 @@ function parseIRealProHTML(html){
     // 5. Décodage obfusc50
     const decoded=decodeIRealChordStr(rawChord);
 
-
+    // 5b. Élagage des blocs parasites (layout iReal Pro)
+    // iReal Pro encode les données de mise en page dans les blocs au-delà du contenu musical,
+    // ces blocs contiennent '>' (marqueur coda/fine) qui ne figure jamais dans les vrais accords.
+    // On tronque à la première occurrence de '>' hors d'une annotation <...>, et on réappend
+    // le reste non-encodé (dernier bout de la chaîne, après les blocs multiples de 50 chars).
+    const _rawLen=(rawChord.startsWith(IREAL_PREFIX)?rawChord.length-IREAL_PREFIX.length:rawChord.length);
+    const _nonEncStart=Math.floor(_rawLen/50)*50; // position dans decoded où commence le reste non-encodé
+    let _gtPos=-1;
+    {let _i=0;while(_i<decoded.length){
+      if(decoded[_i]==='<'){const _e=decoded.indexOf('>',_i+1);if(_e!==-1&&_e-_i<=40){_i=_e+1;continue;}}
+      if(decoded[_i]==='>'){_gtPos=_i;break;}
+      _i++;
+    }}
+    const cleanDecoded=(_gtPos!==-1&&_gtPos<_nonEncStart)
+      ? decoded.slice(0,_gtPos)+decoded.slice(_nonEncStart)
+      : decoded;
 
     // 6. Chiffrage de mesure
     let timeSig='4/4';
-    const tsM=decoded.match(/T([2-9])([2-9])/)||decoded.match(/([2-9])([2-9])T/);
+    const tsM=cleanDecoded.match(/T([2-9])([2-9])/)||cleanDecoded.match(/([2-9])([2-9])T/);
     if(tsM)timeSig=`${tsM[1]}/${tsM[2]}`;
 
     // 7. Tokenisation + construction des sections
-    const toks=tokenizeIReal(decoded);
+    const toks=tokenizeIReal(cleanDecoded);
     let sections=iRealTokensToSections(toks,sectionNames,timeSig.split('/')[0]);
 
     // 8. Associer les noms extraits aux sections (priorité aux noms du champ URL)
