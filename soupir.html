@@ -17,6 +17,9 @@
     body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','Inter',system-ui,sans-serif;background:#EDE8DC;color:#2C1F0F;overscroll-behavior:none;user-select:none;-webkit-user-select:none;}
     body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:1000;opacity:0.10;
       background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='0.4'/%3E%3C/svg%3E");}
+    .grid-paper{position:relative;}
+    .grid-paper::after{content:'';position:absolute;inset:0;pointer-events:none;z-index:50;opacity:0.055;
+      background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23g)' opacity='0.5'/%3E%3C/svg%3E");}
     ::-webkit-scrollbar{width:3px;}::-webkit-scrollbar-track{background:transparent;}::-webkit-scrollbar-thumb{background:#C5BFB6;border-radius:2px;}
     .app-screen{height:100vh;height:100svh;}
     input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;}
@@ -160,7 +163,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='1.97';
+const APP_VERSION='1.99';
 const CHORD_FONT="'Barlow Semi Condensed','Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -249,19 +252,21 @@ function Barline({type='normal',onClick,minH=106,accentColor='#1A1A1A',dotsColor
   // BW fixe 10px pour TOUS les types : pas de décalage en changeant le type.
   // Le contenu des barres de répétition (>10px) déborde en overflow:visible vers la gauche.
   const BW=type==='none'?0:10;
-  const INK=accentColor;       // couleur des traits de barline
-  const DOTS=dotsColor||INK;   // couleur des points de répétition (rouge si préférence rouge)
+  const INK=accentColor;       // couleur des traits neutres (barres fines, finale)
+  const DOTS=dotsColor||INK;   // couleur des éléments de répétition (rouge si préférence rouge)
+  const isRepeat=type==='repeat-start'||type==='repeat-end'||type==='repeat-end-start';
+  const RINK=isRepeat?DOTS:INK; // barre épaisse + crochets : rouge sur les reprises, neutre ailleurs
   const thin={width:1.5,alignSelf:'stretch',background:INK,flexShrink:0,borderRadius:0.5};
-  const thick={width:3,alignSelf:'stretch',background:INK,flexShrink:0,borderRadius:0.5};
+  const thick={width:isRepeat?3.5:3,alignSelf:'stretch',background:RINK,flexShrink:0,borderRadius:0.5};
   const sp=(w)=>({width:w,flexShrink:0});
   // Barre épaisse avec serlles horizontales en haut et en bas
   // dir='right' → vers la droite (repeat-start) ; 'left' → vers la gauche (repeat-end)
   const thickHook=(dir)=>(
     <div style={{position:'relative',overflow:'visible',...thick}}>
       <div style={{position:'absolute',...(dir==='right'?{left:0}:{right:0}),
-        top:0,width:6,height:2,background:INK,borderRadius:0.5}}/>
+        top:0,width:6,height:2,background:RINK,borderRadius:0.5}}/>
       <div style={{position:'absolute',...(dir==='right'?{left:0}:{right:0}),
-        bottom:0,width:6,height:2,background:INK,borderRadius:0.5}}/>
+        bottom:0,width:6,height:2,background:RINK,borderRadius:0.5}}/>
     </div>
   );
   const dots=(
@@ -3265,11 +3270,12 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                 <span style={{position:'absolute',left:0,top:'50%',transform:'translateY(-50%)',
                   fontSize:10,color:'#D0CAC0',fontWeight:300,lineHeight:1,userSelect:'none'}}>·</span>
               )}
-              {/* Annotation — absolu en bas */}
+              {/* Annotation — absolu en haut, sous la volta si présente */}
               {hasText&&(
-                <div style={{position:'absolute',bottom:2,left:0,right:0,
+                <div style={{position:'absolute',top:hasVolta?VOLTA_H+2:3,left:0,right:0,
                   textAlign:'center',fontSize:8,fontStyle:'italic',
-                  fontWeight:700,color:'#9A7050',lineHeight:1.2,
+                  fontWeight:400,fontFamily:"Georgia,'Times New Roman',serif",
+                  color:'#9A7050',lineHeight:1.2,
                   overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',
                   pointerEvents:'none',zIndex:2}}>
                   {beat.t}
@@ -3427,7 +3433,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
       </div>
 
       {/* Grille pages */}
-      <div onClick={!editMode&&!drawMode?showBarsTemp:undefined}
+      <div className="grid-paper" onClick={!editMode&&!drawMode?showBarsTemp:undefined}
         style={{flex:1,display:'flex',flexDirection:'column',overflow:'auto',background:TH.gridBg,
           position:'relative',cursor:!editMode&&!drawMode?'pointer':undefined}}>
         {/* Pre-pass : détecter les rows dont la section se termine à pleine capacité
@@ -3600,9 +3606,10 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                                 )}
                                 {!hasChord&&editMode&&<span style={{position:'absolute',left:0,top:'50%',transform:'translateY(-50%)',fontSize:9,color:'#D8D4CE',lineHeight:1,userSelect:'none'}}>·</span>}
                                 {hasText&&(
-                                  <div style={{position:'absolute',bottom:2,left:0,right:0,
+                                  <div style={{position:'absolute',top:hasVolta?VOLTA_H+2:3,left:0,right:0,
                                     textAlign:'center',fontSize:7,fontStyle:'italic',
-                                    fontWeight:700,color:'#9A7050',lineHeight:1.2,
+                                    fontWeight:400,fontFamily:"Georgia,'Times New Roman',serif",
+                                    color:'#9A7050',lineHeight:1.2,
                                     overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',
                                     pointerEvents:'none',zIndex:2}}>
                                     {beat.t}
@@ -3674,7 +3681,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                         minWidth:0,overflow:'hidden'}}>
                         {/* Badge nom de section — première mesure de chaque section */}
                         {sectionStart&&sectionName&&(
-                          <div style={{position:'absolute',bottom:4,left:ci===0?6:4,zIndex:7,
+                          <div style={{position:'absolute',top:4,left:ci===0?6:4,zIndex:7,
                             background:isDark?'rgba(100,55,15,0.88)':'rgba(148,72,18,0.82)',
                             color:isDark?'#FFD4A0':'#FFE8C8',borderRadius:4,
                             fontSize:10,fontWeight:800,padding:'2px 7px',lineHeight:1.4,
