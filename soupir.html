@@ -158,7 +158,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='1.81';
+const APP_VERSION='1.82';
 const CHORD_FONT="'Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -1901,7 +1901,9 @@ function tokenizeIReal(str){
     // iReal Pro encode certaines bémols en mettant le 'b' AVANT la lettre de note.
     // À traiter avant la détection standard pour que le 'b' ne soit pas ignoré.
     if(str[i]==='b'&&/[A-G]/.test(str[i+1]||'')){
-      const root=str[i+1]+'b';i+=2;
+      // Normalisation enharmonique : Fb=Eb, Cb=B (ne s'appellent jamais "Fb"/"Cb" en pratique)
+      const _r=str[i+1]+'b';
+      const root=(_r==='Fb'?'Eb':_r==='Cb'?'B':_r);i+=2;
       let qualId=pendingQual?iRealQualToId(pendingQual):'maj';
       pendingQual=null;
       const qMb=str.slice(i).match(/^\*([^*]{1,4})\*/);
@@ -1985,6 +1987,7 @@ function iRealTokensToSections(toks,sectionNames,timeSig){
   let voltaNum=null;
   let pendingSigns=[];   // signes (segno, coda…) en attente d'être attachés au prochain beat
   let pendingText='';    // annotation textuelle (D.S. al Coda, Fine…) en attente
+  let nextSectionLetter=null; // lettre du marqueur *A/*B/*C… → nom de la prochaine section
 
   function pushMeasure(){
     if(curBeats.length>0){
@@ -1996,17 +1999,24 @@ function iRealTokensToSections(toks,sectionNames,timeSig){
   }
   function pushSection(){
     if(curMeasures.length>0){
-      const name=sectionNames[sectionIdx]||String.fromCharCode(65+sectionIdx);
+      // Priorité : nom extrait de l'URL > lettre du marqueur *X > alphabétique
+      const letterName=nextSectionLetter
+        ?({'i':'Intro','v':'Verse','c':'Chorus'}[nextSectionLetter]||nextSectionLetter.toUpperCase())
+        :null;
+      const name=sectionNames[sectionIdx]||(letterName||String.fromCharCode(65+sectionIdx));
       sections.push({name,type:'grid',startBar:repeatOpen?'repeat-start':'normal',measures:curMeasures});
       sectionIdx++;
       curMeasures=[];
+      nextSectionLetter=null;
     }
   }
 
   for(const tok of toks){
     if(tok.type==='section'){
       pushMeasure();pushSection();
-      repeatOpen=false;voltaNum=null;pendingSigns=[];pendingText='';
+      nextSectionLetter=tok.letter; // mémoriser la lettre pour nommer la section qui commence
+      repeatOpen=false;voltaNum=null;
+      // NE PAS réinitialiser pendingSigns : un signe avant *B doit aller au 1er accord de la nouvelle section
     } else if(tok.type==='bar'||tok.type==='bar-double'||tok.type==='bar-final'){
       pushMeasure();
     } else if(tok.type==='repeat-start'){
@@ -2111,7 +2121,8 @@ function parseIRealProHTML(html){
     const encodedBlocksLen=Math.floor(dataForSearch.length/50)*50;
     const chordRemainder=dataForSearch.slice(encodedBlocksLen);
     const snM=chordRemainder.match(/<([^>]+)>/);
-    const sectionNames=snM?snM[1].trim().split(/\s+/).filter(Boolean):[];
+    // Filtrer les annotations de répétition "Nx" (ex. "3x", "2x") : ce ne sont pas des noms de section
+    const sectionNames=snM?snM[1].trim().split(/\s+/).filter(Boolean).filter(n=>!/^\d+[xX]$/.test(n)):[];
     // On retire le tag uniquement — il est dans le reste non-encodé, pas dans les blocs
     const rawChord=snM?chordField.replace(snM[0],''):chordField;
 
@@ -2119,10 +2130,13 @@ function parseIRealProHTML(html){
     const decoded=decodeIRealChordStr(rawChord);
 
     // 5b. Élagage des blocs parasites (layout iReal Pro)
-    // iReal Pro encode les données de mise en page dans les blocs au-delà du contenu musical,
-    // ces blocs contiennent '>' (marqueur coda/fine) qui ne figure jamais dans les vrais accords.
-    // On tronque à la première occurrence de '>' hors d'une annotation <...>, et on réappend
-    // le reste non-encodé (dernier bout de la chaîne, après les blocs multiples de 50 chars).
+    // iReal Pro remplit les blocs après le contenu musical avec des données de positionnement
+    // (coordonnées Coda, Fine, D.S.). Ces blocs contiennent systématiquement '>' comme marqueur
+    // de saut de coda/fine — caractère qui n'apparaît JAMAIS dans de vrais accords iReal Pro.
+    // Robustesse : on saute les annotations <...> avant de chercher '>' (un <Fine> ou <D.S. al Coda>
+    // dans les vrais accords ne déclencherait pas de faux positif car le '>' est à l'intérieur des <>
+    // et est donc ignoré par la boucle). Sans troncature, ces blocs parasites injectaient des '{', '}'
+    // et '|' qui créaient des sections supplémentaires (D, E…) avec des accords inventés.
     const _rawLen=(rawChord.startsWith(IREAL_PREFIX)?rawChord.length-IREAL_PREFIX.length:rawChord.length);
     const _nonEncStart=Math.floor(_rawLen/50)*50; // position dans decoded où commence le reste non-encodé
     let _gtPos=-1;
@@ -2135,16 +2149,19 @@ function parseIRealProHTML(html){
       ? decoded.slice(0,_gtPos)+decoded.slice(_nonEncStart)
       : decoded;
 
-    // 6. Chiffrage de mesure
-    let timeSig='4/4';
-    const tsM=cleanDecoded.match(/T([2-9])([2-9])/)||cleanDecoded.match(/([2-9])([2-9])T/);
-    if(tsM)timeSig=`${tsM[1]}/${tsM[2]}`;
-
-    // 7. Tokenisation + construction des sections
+    // 6. Tokenisation
     const toks=tokenizeIReal(cleanDecoded);
+
+    // 7. Chiffrage de mesure : prendre le PREMIER token timesig du flux (plus fiable qu'un regex
+    //    sur la chaîne brute qui peut capturer un T parasite dans les blocs de layout).
+    let timeSig='4/4';
+    const tsTok=toks.find(t=>t.type==='timesig');
+    if(tsTok)timeSig=tsTok.value;
+
+    // 8. Construction des sections
     let sections=iRealTokensToSections(toks,sectionNames,timeSig.split('/')[0]);
 
-    // 8. Associer les noms extraits aux sections (priorité aux noms du champ URL)
+    // 9. Associer les noms extraits aux sections (priorité aux noms du champ URL, après filtrage Nx)
     sections=sections.map((s,i)=>({...s,name:sectionNames[i]||s.name}));
 
     // 9. BPM (0 dans iReal → 120 par défaut)
