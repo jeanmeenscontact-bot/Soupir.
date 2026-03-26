@@ -84,7 +84,7 @@ const EXTENSIONS=[
 function noteIdx(n){let i=SHARP.indexOf(n);return i!==-1?i:FLAT.indexOf(n);}
 function transNote(n,s,f){const i=noteIdx(n);if(i===-1)return n;const ni=((i+s)%12+12)%12;return f?FLAT[ni]:SHARP[ni];}
 function parseRoot(c){const m=c&&c.match(/^([A-G][b#]?)/);return m?m[1]:null;}
-function transChord(c,s,f){if(!c||c==='—'||c==='%'||c==='/')return c;const r=parseRoot(c);if(!r)return c;return transNote(r,s,f)+c.slice(r.length);}
+function transChord(c,s,f){if(!c||c==='—'||c==='%'||c==='/')return c;const r=parseRoot(c);if(!r)return c;const rest=c.slice(r.length);const bi=rest.lastIndexOf('/');if(bi>=0){const bassR=parseRoot(rest.slice(bi+1));if(bassR)return transNote(r,s,f)+rest.slice(0,bi+1)+transNote(bassR,s,f)+rest.slice(bi+1+bassR.length);}return transNote(r,s,f)+rest;}
 function buildScale(key,mode='maj'){const f=FLAT_KEYS.includes(key);const ivs=mode==='min'?MINOR_IV:MAJOR_IV;const quals=mode==='min'?MINOR_DEG_QUAL:DEG_QUAL;const lbls=mode==='min'?MINOR_DEG_LBL:DEG_LBL;return ivs.map((iv,i)=>{const ni=((noteIdx(key)+iv)%12+12)%12;const note=f?FLAT[ni]:SHARP[ni];return{degree:lbls[i],note,quality:quals[i]};});}
 function chordToDeg(chord,key){const r=parseRoot(chord);if(!r)return null;const ci=noteIdx(r),ki=noteIdx(key);if(ci===-1||ki===-1)return null;const iv=((ci-ki)%12+12)%12;const di=MAJOR_IV.indexOf(iv);return di===-1?null:DEG_LBL[di]+chord.slice(r.length);}
 function parseChordFull(chord){
@@ -158,7 +158,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='1.86';
+const APP_VERSION='1.88';
 const CHORD_FONT="'Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -891,6 +891,10 @@ function BarlinePanel({si,mi,currentBarType,measure,onSelectBarline,onAction,onC
             <span style={{fontSize:14,fontWeight:600}}>Diviser en 2 demi-mesures</span>
           </button>
         }
+        <button onClick={()=>onAction('toggleRowSpacer')} style={rowBtn}>
+          <span style={{width:22,textAlign:'center',fontSize:15,flexShrink:0}}>⇕</span>
+          <span style={{fontSize:14,fontWeight:600}}>{measure&&measure.rowSpacer?'Retirer l\'espace':'Espace avant cette ligne'}</span>
+        </button>
         <button onClick={()=>onAction('deleteMeasure')} style={{...rowBtn,color:'#C0392B'}}>
           <span style={{width:22,textAlign:'center',fontSize:15,flexShrink:0}}>×</span>
           <span style={{fontSize:14,fontWeight:600}}>Supprimer cette mesure</span>
@@ -1535,9 +1539,9 @@ function LibraryScreen({library,activePieceId,onSelect,onBack,onCreate,onImport}
         <span style={{fontSize:18,color:'#C0BAB0'}}>↑</span>
         <div>
           <div style={{fontSize:15,color:'#8A847C',fontWeight:500}}>Importer</div>
-          <div style={{fontSize:11,color:'#A0A0A0',marginTop:1}}>MusicXML · iReal Pro HTML</div>
+          <div style={{fontSize:11,color:'#A0A0A0',marginTop:1}}>MusicXML</div>
         </div>
-        <input ref={fileRef} type="file" accept=".musicxml,.xml,.html"
+        <input ref={fileRef} type="file" accept=".musicxml,.xml"
           style={{display:'none'}} onChange={handleFileChange}/>
       </div>
       {importErr&&(
@@ -1789,7 +1793,10 @@ function parseMusicXML(xmlString){
       // Volta et/ou signes sur le premier beat (fusionnés)
       if(volta||mSigns.length>0)beatsArr[0]=mkBeat(beatsArr[0].c,mSigns,volta);
 
-      rawMeasures.push({leftType,rightType,beats:beatsArr,rehearsal});
+      // Saut de ligne depuis <print new-system="yes"/> (demande de nouveau système iReal Pro)
+      const lineBreak=!!mEl.querySelector('print[new-system="yes"]')||undefined;
+
+      rawMeasures.push({leftType,rightType,beats:beatsArr,rehearsal,lineBreak});
     }
 
     // ── Regrouper en sections ──────────────────────────────────────────────────
@@ -1806,7 +1813,7 @@ function parseMusicXML(xmlString){
         cur={name,type:'grid',startBar:m.leftType,measures:[]};
         secIdx++;
       }
-      cur.measures.push({beats:m.beats,barAfter:m.rightType});
+      cur.measures.push({beats:m.beats,barAfter:m.rightType,...(m.lineBreak?{lineBreak:true}:{})});
     }
     if(cur)sections.push(cur);
 
@@ -1963,8 +1970,10 @@ function tokenizeIReal(str){
     if(str[i]==='f'){i++;continue;}
     // Répétition de mesure (%)
     if(str[i]==='x'){toks.push({type:'repeat-measure'});i++;continue;}
+    // Y = espaceur iReal Pro (nouvelle ligne) — émettre un token pour la détection de saut de ligne
+    if(str[i]==='Y'){toks.push({type:'y-spacer'});i++;continue;}
     // Spacer / continuation / fin de musique → ignorer
-    if(str[i]==='Y'||str[i]==='U'||str[i]==='r'||str[i]==='p'||str[i]==='l'){i++;continue;}
+    if(str[i]==='U'||str[i]==='r'||str[i]==='p'||str[i]==='l'){i++;continue;}
     // Volta N1/N2/N3 (crochet de reprise numéroté)
     if(str[i]==='N'&&/[0-9]/.test(str[i+1]||'')){
       toks.push({type:'volta-n',num:str[i+1]});i+=2;continue;
@@ -2005,12 +2014,16 @@ function iRealTokensToSections(toks,sectionNames,timeSig){
   let pendingSigns=[];   // signes (segno, coda…) en attente d'être attachés au prochain beat
   let pendingText='';    // annotation textuelle (D.S. al Coda, Fine…) en attente
   let nextSectionLetter=null; // lettre du marqueur *A/*B/*C… → nom de la prochaine section
+  let pendingLineBreak=false; // Y espaceur iReal Pro = saut de ligne avant la prochaine mesure
+  let pendingRowSpacer=false; // Y espaceur iReal Pro = espace supplémentaire avant la prochaine ligne
 
   function pushMeasure(){
     if(curBeats.length>0){
       // Padding jusqu'à numBeats beats
       while(curBeats.length<numBeats)curBeats.push(mkBeat(''));
-      curMeasures.push({beats:curBeats.slice(0,numBeats),barAfter:'normal'});
+      const lb=pendingLineBreak;pendingLineBreak=false;
+      const rs=pendingRowSpacer;pendingRowSpacer=false;
+      curMeasures.push({beats:curBeats.slice(0,numBeats),barAfter:'normal',...(lb?{lineBreak:true}:{}),...(rs?{rowSpacer:true}:{})});
       curBeats=[];
     }
   }
@@ -2072,7 +2085,9 @@ function iRealTokensToSections(toks,sectionNames,timeSig){
       const repBeats=[mkBeat('%',signs,voltaNum,t)];
       voltaNum=null;
       while(repBeats.length<numBeats)repBeats.push(mkBeat(''));
-      curMeasures.push({beats:repBeats,barAfter:'normal'});
+      const lbR=pendingLineBreak;pendingLineBreak=false;
+      const rsR=pendingRowSpacer;pendingRowSpacer=false;
+      curMeasures.push({beats:repBeats,barAfter:'normal',...(lbR?{lineBreak:true}:{}),...(rsR?{rowSpacer:true}:{})});
     } else if(tok.type==='chord'){
       // Convertir qualId + ext + bass → chordStr Soupir
       const q=QUALITIES.find(q=>q.id===tok.qualId)||QUALITIES.find(q=>q.id==='maj');
@@ -2091,6 +2106,10 @@ function iRealTokensToSections(toks,sectionNames,timeSig){
       const t=isFirst?pendingText:'';
       if(isFirst){voltaNum=null;pendingText='';}
       curBeats.push(mkBeat('—',signs,v,t));
+    } else if(tok.type==='y-spacer'){
+      // Y = espaceur iReal Pro → saut de ligne + espace supplémentaire avant la prochaine mesure
+      // (seulement entre mesures, pas à l'intérieur d'une mesure en cours)
+      if(curBeats.length===0){pendingLineBreak=true;pendingRowSpacer=true;}
     }
   }
   pushMeasure();
@@ -2847,6 +2866,8 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
           const prevM=mi>0?section.measures[mi-1]:null;
           const isContinuation=!!(prevM&&prevM.barAfter==='none');
           if(!isContinuation){mCount++;lastMasterMi=mi;}
+          // Saut de ligne forcé : terminer la rangée courante avant cette mesure
+          if(measure.lineBreak&&row.length>0&&!isContinuation){rows.push({cells:row,rowType:'measures'});row=[];}
           row.push({type:'measure',si,mi,measure,section,sectionStart:mi===0,sectionName:section.name,num:isContinuation?null:mCount,isContinuation,masterMi:isContinuation?lastMasterMi:mi});
           if(row.length===GCOLS){rows.push({cells:row,rowType:'measures'});row=[];}
         });
@@ -3071,6 +3092,13 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
       setLibrary(lib=>lib.map(p=>p.id!==piece.id?p:{...p,
         sections:p.sections.map((s,sI)=>sI!==si?s:{...s,
           measures:[...s.measures.slice(0,mi),mk([]),...s.measures.slice(mi)]
+        })
+      }));
+    }
+    else if(action==='toggleRowSpacer'){
+      setLibrary(lib=>lib.map(p=>p.id!==piece.id?p:{...p,
+        sections:p.sections.map((s,sI)=>sI!==si?s:{...s,
+          measures:s.measures.map((mm,mI)=>mI!==mi?mm:{...mm,rowSpacer:mm.rowSpacer?undefined:true})
         })
       }));
     }
@@ -3422,9 +3450,11 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
             !lastRealCell.isContinuation&&row.cells.length<GCOLS;
           // "+" en début de row : provient d'une section terminée en row pleine
           const addSiAtStart=editMode?row._addMeasureSi:null;
+          const hasRowSpacer=row.cells.some(c=>c.measure?.rowSpacer);
           return(
             <div key={ri} style={{height:rowH,flexShrink:0,display:'flex',alignItems:'stretch',position:'relative',
               borderBottom:`0.5px solid ${TH.rowBorder}`,overflow:'visible',
+              marginTop:hasRowSpacer?Math.round(rowH*0.45):0,
               paddingTop:ROW_PAD,paddingBottom:ROW_PAD}}>
               {/* Barre gauche — avec badge "+" si la section précédente se termine ici */}
               <div style={{position:'relative',display:'flex',flexShrink:0}}>
@@ -3624,6 +3654,11 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                             letterSpacing:0.5,pointerEvents:'none'}}>
                             {measure.label}
                           </div>
+                        )}
+                        {editMode&&measure.rowSpacer&&(
+                          <div style={{position:'absolute',top:2,right:4,zIndex:8,
+                            color:'#B0A898',fontSize:10,pointerEvents:'none',lineHeight:1,
+                            fontWeight:700}}>⇕</div>
                         )}
                         {measure.timeSig&&(
                           <div style={{position:'absolute',top:3,right:4,zIndex:6,
