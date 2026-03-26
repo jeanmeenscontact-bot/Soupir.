@@ -158,7 +158,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='1.84';
+const APP_VERSION='1.85';
 const CHORD_FONT="'Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -2138,6 +2138,21 @@ function parseIRealProHTML(html){
     // 5. Décodage obfusc50
     const decoded=decodeIRealChordStr(rawChord);
 
+    // 5a. Détection du format : ancien (RAW) vs nouveau (DECODED)
+    // Certains morceaux plus anciens stockent les accords directement dans la chaîne brute
+    // sans appliquer l'encodage obfusc50. On compare la densité de symboles musicaux
+    // (barres, marqueurs de section, accords) dans les 100 premiers caractères de chaque version.
+    // Si le RAW score plus haut que le DECODED, on utilise le RAW directement.
+    function scoreIRealStr(s,n){
+      const chunk=(s||'').slice(0,n||100);
+      const bars=(chunk.match(/LZ|ZL|\|/g)||[]).length;
+      const sections=(chunk.match(/\*[A-Civc]/g)||[]).length;
+      const chords=(chunk.match(/(?:b[A-G]|[A-G][#b]?)(?:-7|m7|M7|7|-)?/g)||[]).length;
+      return bars*3+sections*5+chords;
+    }
+    const _rawNoPrefix=rawChord.startsWith(IREAL_PREFIX)?rawChord.slice(IREAL_PREFIX.length):rawChord;
+    const chordBase=(scoreIRealStr(_rawNoPrefix)>scoreIRealStr(decoded))?_rawNoPrefix:decoded;
+
     // 5b. Élagage des blocs parasites (layout iReal Pro)
     // iReal Pro remplit les blocs après le contenu musical avec des données de positionnement
     // (coordonnées Coda, Fine, D.S.). Ces blocs contiennent systématiquement '>' comme marqueur
@@ -2147,16 +2162,16 @@ function parseIRealProHTML(html){
     // et est donc ignoré par la boucle). Sans troncature, ces blocs parasites injectaient des '{', '}'
     // et '|' qui créaient des sections supplémentaires (D, E…) avec des accords inventés.
     const _rawLen=(rawChord.startsWith(IREAL_PREFIX)?rawChord.length-IREAL_PREFIX.length:rawChord.length);
-    const _nonEncStart=Math.floor(_rawLen/50)*50; // position dans decoded où commence le reste non-encodé
+    const _nonEncStart=Math.floor(_rawLen/50)*50; // position dans chordBase où commence le reste non-encodé
     let _gtPos=-1;
-    {let _i=0;while(_i<decoded.length){
-      if(decoded[_i]==='<'){const _e=decoded.indexOf('>',_i+1);if(_e!==-1&&_e-_i<=40){_i=_e+1;continue;}}
-      if(decoded[_i]==='>'){_gtPos=_i;break;}
+    {let _i=0;while(_i<chordBase.length){
+      if(chordBase[_i]==='<'){const _e=chordBase.indexOf('>',_i+1);if(_e!==-1&&_e-_i<=40){_i=_e+1;continue;}}
+      if(chordBase[_i]==='>'){_gtPos=_i;break;}
       _i++;
     }}
     const cleanDecoded=(_gtPos!==-1&&_gtPos<_nonEncStart)
-      ? decoded.slice(0,_gtPos)+decoded.slice(_nonEncStart)
-      : decoded;
+      ? chordBase.slice(0,_gtPos)+chordBase.slice(_nonEncStart)
+      : chordBase;
 
     // 6. Tokenisation
     const toks=tokenizeIReal(cleanDecoded);
