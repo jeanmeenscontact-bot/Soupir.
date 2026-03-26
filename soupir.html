@@ -160,7 +160,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='1.90';
+const APP_VERSION='1.92';
 const CHORD_FONT="'Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -253,6 +253,33 @@ function Barline({type='normal',onClick,minH=106,accentColor='#1A1A1A'}){
   const thin={width:1.5,alignSelf:'stretch',background:INK,flexShrink:0,borderRadius:0.5};
   const thick={width:3,alignSelf:'stretch',background:INK,flexShrink:0,borderRadius:0.5};
   const sp=(w)=>({width:w,flexShrink:0});
+  // Barre épaisse avec crochets en L courbé (style iReal Pro)
+  // dir='right' → crochets s'ouvrent vers la droite (repeat-start) ; 'left' → vers la gauche (repeat-end)
+  const thickHook=(dir)=>{
+    const isRight=dir==='right';
+    const hook=(isTop)=>(
+      <div style={{
+        position:'absolute',
+        [isTop?'top':'bottom']:-1,
+        [isRight?'left':'right']:-1,
+        width:7, height:7,
+        background:'transparent',
+        borderStyle:'solid',
+        borderColor:INK,
+        borderTopWidth:isTop?2.5:0,
+        borderBottomWidth:isTop?0:2.5,
+        borderLeftWidth:isRight?0:2.5,
+        borderRightWidth:isRight?2.5:0,
+        borderRadius:isRight?(isTop?'0 5px 0 0':'0 0 5px 0'):(isTop?'5px 0 0 0':'0 0 0 5px'),
+      }}/>
+    );
+    return(
+      <div style={{position:'relative',overflow:'visible',...thick}}>
+        {hook(true)}
+        {hook(false)}
+      </div>
+    );
+  };
   const dots=(
     <div style={{display:'flex',flexDirection:'column',justifyContent:'center',
       gap:4,alignSelf:'center',width:3,flexShrink:0}}>
@@ -271,11 +298,11 @@ function Barline({type='normal',onClick,minH=106,accentColor='#1A1A1A'}){
   switch(type){
     case 'normal':           inner=<div style={thin}/>;break;
     case 'double':           inner=<><div style={thin}/><div style={sp(2)}/><div style={thin}/></>;break;
-    // repeat-start : |: — barre fine à gauche, épaisse+points contenus à droite
-    case 'repeat-start':     inner=<><div style={thin}/><div style={sp(2)}/><div style={thick}/><div style={sp(3)}/>{dots}</>;break;
-    // repeat-end : :| — points+épaisse à gauche, barre fine à droite
-    case 'repeat-end':       inner=<>{dots}<div style={sp(3)}/><div style={thick}/><div style={sp(2)}/><div style={thin}/></>;break;
-    case 'repeat-end-start': inner=<>{dots}<div style={sp(2)}/><div style={thick}/><div style={sp(1)}/><div style={thick}/><div style={sp(2)}/>{dots}</>;break;
+    // repeat-start : |: — barre fine à gauche, épaisse avec crochets+points contenus à droite
+    case 'repeat-start':     inner=<><div style={thin}/><div style={sp(2)}/>{thickHook('right')}<div style={sp(3)}/>{dots}</>;break;
+    // repeat-end : :| — points+épaisse avec crochets à gauche, barre fine à droite
+    case 'repeat-end':       inner=<>{dots}<div style={sp(3)}/>{thickHook('left')}<div style={sp(2)}/><div style={thin}/></>;break;
+    case 'repeat-end-start': inner=<>{dots}<div style={sp(2)}/>{thickHook('left')}<div style={sp(1)}/>{thickHook('right')}<div style={sp(2)}/>{dots}</>;break;
     case 'final':            inner=<><div style={thin}/><div style={sp(2)}/><div style={{...thick,width:4}}/></>;break;
     default:                 inner=<div style={thin}/>;
   }
@@ -1753,8 +1780,9 @@ function parseMusicXML(xmlString){
       const volta=getVolta(mEl);
       const rehearsal=getRehearsalName(mEl);
 
-      // Accords avec positions en beats
+      // Accords et signes avec positions en beats — un seul parcours sur les enfants
       const harmonies=[];
+      const dirsByBeat={}; // beatPos → signs[] (segno, coda…)
       let pos=0;
       for(const child of mEl.children){
         if(child.tagName==='harmony'){
@@ -1786,6 +1814,13 @@ function parseMusicXML(xmlString){
           const beatPos=Math.round(pos/divisions);
           harmonies.push({beatPos,chordStr:chordStr+bassStr});
         }
+        // Signes musicaux au beat courant (position réelle dans le flux de notes)
+        if(child.tagName==='direction'){
+          const bp=Math.min(Math.round(pos/divisions),numBeats-1);
+          if(!dirsByBeat[bp])dirsByBeat[bp]=[];
+          if(child.querySelector('segno')&&!dirsByBeat[bp].includes('segno'))dirsByBeat[bp].push('segno');
+          if(child.querySelector('coda')&&!dirsByBeat[bp].includes('coda'))dirsByBeat[bp].push('coda');
+        }
         // Avancer la position (notes sans <chord> = notes principales)
         if(child.tagName==='note'&&!child.querySelector('chord')){
           pos+=parseInt(child.querySelector('duration')?.textContent||'0');
@@ -1797,16 +1832,14 @@ function parseMusicXML(xmlString){
       harmonies.forEach(({beatPos,chordStr})=>{
         if(beatPos<numBeats)beatsArr[beatPos]=mkBeat(chordStr);
       });
-      // Signes musicaux (Segno, Coda) depuis <direction><direction-type><segno/|coda/>
-      // Ces éléments sont dans des <direction> à l'intérieur de la mesure et doivent
-      // être attachés au premier beat pour être affichés dans la grille Soupir.
-      const mSigns=[];
-      for(const dir of mEl.querySelectorAll('direction')){
-        if(dir.querySelector('segno')&&!mSigns.includes('segno'))mSigns.push('segno');
-        if(dir.querySelector('coda') &&!mSigns.includes('coda')) mSigns.push('coda');
-      }
-      // Volta et/ou signes sur le premier beat (fusionnés)
-      if(volta||mSigns.length>0)beatsArr[0]=mkBeat(beatsArr[0].c,mSigns,volta);
+      // Appliquer les signes aux beats selon leur position réelle
+      Object.entries(dirsByBeat).forEach(([bp,signs])=>{
+        const bi=parseInt(bp);if(bi>=numBeats||!signs.length)return;
+        const b=beatsArr[bi];
+        beatsArr[bi]=mkBeat(b.c,[...new Set([...(b.s||[]),...signs])],b.v,b.t);
+      });
+      // Volta sur beat 0 (indépendamment des signes)
+      if(volta){const b=beatsArr[0];beatsArr[0]=mkBeat(b.c,b.s||[],volta,b.t);}
 
       // Saut de ligne depuis <print new-system="yes"/> (demande de nouveau système iReal Pro)
       const lineBreak=!!mEl.querySelector('print[new-system="yes"]')||undefined;
@@ -3182,17 +3215,31 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
     const VOLTA_H=15;
 
     const isSel=editMode&&picker.visible&&!picker.isGrande&&picker.si===si&&picker.mi===mi&&picker.half===(half||'a');
+    // Signes sur l'ensemble de la mesure (toutes positions) → overlay centré en haut
+    const measureSignIds=[...new Set(beats.flatMap(b=>b.s||[]))];
+    const hasMeasureSigns=measureSignIds.length>0;
+    const hasVoltaBeat0=!!beats[0]?.v;
     return(
       <div style={{flex:1,display:'flex',minWidth:0,position:'relative',
         background:isSel?'rgba(58,155,213,0.09)':'transparent',
         transition:'background 0.12s'}}>
+
+        {/* ── Signes musicaux — overlay en haut de la mesure entière ── */}
+        {hasMeasureSigns&&(
+          <div style={{position:'absolute',top:hasVoltaBeat0?VOLTA_H+2:1,left:1,
+            pointerEvents:'none',zIndex:3,lineHeight:1}}>
+            <span style={{fontSize:13,color:SIGN_COLOR,fontWeight:900,
+              background:SIGN_COLOR+'18',borderRadius:3,padding:'1px 4px',lineHeight:1.1,whiteSpace:'nowrap'}}>
+              {measureSignIds.map(s=>{const st=SIGN_TYPES.find(x=>x.id===s);return st?st.sym:s;}).join(' ')}
+            </span>
+          </div>
+        )}
 
         {/* ── 4 colonnes de temps ── */}
         {beats.map((beat,bi)=>{
           const chord=beat.c||'';
           const hasChord=!!chord;
           const hasVolta=!!beat.v;
-          const hasSigns=beat.s&&beat.s.length>0;
           const hasText=!!beat.t;
           const spec=isSpec(chord);
           const idem=chord==='%';
@@ -3215,16 +3262,6 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                   pointerEvents:'none',zIndex:2}}>
                   <span style={{fontSize:8,fontWeight:900,color:INK_ACCENT,lineHeight:1,fontStyle:'italic'}}>
                     {beat.v}.
-                  </span>
-                </div>
-              )}
-              {/* Signes — absolu */}
-              {hasSigns&&(
-                <div style={{position:'absolute',top:hasVolta?VOLTA_H+1:2,left:0,right:0,
-                  display:'flex',justifyContent:'center',pointerEvents:'none',zIndex:2}}>
-                  <span style={{fontSize:18,color:SIGN_COLOR,fontWeight:900,
-                    background:SIGN_COLOR+'18',borderRadius:3,padding:'0 4px',lineHeight:1.1}}>
-                    {beat.s.map(s=>{const st=SIGN_TYPES.find(x=>x.id===s);return st?st.sym:s;}).join(' ')}
                   </span>
                 </div>
               )}
@@ -3522,6 +3559,14 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                             minWidth:0,overflow:'hidden',
                             background:editMode&&picker.visible&&picker.isGrande&&picker.si===si&&picker.mi===mi?'rgba(58,155,213,0.09)':'transparent',
                             transition:'background 0.12s'}}>
+                          {/* Signes musicaux — overlay grande mesure */}
+                          {(()=>{const gmSignIds=[...new Set(allBeats.flatMap(b=>b.s||[]))];const gmHasVolta=!!allBeats[0]?.v;return gmSignIds.length>0&&(
+                            <div style={{position:'absolute',top:gmHasVolta?VOLTA_H+2:1,left:1,pointerEvents:'none',zIndex:3,lineHeight:1}}>
+                              <span style={{fontSize:13,color:SIGN_COLOR,fontWeight:900,background:SIGN_COLOR+'18',borderRadius:3,padding:'1px 4px',lineHeight:1.1,whiteSpace:'nowrap'}}>
+                                {gmSignIds.map(s=>{const st=SIGN_TYPES.find(x=>x.id===s);return st?st.sym:s;}).join(' ')}
+                              </span>
+                            </div>
+                          );})()}
                           {/* Badge nom de section — première grande mesure de chaque section */}
                           {sectionStart&&sectionName&&(
                             <div style={{position:'absolute',bottom:3,left:ci===0?6:4,zIndex:7,
@@ -3538,7 +3583,6 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                             const chord=beat.c||'';
                             const hasChord=!!chord;
                             const hasVolta=!!beat.v;
-                            const hasSigns=beat.s&&beat.s.length>0;
                             const hasText=!!beat.t;
                             const spec=isSpec(chord);const idem=chord==='%';
                             const isDia=!spec&&!idem&&hasChord&&chordToDeg(chord,displayKey)!==null;
@@ -3557,15 +3601,6 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                                     display:'flex',alignItems:'flex-start',paddingLeft:3,paddingTop:2,
                                     pointerEvents:'none',zIndex:2}}>
                                     <span style={{fontSize:8,fontWeight:900,color:INK_ACCENT,lineHeight:1,fontStyle:'italic'}}>{beat.v}.</span>
-                                  </div>
-                                )}
-                                {hasSigns&&(
-                                  <div style={{position:'absolute',top:hasVolta?VOLTA_H+1:2,left:0,right:0,
-                                    display:'flex',justifyContent:'center',pointerEvents:'none',zIndex:2}}>
-                                    <span style={{fontSize:16,color:SIGN_COLOR,fontWeight:900,
-                                      background:SIGN_COLOR+'18',borderRadius:3,padding:'0 4px',lineHeight:1.1}}>
-                                      {beat.s.map(s=>{const st=SIGN_TYPES.find(x=>x.id===s);return st?st.sym:s;}).join(' ')}
-                                    </span>
                                   </div>
                                 )}
                                 {hasChord&&(
