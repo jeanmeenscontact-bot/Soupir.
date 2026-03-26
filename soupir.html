@@ -158,7 +158,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='1.85';
+const APP_VERSION='1.86';
 const CHORD_FONT="'Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -1778,8 +1778,16 @@ function parseMusicXML(xmlString){
       harmonies.forEach(({beatPos,chordStr})=>{
         if(beatPos<numBeats)beatsArr[beatPos]=mkBeat(chordStr);
       });
-      // Volta sur le premier beat
-      if(volta)beatsArr[0]=mkBeat(beatsArr[0].c,[],volta);
+      // Signes musicaux (Segno, Coda) depuis <direction><direction-type><segno/|coda/>
+      // Ces éléments sont dans des <direction> à l'intérieur de la mesure et doivent
+      // être attachés au premier beat pour être affichés dans la grille Soupir.
+      const mSigns=[];
+      for(const dir of mEl.querySelectorAll('direction')){
+        if(dir.querySelector('segno')&&!mSigns.includes('segno'))mSigns.push('segno');
+        if(dir.querySelector('coda') &&!mSigns.includes('coda')) mSigns.push('coda');
+      }
+      // Volta et/ou signes sur le premier beat (fusionnés)
+      if(volta||mSigns.length>0)beatsArr[0]=mkBeat(beatsArr[0].c,mSigns,volta);
 
       rawMeasures.push({leftType,rightType,beats:beatsArr,rehearsal});
     }
