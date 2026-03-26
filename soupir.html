@@ -26,6 +26,8 @@
       .icon-btn:hover{background:#D8D2C8 !important;}
       .lib-row:hover{background:#E5E0D8 !important;}
       .barline-hit:hover{opacity:0.4;}
+      .barline-hit{position:relative;z-index:2;}
+      .barline-hit::before{content:'';position:absolute;top:0;bottom:0;left:-9px;right:-9px;}
       .chord-tap:hover{background:rgba(26,26,26,0.07) !important;}
       .num-tap:hover{color:#8A847C !important;}
       .pref-btn:hover{background:#E8E2D8 !important;}
@@ -158,7 +160,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='1.88';
+const APP_VERSION='1.89';
 const CHORD_FONT="'Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -891,10 +893,23 @@ function BarlinePanel({si,mi,currentBarType,measure,onSelectBarline,onAction,onC
             <span style={{fontSize:14,fontWeight:600}}>Diviser en 2 demi-mesures</span>
           </button>
         }
-        <button onClick={()=>onAction('toggleRowSpacer')} style={rowBtn}>
-          <span style={{width:22,textAlign:'center',fontSize:15,flexShrink:0}}>⇕</span>
-          <span style={{fontSize:14,fontWeight:600}}>{measure&&measure.rowSpacer?'Retirer l\'espace':'Espace avant cette ligne'}</span>
-        </button>
+        <div style={{display:'flex',alignItems:'center',gap:10,padding:'12px 22px',borderTop:`1px solid rgba(160,155,148,0.2)`}}>
+          <span style={{width:22,textAlign:'center',fontSize:15,flexShrink:0,color:measure&&measure.rowSpacer?'#1A1A1A':'#A0A0A0'}}>⇕</span>
+          <span style={{fontSize:13,color:'#8A847C',flex:1}}>Espace avant la ligne</span>
+          {[1,2,3].map(sz=>{
+            const active=measure&&measure.rowSpacer===sz;
+            const lbl=sz===1?'S':sz===2?'M':'L';
+            return(<button key={sz}
+              onClick={()=>onAction(active?'clearRowSpacer':('setRowSpacer'+lbl))}
+              style={{width:32,height:28,borderRadius:6,border:'1.5px solid',
+                borderColor:active?'#1A1A1A':'#C0BAB0',
+                background:active?'#1A1A1A':'transparent',
+                color:active?'#FFF':'#1A1A1A',
+                fontSize:12,fontWeight:700,cursor:'pointer',flexShrink:0}}>
+              {lbl}
+            </button>);
+          })}
+        </div>
         <button onClick={()=>onAction('deleteMeasure')} style={{...rowBtn,color:'#C0392B'}}>
           <span style={{width:22,textAlign:'center',fontSize:15,flexShrink:0}}>×</span>
           <span style={{fontSize:14,fontWeight:600}}>Supprimer cette mesure</span>
@@ -2014,16 +2029,16 @@ function iRealTokensToSections(toks,sectionNames,timeSig){
   let pendingSigns=[];   // signes (segno, coda…) en attente d'être attachés au prochain beat
   let pendingText='';    // annotation textuelle (D.S. al Coda, Fine…) en attente
   let nextSectionLetter=null; // lettre du marqueur *A/*B/*C… → nom de la prochaine section
-  let pendingLineBreak=false; // Y espaceur iReal Pro = saut de ligne avant la prochaine mesure
-  let pendingRowSpacer=false; // Y espaceur iReal Pro = espace supplémentaire avant la prochaine ligne
+  let pendingLineBreak=false; // MusicXML new-system → saut de ligne sans espace
+  let pendingRowSpacer=0;    // Y iReal Pro (0=aucun, 1=S, 2=M, 3=L) → saut de ligne + espace
 
   function pushMeasure(){
     if(curBeats.length>0){
       // Padding jusqu'à numBeats beats
       while(curBeats.length<numBeats)curBeats.push(mkBeat(''));
       const lb=pendingLineBreak;pendingLineBreak=false;
-      const rs=pendingRowSpacer;pendingRowSpacer=false;
-      curMeasures.push({beats:curBeats.slice(0,numBeats),barAfter:'normal',...(lb?{lineBreak:true}:{}),...(rs?{rowSpacer:true}:{})});
+      const rs=pendingRowSpacer;pendingRowSpacer=0;
+      curMeasures.push({beats:curBeats.slice(0,numBeats),barAfter:'normal',...(lb?{lineBreak:true}:{}),...(rs>0?{rowSpacer:rs}:{})});
       curBeats=[];
     }
   }
@@ -2086,8 +2101,8 @@ function iRealTokensToSections(toks,sectionNames,timeSig){
       voltaNum=null;
       while(repBeats.length<numBeats)repBeats.push(mkBeat(''));
       const lbR=pendingLineBreak;pendingLineBreak=false;
-      const rsR=pendingRowSpacer;pendingRowSpacer=false;
-      curMeasures.push({beats:repBeats,barAfter:'normal',...(lbR?{lineBreak:true}:{}),...(rsR?{rowSpacer:true}:{})});
+      const rsR=pendingRowSpacer;pendingRowSpacer=0;
+      curMeasures.push({beats:repBeats,barAfter:'normal',...(lbR?{lineBreak:true}:{}),...(rsR>0?{rowSpacer:rsR}:{})});
     } else if(tok.type==='chord'){
       // Convertir qualId + ext + bass → chordStr Soupir
       const q=QUALITIES.find(q=>q.id===tok.qualId)||QUALITIES.find(q=>q.id==='maj');
@@ -2107,9 +2122,8 @@ function iRealTokensToSections(toks,sectionNames,timeSig){
       if(isFirst){voltaNum=null;pendingText='';}
       curBeats.push(mkBeat('—',signs,v,t));
     } else if(tok.type==='y-spacer'){
-      // Y = espaceur iReal Pro → saut de ligne + espace supplémentaire avant la prochaine mesure
-      // (seulement entre mesures, pas à l'intérieur d'une mesure en cours)
-      if(curBeats.length===0){pendingLineBreak=true;pendingRowSpacer=true;}
+      // Y = espaceur iReal Pro → espace avant la prochaine ligne (Y=S, YY=M, YYY=L)
+      if(curBeats.length===0)pendingRowSpacer=Math.min(3,(pendingRowSpacer||0)+1);
     }
   }
   pushMeasure();
@@ -2866,8 +2880,8 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
           const prevM=mi>0?section.measures[mi-1]:null;
           const isContinuation=!!(prevM&&prevM.barAfter==='none');
           if(!isContinuation){mCount++;lastMasterMi=mi;}
-          // Saut de ligne forcé : terminer la rangée courante avant cette mesure
-          if(measure.lineBreak&&row.length>0&&!isContinuation){rows.push({cells:row,rowType:'measures'});row=[];}
+          // Saut de ligne forcé (lineBreak) ou espace avant ligne (rowSpacer) → nouvelle rangée
+          if((measure.lineBreak||measure.rowSpacer)&&row.length>0&&!isContinuation){rows.push({cells:row,rowType:'measures'});row=[];}
           row.push({type:'measure',si,mi,measure,section,sectionStart:mi===0,sectionName:section.name,num:isContinuation?null:mCount,isContinuation,masterMi:isContinuation?lastMasterMi:mi});
           if(row.length===GCOLS){rows.push({cells:row,rowType:'measures'});row=[];}
         });
@@ -3095,10 +3109,11 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
         })
       }));
     }
-    else if(action==='toggleRowSpacer'){
+    else if(action==='setRowSpacerS'||action==='setRowSpacerM'||action==='setRowSpacerL'||action==='clearRowSpacer'){
+      const sz=action==='setRowSpacerS'?1:action==='setRowSpacerM'?2:action==='setRowSpacerL'?3:undefined;
       setLibrary(lib=>lib.map(p=>p.id!==piece.id?p:{...p,
         sections:p.sections.map((s,sI)=>sI!==si?s:{...s,
-          measures:s.measures.map((mm,mI)=>mI!==mi?mm:{...mm,rowSpacer:mm.rowSpacer?undefined:true})
+          measures:s.measures.map((mm,mI)=>mI!==mi?mm:{...mm,rowSpacer:sz})
         })
       }));
     }
@@ -3450,11 +3465,12 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
             !lastRealCell.isContinuation&&row.cells.length<GCOLS;
           // "+" en début de row : provient d'une section terminée en row pleine
           const addSiAtStart=editMode?row._addMeasureSi:null;
-          const hasRowSpacer=row.cells.some(c=>c.measure?.rowSpacer);
+          const rowSpacerSz=row.cells.reduce((acc,c)=>Math.max(acc,c.measure?.rowSpacer||0),0);
+          const spacerMT=rowSpacerSz===1?Math.round(rowH*0.25):rowSpacerSz===2?Math.round(rowH*0.5):rowSpacerSz===3?Math.round(rowH*0.9):0;
           return(
             <div key={ri} style={{height:rowH,flexShrink:0,display:'flex',alignItems:'stretch',position:'relative',
               borderBottom:`0.5px solid ${TH.rowBorder}`,overflow:'visible',
-              marginTop:hasRowSpacer?Math.round(rowH*0.45):0,
+              marginTop:spacerMT,
               paddingTop:ROW_PAD,paddingBottom:ROW_PAD}}>
               {/* Barre gauche — avec badge "+" si la section précédente se termine ici */}
               <div style={{position:'relative',display:'flex',flexShrink:0}}>
@@ -3657,8 +3673,8 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                         )}
                         {editMode&&measure.rowSpacer&&(
                           <div style={{position:'absolute',top:2,right:4,zIndex:8,
-                            color:'#B0A898',fontSize:10,pointerEvents:'none',lineHeight:1,
-                            fontWeight:700}}>⇕</div>
+                            color:'#B0A898',fontSize:9,pointerEvents:'none',lineHeight:1,
+                            fontWeight:700}}>⇕{measure.rowSpacer===1?'S':measure.rowSpacer===2?'M':'L'}</div>
                         )}
                         {measure.timeSig&&(
                           <div style={{position:'absolute',top:3,right:4,zIndex:6,
