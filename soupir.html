@@ -14,7 +14,7 @@
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Barlow+Condensed:wght@400;500&display=swap');
     *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
     html,body{height:100%;overflow:hidden;}
-    body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','Inter',system-ui,sans-serif;background:#F2F0EB;color:#1C1C1E;overscroll-behavior:none;user-select:none;-webkit-user-select:none;}
+    body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','Inter',system-ui,sans-serif;background:#EDE8DC;color:#2C1F0F;overscroll-behavior:none;user-select:none;-webkit-user-select:none;}
     body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:1000;opacity:0.10;
       background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='0.4'/%3E%3C/svg%3E");}
     ::-webkit-scrollbar{width:3px;}::-webkit-scrollbar-track{background:transparent;}::-webkit-scrollbar-thumb{background:#C5BFB6;border-radius:2px;}
@@ -160,7 +160,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='1.92';
+const APP_VERSION='1.93';
 const CHORD_FONT="'Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -253,33 +253,16 @@ function Barline({type='normal',onClick,minH=106,accentColor='#1A1A1A'}){
   const thin={width:1.5,alignSelf:'stretch',background:INK,flexShrink:0,borderRadius:0.5};
   const thick={width:3,alignSelf:'stretch',background:INK,flexShrink:0,borderRadius:0.5};
   const sp=(w)=>({width:w,flexShrink:0});
-  // Barre épaisse avec crochets en L courbé (style iReal Pro)
-  // dir='right' → crochets s'ouvrent vers la droite (repeat-start) ; 'left' → vers la gauche (repeat-end)
-  const thickHook=(dir)=>{
-    const isRight=dir==='right';
-    const hook=(isTop)=>(
-      <div style={{
-        position:'absolute',
-        [isTop?'top':'bottom']:-1,
-        [isRight?'left':'right']:-1,
-        width:7, height:7,
-        background:'transparent',
-        borderStyle:'solid',
-        borderColor:INK,
-        borderTopWidth:isTop?2.5:0,
-        borderBottomWidth:isTop?0:2.5,
-        borderLeftWidth:isRight?0:2.5,
-        borderRightWidth:isRight?2.5:0,
-        borderRadius:isRight?(isTop?'0 5px 0 0':'0 0 5px 0'):(isTop?'5px 0 0 0':'0 0 0 5px'),
-      }}/>
-    );
-    return(
-      <div style={{position:'relative',overflow:'visible',...thick}}>
-        {hook(true)}
-        {hook(false)}
-      </div>
-    );
-  };
+  // Barre épaisse avec serlles horizontales en haut et en bas
+  // dir='right' → vers la droite (repeat-start) ; 'left' → vers la gauche (repeat-end)
+  const thickHook=(dir)=>(
+    <div style={{position:'relative',overflow:'visible',...thick}}>
+      <div style={{position:'absolute',...(dir==='right'?{left:0}:{right:0}),
+        top:0,width:6,height:2,background:INK,borderRadius:0.5}}/>
+      <div style={{position:'absolute',...(dir==='right'?{left:0}:{right:0}),
+        bottom:0,width:6,height:2,background:INK,borderRadius:0.5}}/>
+    </div>
+  );
   const dots=(
     <div style={{display:'flex',flexDirection:'column',justifyContent:'center',
       gap:4,alignSelf:'center',width:3,flexShrink:0}}>
@@ -2730,7 +2713,7 @@ async function exportPDF(piece,displayKey,displayMode,prefs){
 
 // ─── EDITOR SCREEN ────────────────────────────────────────────────────────────
 const GCOLS=4;
-const CHORD_FS=34;      // taille accords — dominant
+const CHORD_FS=40;      // taille accords — dominant (lisible de loin)
 const MEASURE_MIN_H=136; // cellules généreuses
 
 function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,displayMode='maj',setDisplayMode,onBack,prefs}){
@@ -2776,7 +2759,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
   const scale=buildScale(displayKey,displayMode);
 
   // Couleur d'accentuation (signes, reprises, volta)
-  const INK_ACCENT=prefs?.accentColor==='red'?'#C0392B':(isDark?'#E8E4DC':'#1A1A1A');
+  const INK_ACCENT=prefs?.accentColor==='red'?'#C0392B':(isDark?'#E8E4DC':'#3A2410');
   const SIGN_COLOR=prefs?.accentColor==='red'?'#C0392B':'#2A5A2A';
 
   useEffect(()=>{
@@ -3273,7 +3256,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                   {spec?(<span style={{fontSize:effectiveFs,fontWeight:700,color:chColor,letterSpacing:'0.05em',lineHeight:1}}>{disp}</span>)
                   :idem?(<span style={{fontSize:Math.round(effectiveFs*1.1),fontWeight:200,color:chColor,letterSpacing:'0.08em',lineHeight:1}}>%</span>)
                   :degreeMode?(<DegreeText deg={disp} fs={effectiveFs} color={chColor} weight={500}/>)
-                  :(<ChordText chord={disp} fs={effectiveFs} color={chColor} weight={500}/>)}
+                  :(<ChordText chord={disp} fs={effectiveFs} color={chColor} weight={600}/>)}
                 </span>
               )}
               {!hasChord&&editMode&&(
@@ -3299,19 +3282,19 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
 
   const isDark=!!prefs?.darkMode;
   const TH={
-    bg:isDark?'#1A1816':'#F2F0EB',
-    topBar:isDark?'rgba(26,24,22,0.97)':'rgba(255,255,255,0.88)',
-    border:isDark?'#3A3634':'#D0CCC4',
-    infoBg:isDark?'rgba(22,20,18,0.98)':'rgba(252,250,246,0.95)',
-    gridBg:isDark?'#1E1C1A':'#FFFFFF',
-    rowBorder:isDark?'rgba(255,255,255,0.05)':'rgba(0,0,0,0.07)',
-    fillerBg:isDark?'#161412':'#FAFAFA',
-    text:isDark?'#F2EDE4':'#1A1A1A',
-    subText:isDark?'#8A8480':'#8A847C',
-    btnBg:isDark?'#2A2826':'#F5F2EC',
-    btnBorder:isDark?'#4A4845':'#D0CAC0',
-    modeSwBg:isDark?'#2A2826':'#E2DDD6',
-    modeSwActive:isDark?'#3A3836':'#FFFFFF',
+    bg:isDark?'#1A1816':'#EDE8DC',
+    topBar:isDark?'rgba(26,24,22,0.97)':'rgba(242,237,228,0.96)',
+    border:isDark?'#3A3634':'#C4B8A4',
+    infoBg:isDark?'rgba(22,20,18,0.98)':'rgba(248,243,234,0.97)',
+    gridBg:isDark?'#1E1C1A':'#FAF6EE',
+    rowBorder:isDark?'rgba(255,255,255,0.05)':'rgba(80,50,10,0.06)',
+    fillerBg:isDark?'#161412':'#F0E8D8',
+    text:isDark?'#F2EDE4':'#2C1F0F',
+    subText:isDark?'#8A8480':'#8A7060',
+    btnBg:isDark?'#2A2826':'#E8E0D0',
+    btnBorder:isDark?'#4A4845':'#C4B49A',
+    modeSwBg:isDark?'#2A2826':'#D8D0C0',
+    modeSwActive:isDark?'#3A3836':'#FAF6EE',
   };
   return(<div className="app-screen" style={{display:'flex',flexDirection:'column',background:TH.bg}}>
 
@@ -3610,7 +3593,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                                     {spec?(<span style={{fontSize:gEffFs,fontWeight:700,color:chColor,letterSpacing:'0.05em',lineHeight:1}}>{disp}</span>)
                                     :idem?(<span style={{fontSize:Math.round(gEffFs*1.1),fontWeight:200,color:chColor,letterSpacing:'0.08em',lineHeight:1}}>%</span>)
                                     :degreeMode?(<DegreeText deg={disp} fs={gEffFs} color={chColor} weight={500}/>)
-                                    :(<ChordText chord={disp} fs={gEffFs} color={chColor} weight={500}/>)}
+                                    :(<ChordText chord={disp} fs={gEffFs} color={chColor} weight={600}/>)}
                                   </span>
                                 )}
                                 {!hasChord&&editMode&&<span style={{position:'absolute',left:0,top:'50%',transform:'translateY(-50%)',fontSize:9,color:'#D8D4CE',lineHeight:1,userSelect:'none'}}>·</span>}
@@ -3690,8 +3673,8 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                         {/* Badge nom de section — première mesure de chaque section */}
                         {sectionStart&&sectionName&&(
                           <div style={{position:'absolute',bottom:3,left:ci===0?6:4,zIndex:7,
-                            background:isDark?'rgba(60,80,120,0.85)':'rgba(30,48,96,0.82)',
-                            color:'#B8D4FF',borderRadius:3,
+                            background:isDark?'rgba(100,55,15,0.88)':'rgba(148,72,18,0.85)',
+                            color:isDark?'#FFD4A0':'#FFE8C8',borderRadius:3,
                             fontSize:8,fontWeight:900,padding:'1px 5px',lineHeight:1.5,
                             letterSpacing:0.8,pointerEvents:'none',whiteSpace:'nowrap',
                             maxWidth:'50%',overflow:'hidden',textOverflow:'ellipsis'}}>
@@ -3700,7 +3683,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                         )}
                         {measure.label&&(
                           <div style={{position:'absolute',top:3,left:ci===0?28:4,zIndex:6,
-                            background:'#1A3060',color:'#90BEFF',borderRadius:3,
+                            background:isDark?'#2A1A08':'#C47830',color:isDark?'#FFD090':'#FFF0D8',borderRadius:3,
                             fontSize:7,fontWeight:900,padding:'1px 5px',lineHeight:1.5,
                             letterSpacing:0.5,pointerEvents:'none'}}>
                             {measure.label}
