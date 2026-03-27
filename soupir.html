@@ -163,7 +163,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='2.07';
+const APP_VERSION='2.08';
 const CHORD_FONT="'Barlow Semi Condensed','Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -3124,7 +3124,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
 
   // Cycle barre de mesure au clic — sans ouvrir de panel
   const BAR_LEFT_CYCLE=['normal','repeat-start'];
-  const BAR_RIGHT_CYCLE=['normal','repeat-end','double','final','none'];
+  const BAR_RIGHT_CYCLE=['normal','repeat-end','repeat-end-start','double','final','none'];
   function cycleBarline(si,mi,side){
     saveUndo();
     const sec=cur.sections[si];
@@ -4264,6 +4264,11 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                   </div>);
                   if(type==='repeat-end')return(<div style={{display:'flex',alignItems:'center',alignSelf:'stretch',gap:2}}>
                     <div style={{display:'flex',flexDirection:'column',gap:3}}><div style={dot}/><div style={dot}/></div><div style={thin}/>
+                  </div>);
+                  if(type==='repeat-end-start')return(<div style={{display:'flex',alignItems:'center',alignSelf:'stretch',gap:1}}>
+                    <div style={{display:'flex',flexDirection:'column',gap:3}}><div style={dot}/><div style={dot}/></div>
+                    <div style={thin}/><div style={thin}/>
+                    <div style={{display:'flex',flexDirection:'column',gap:3}}><div style={dot}/><div style={dot}/></div>
                   </div>);
                   if(type==='double')return(<div style={{display:'flex',alignItems:'stretch',alignSelf:'stretch',gap:2}}><div style={thin}/><div style={thin}/></div>);
                   if(type==='final')return(<div style={{display:'flex',alignItems:'stretch',alignSelf:'stretch',gap:2}}><div style={thin}/><div style={thick}/></div>);
