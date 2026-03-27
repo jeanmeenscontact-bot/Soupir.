@@ -163,7 +163,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='2.01';
+const APP_VERSION='2.02';
 const CHORD_FONT="'Barlow Semi Condensed','Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -1769,11 +1769,17 @@ function parseMusicXML(xmlString){
       const volta=getVolta(mEl);
       const rehearsal=getRehearsalName(mEl);
 
+      // Détection mesure simile (measure-repeat) → beat 0 = '%'
+      const measureRepeatEl=mEl.querySelector('measure-repeat');
+      const isMeasureRepeat=measureRepeatEl&&measureRepeatEl.getAttribute('type')==='start';
+
       // Accords et signes avec positions en beats — un seul parcours sur les enfants
       const harmonies=[];
       const dirsByBeat={}; // beatPos → signs[] (segno, coda…)
       let pos=0;
       for(const child of mEl.children){
+        // Si mesure-simile : ignorer les harmonies (elles sont copiées pour la lecture)
+        if(isMeasureRepeat&&child.tagName==='harmony') continue;
         if(child.tagName==='harmony'){
           // Racine (via sous-élément <root> pour éviter confusion avec <bass>)
           const rootEl=child.querySelector('root');
@@ -1821,9 +1827,13 @@ function parseMusicXML(xmlString){
 
       // Construire le tableau de beats (vides = '', pas de '/')
       const beatsArr=Array.from({length:numBeats},()=>mkBeat(''));
-      harmonies.forEach(({beatPos,chordStr})=>{
-        if(beatPos<numBeats)beatsArr[beatPos]=mkBeat(chordStr);
-      });
+      if(isMeasureRepeat){
+        beatsArr[0]=mkBeat('%'); // signe idem = répéter la mesure précédente
+      } else {
+        harmonies.forEach(({beatPos,chordStr})=>{
+          if(beatPos<numBeats)beatsArr[beatPos]=mkBeat(chordStr);
+        });
+      }
       // Appliquer les signes aux beats selon leur position réelle
       Object.entries(dirsByBeat).forEach(([bp,signs])=>{
         const bi=parseInt(bp);if(bi>=numBeats||!signs.length)return;
