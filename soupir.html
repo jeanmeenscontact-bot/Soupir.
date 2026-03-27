@@ -163,7 +163,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='2.02';
+const APP_VERSION='2.04';
 const CHORD_FONT="'Barlow Semi Condensed','Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -1849,6 +1849,32 @@ function parseMusicXML(xmlString){
       rawMeasures.push({leftType,rightType,beats:beatsArr,rehearsal,lineBreak});
     }
 
+    // ── Détection automatique du signe idem '%' ────────────────────────────────
+    // Si une mesure a exactement les mêmes accords que la précédente (même position),
+    // sans marque de section ni signe de renvoi, on la remplace par '%'.
+    // La référence ne change pas quand une mesure devient '%' → cascade possible.
+    {
+      let refBeats=null;
+      for(const m of rawMeasures){
+        const orig=m.beats.slice(); // snapshot avant toute transformation
+        if(!refBeats){refBeats=orig;continue;}
+        const eligible=!m.rehearsal
+          &&m.leftType==='normal'
+          &&orig.some(b=>b.c&&b.c!=='%')          // au moins un accord réel
+          &&!orig.some(b=>b.s&&b.s.length>0);     // pas de signe (coda/segno) sur cette mesure
+        if(eligible){
+          const allMatch=orig.every((b,bi)=>(b.c||'')===(refBeats[bi]?.c||''));
+          if(allMatch){
+            // Transformer en signe idem : beat 0 = '%', autres = vides ; volta conservé
+            const volta=orig[0]?.v||null;
+            m.beats=orig.map((b,bi)=>mkBeat(bi===0?'%':'',b.s||[],bi===0?volta:null,null));
+            continue; // refBeats inchangé → '%' en cascade possible
+          }
+        }
+        refBeats=orig;
+      }
+    }
+
     // ── Regrouper en sections ──────────────────────────────────────────────────
     // Nouvelle section sur : barre gauche non-normale OU marque de répétition
     const sections=[];
@@ -3218,18 +3244,16 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
     const VOLTA_H=19;
 
     const isSel=editMode&&picker.visible&&!picker.isGrande&&picker.si===si&&picker.mi===mi&&picker.half===(half||'a');
-    // Signes + annotations — fusionnés en un seul overlay flex en haut
-    const measureSignIds=[...new Set(beats.flatMap(b=>b.s||[]))];
-    const hasMeasureSigns=measureSignIds.length>0;
+    // Annotations + badge — overlay flex en haut (signes gérés par temps dans beats.map)
     const measureAnnotations=beats.map(b=>b.t||'').filter(Boolean).join(' · ');
     const hasVoltaBeat0=!!beats[0]?.v;
-    const hasTopOverlay=hasMeasureSigns||!!measureAnnotations||!!secBadge;
+    const hasTopOverlay=!!measureAnnotations||!!secBadge;
     return(
       <div style={{flex:1,display:'flex',minWidth:0,position:'relative',
         background:isSel?'rgba(58,155,213,0.09)':'transparent',
         transition:'background 0.12s'}}>
 
-        {/* ── Badge section + Signes + Annotation — une seule ligne flex en haut ── */}
+        {/* ── Badge section + Annotation — overlay flex en haut ── */}
         {hasTopOverlay&&(
           <div style={{position:'absolute',top:hasVoltaBeat0?VOLTA_H+2:2,left:1,right:1,
             display:'flex',alignItems:'center',gap:4,
@@ -3241,12 +3265,6 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                 padding:'2px 7px',lineHeight:1.4,letterSpacing:1.0,textTransform:'uppercase',
                 overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:'50%'}}>
                 {secBadge}
-              </span>
-            )}
-            {hasMeasureSigns&&(
-              <span style={{fontSize:20,color:SIGN_COLOR,fontWeight:900,
-                background:SIGN_COLOR+'18',borderRadius:4,padding:'2px 5px',lineHeight:1.1,whiteSpace:'nowrap',flexShrink:0}}>
-                {measureSignIds.map(s=>{const st=SIGN_TYPES.find(x=>x.id===s);return st?st.sym:s;}).join(' ')}
               </span>
             )}
             {measureAnnotations&&(
@@ -3286,6 +3304,16 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                   pointerEvents:'none',zIndex:2}}>
                   <span style={{fontSize:10,fontWeight:900,color:SIGN_ACCENT,lineHeight:1,fontStyle:'italic'}}>
                     {beat.v}.
+                  </span>
+                </div>
+              )}
+              {/* Signes musicaux — positionnés au bon temps */}
+              {beat.s&&beat.s.length>0&&(
+                <div style={{position:'absolute',top:hasVolta?VOLTA_H+2:2,left:0,
+                  display:'flex',pointerEvents:'none',zIndex:8,lineHeight:1}}>
+                  <span style={{fontSize:18,color:SIGN_COLOR,fontWeight:900,
+                    background:SIGN_COLOR+'18',borderRadius:4,padding:'2px 5px',lineHeight:1.1,whiteSpace:'nowrap'}}>
+                    {beat.s.map(s=>{const st=SIGN_TYPES.find(x=>x.id===s);return st?st.sym:s;}).join(' ')}
                   </span>
                 </div>
               )}
@@ -3574,19 +3602,22 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                             minWidth:0,overflow:'hidden',
                             background:editMode&&picker.visible&&picker.isGrande&&picker.si===si&&picker.mi===mi?'rgba(58,155,213,0.09)':'transparent',
                             transition:'background 0.12s'}}>
-                          {/* Signes + annotations — overlay flex en haut (grande mesure) */}
+                          {/* Badge section + Annotations — overlay flex en haut (grande mesure) */}
                           {(()=>{
-                            const gmSignIds=[...new Set(allBeats.flatMap(b=>b.s||[]))];
                             const gmAnnotations=allBeats.map(b=>b.t||'').filter(Boolean).join(' · ');
                             const gmHasVolta=!!allBeats[0]?.v;
-                            const gmHasTop=gmSignIds.length>0||!!gmAnnotations;
+                            const gmHasTop=!!gmAnnotations||(sectionStart&&!!sectionName);
                             return gmHasTop&&(
                               <div style={{position:'absolute',top:gmHasVolta?VOLTA_H+2:2,left:1,right:1,
                                 display:'flex',alignItems:'center',gap:5,
-                                pointerEvents:'none',zIndex:3,lineHeight:1,overflow:'hidden'}}>
-                                {gmSignIds.length>0&&(
-                                  <span style={{fontSize:20,color:SIGN_COLOR,fontWeight:900,background:SIGN_COLOR+'18',borderRadius:4,padding:'2px 5px',lineHeight:1.1,whiteSpace:'nowrap',flexShrink:0}}>
-                                    {gmSignIds.map(s=>{const st=SIGN_TYPES.find(x=>x.id===s);return st?st.sym:s;}).join(' ')}
+                                pointerEvents:'none',zIndex:7,lineHeight:1,overflow:'hidden'}}>
+                                {sectionStart&&sectionName&&(
+                                  <span style={{fontSize:10,fontWeight:800,flexShrink:0,
+                                    background:isDark?'rgba(100,55,15,0.88)':'rgba(148,72,18,0.82)',
+                                    color:isDark?'#FFD4A0':'#FFE8C8',borderRadius:4,
+                                    padding:'2px 7px',lineHeight:1.4,letterSpacing:1.0,textTransform:'uppercase',
+                                    overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:'50%'}}>
+                                    {sectionName}
                                   </span>
                                 )}
                                 {gmAnnotations&&(
@@ -3599,18 +3630,6 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                               </div>
                             );
                           })()}
-                          {/* Badge nom de section — première grande mesure de chaque section */}
-                          {sectionStart&&sectionName&&(
-                            <div style={{position:'absolute',top:4,left:ci===0?6:4,zIndex:7,
-                              background:isDark?'rgba(100,55,15,0.88)':'rgba(148,72,18,0.82)',
-                              color:isDark?'#FFD4A0':'#FFE8C8',borderRadius:4,
-                              fontSize:10,fontWeight:800,padding:'2px 7px',lineHeight:1.4,
-                              letterSpacing:1.0,textTransform:'uppercase',
-                              pointerEvents:'none',whiteSpace:'nowrap',
-                              maxWidth:'40%',overflow:'hidden',textOverflow:'ellipsis'}}>
-                              {sectionName}
-                            </div>
-                          )}
                           {/* 8 temps : 4 + séparateur 20px + 4 → aligne le 5e accord avec une mesure seule */}
                           {allBeats.flatMap((beat,bi)=>{
                             const chord=beat.c||'';
@@ -3634,6 +3653,16 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                                     display:'flex',alignItems:'flex-start',paddingLeft:3,paddingTop:2,
                                     pointerEvents:'none',zIndex:2}}>
                                     <span style={{fontSize:10,fontWeight:900,color:SIGN_ACCENT,lineHeight:1,fontStyle:'italic'}}>{beat.v}.</span>
+                                  </div>
+                                )}
+                                {/* Signes musicaux — positionnés au bon temps */}
+                                {beat.s&&beat.s.length>0&&(
+                                  <div style={{position:'absolute',top:hasVolta?VOLTA_H+2:2,left:0,
+                                    display:'flex',pointerEvents:'none',zIndex:8,lineHeight:1}}>
+                                    <span style={{fontSize:18,color:SIGN_COLOR,fontWeight:900,
+                                      background:SIGN_COLOR+'18',borderRadius:4,padding:'2px 5px',lineHeight:1.1,whiteSpace:'nowrap'}}>
+                                      {beat.s.map(s=>{const st=SIGN_TYPES.find(x=>x.id===s);return st?st.sym:s;}).join(' ')}
+                                    </span>
                                   </div>
                                 )}
                                 {hasChord&&(
