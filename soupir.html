@@ -163,7 +163,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='2.08';
+const APP_VERSION='2.09';
 const CHORD_FONT="'Barlow Semi Condensed','Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -249,9 +249,8 @@ function SoupirLogo({size=90,color='#1A1A1A'}){
 // ─── BARLINE ─────────────────────────────────────────────────────────────────
 function Barline({type='normal',onClick,minH=106,accentColor='#1A1A1A',dotsColor=null}){
   // type 'none' → largeur 0 (grande mesure = fusionner avec la suivante)
-  // BW fixe 10px pour TOUS les types : pas de décalage en changeant le type.
-  // Le contenu des barres de répétition (>10px) déborde en overflow:visible vers la gauche.
-  const BW=type==='none'?0:10;
+  // BW large quand cliquable pour faciliter le tap ; contenu centré, overflow visible.
+  const BW=type==='none'?0:onClick?20:10;
   const INK=accentColor;       // couleur des traits neutres (barres fines, finale)
   const DOTS=dotsColor||INK;   // couleur des éléments de répétition (rouge si préférence rouge)
   const isRepeat=type==='repeat-start'||type==='repeat-end'||type==='repeat-end-start';
@@ -4245,72 +4244,22 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
 
               {/* Rythme */}
               {GRP('Rythme', CRYTHME)}
-              {LBL('Temps + barres', CRYTHME)}
-              {(()=>{
-                // Types de barres courantes
-                const cpkSec=cur.sections[picker.si];
-                const cpkLBT=picker.mi===0?(cpkSec?.startBar||'normal'):(cpkSec?.measures[picker.mi-1]?.barAfter||'normal');
-                const cpkRBT=cpkSec?.measures[picker.mi]?.barAfter||'normal';
-                // Rendu mini barre verticale
-                const MiniBar=({type})=>{
-                  const mc=CRYTHME;
-                  const isActive=type!=='normal';
-                  const thin={width:1.5,background:mc,alignSelf:'stretch',borderRadius:1};
-                  const thick={width:3,background:mc,alignSelf:'stretch',borderRadius:1};
-                  const dot={width:3.5,height:3.5,borderRadius:'50%',background:mc};
-                  if(type==='normal')return(<div style={{display:'flex',justifyContent:'center',alignSelf:'stretch',alignItems:'stretch',width:8}}><div style={thin}/></div>);
-                  if(type==='repeat-start')return(<div style={{display:'flex',alignItems:'center',alignSelf:'stretch',gap:2}}>
-                    <div style={thin}/><div style={{display:'flex',flexDirection:'column',gap:3}}><div style={dot}/><div style={dot}/></div>
-                  </div>);
-                  if(type==='repeat-end')return(<div style={{display:'flex',alignItems:'center',alignSelf:'stretch',gap:2}}>
-                    <div style={{display:'flex',flexDirection:'column',gap:3}}><div style={dot}/><div style={dot}/></div><div style={thin}/>
-                  </div>);
-                  if(type==='repeat-end-start')return(<div style={{display:'flex',alignItems:'center',alignSelf:'stretch',gap:1}}>
-                    <div style={{display:'flex',flexDirection:'column',gap:3}}><div style={dot}/><div style={dot}/></div>
-                    <div style={thin}/><div style={thin}/>
-                    <div style={{display:'flex',flexDirection:'column',gap:3}}><div style={dot}/><div style={dot}/></div>
-                  </div>);
-                  if(type==='double')return(<div style={{display:'flex',alignItems:'stretch',alignSelf:'stretch',gap:2}}><div style={thin}/><div style={thin}/></div>);
-                  if(type==='final')return(<div style={{display:'flex',alignItems:'stretch',alignSelf:'stretch',gap:2}}><div style={thin}/><div style={thick}/></div>);
-                  if(type==='none')return(<div style={{display:'flex',justifyContent:'center',alignItems:'center',alignSelf:'stretch',width:8}}>
-                    <div style={{width:3,height:3,borderRadius:'50%',background:`${mc}50`}}/>
-                  </div>);
-                  return(<div style={{display:'flex',justifyContent:'center',alignSelf:'stretch',alignItems:'stretch',width:8}}><div style={thin}/></div>);
-                };
-                return(
-                  <div style={{display:'flex',gap:5,marginBottom:14,alignItems:'stretch'}}>
-                    {/* Barre gauche */}
-                    <button onClick={()=>cycleBarline(picker.si,picker.mi,'left')}
-                      title={`Barre gauche : ${cpkLBT}`}
-                      style={{...B,width:24,borderRadius:8,flexShrink:0,
-                        background:cpkLBT!=='normal'?`${CRYTHME}22`:'transparent',
-                        outline:`1.5px solid ${cpkLBT!=='normal'?CRYTHME:BC}`,padding:'0 2px'}}>
-                      <MiniBar type={cpkLBT}/>
+              {LBL('Temps', CRYTHME)}
+              <div style={{display:'flex',gap:5,marginBottom:14}}>
+                {(picker.localBeats||[]).map((_b,bi)=>{
+                  const bc=(picker.localBeats||[])[bi]?.c||'';
+                  const filled=bc&&!isSpec(bc);
+                  return(
+                    <button key={bi} onClick={()=>cpkBeat(bi)}
+                      style={{...B,flex:1,height:40,borderRadius:9,fontSize:12,fontWeight:800,
+                        background:sbi===bi?CRYTHME:(filled?(isDark?'#2E2C2A':'#E8E4DE'):'transparent'),
+                        color:sbi===bi?'#F2EDE4':(filled?(isDark?'#C0BAB0':'#6A6460'):IC),
+                        outline:`2px solid ${sbi===bi?CRYTHME:(filled?'#4A4845':BC)}`}}>
+                      {sbi===bi&&filled?applyPrefs(bc,prefs)||String(bi+1):String(bi+1)}
                     </button>
-                    {(picker.localBeats||[]).map((_b,bi)=>{
-                      const bc=(picker.localBeats||[])[bi]?.c||'';
-                      const filled=bc&&!isSpec(bc);
-                      return(
-                        <button key={bi} onClick={()=>cpkBeat(bi)}
-                          style={{...B,flex:1,height:40,borderRadius:9,fontSize:12,fontWeight:800,
-                            background:sbi===bi?CRYTHME:(filled?(isDark?'#2E2C2A':'#E8E4DE'):'transparent'),
-                            color:sbi===bi?'#F2EDE4':(filled?(isDark?'#C0BAB0':'#6A6460'):IC),
-                            outline:`2px solid ${sbi===bi?CRYTHME:(filled?'#4A4845':BC)}`}}>
-                          {sbi===bi&&filled?applyPrefs(bc,prefs)||String(bi+1):String(bi+1)}
-                        </button>
-                      );
-                    })}
-                    {/* Barre droite */}
-                    <button onClick={()=>cycleBarline(picker.si,picker.mi,'right')}
-                      title={`Barre droite : ${cpkRBT}`}
-                      style={{...B,width:24,borderRadius:8,flexShrink:0,
-                        background:cpkRBT!=='normal'?`${CRYTHME}22`:'transparent',
-                        outline:`1.5px solid ${cpkRBT!=='normal'?CRYTHME:BC}`,padding:'0 2px'}}>
-                      <MiniBar type={cpkRBT}/>
-                    </button>
-                  </div>
-                );
-              })()}
+                  );
+                })}
+              </div>
 
               {/* Accords spéciaux */}
               {LBL('Spécial', CRYTHME)}
