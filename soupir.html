@@ -163,7 +163,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='2.06';
+const APP_VERSION='2.07';
 const CHORD_FONT="'Barlow Semi Condensed','Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -2789,7 +2789,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
     localBeats:[mkBeat(),mkBeat(),mkBeat(),mkBeat()],selectedBeat:0,
   });
   const [measureSheet,setMeasureSheet]=useState(null); // {si, mi} — structurel uniquement
-  const [barlinePick,setBarlinePick]=useState(null);   // {si, mi, side}
+  const [barlinePick,setBarlinePick]=useState(null);   // conservé pour grande mesure Sheet picker
   const [insertSheet,setInsertSheet]=useState(null);
   const [currentPage,setCurrentPage]=useState(0);
   const [editMode,setEditMode]=useState(true); // true = édition, false = lecture
@@ -3120,6 +3120,27 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
       })
     }));
     setBarlinePick(null);
+  }
+
+  // Cycle barre de mesure au clic — sans ouvrir de panel
+  const BAR_LEFT_CYCLE=['normal','repeat-start'];
+  const BAR_RIGHT_CYCLE=['normal','repeat-end','double','final','none'];
+  function cycleBarline(si,mi,side){
+    saveUndo();
+    const sec=cur.sections[si];
+    const curType=side==='right'
+      ?(sec.measures[mi]?.barAfter||'normal')
+      :(mi===0?(sec.startBar||'normal'):(sec.measures[mi-1]?.barAfter||'normal'));
+    const cyc=side==='left'?BAR_LEFT_CYCLE:BAR_RIGHT_CYCLE;
+    const next=cyc[(cyc.indexOf(curType)+1)%cyc.length];
+    setLibrary(lib=>lib.map(p=>p.id!==piece.id?p:{...p,
+      sections:p.sections.map((s,sI)=>{
+        if(sI!==si)return s;
+        if(side==='right')return{...s,measures:s.measures.map((mm,mI)=>mI!==mi?mm:{...mm,barAfter:next})};
+        if(mi===0)return{...s,startBar:next};
+        return{...s,measures:s.measures.map((mm,mI)=>mI!==(mi-1)?mm:{...mm,barAfter:next})};
+      })
+    }));
   }
 
   function handleMeasureAction(si,mi,action){
@@ -3574,7 +3595,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
               <div style={{position:'relative',display:'flex',flexShrink:0}}>
                 <Barline
                   type={firstCell.mi===0?(cur.sections[firstCell.si].startBar||'normal'):'normal'}
-                  onClick={editMode?(e)=>{e.stopPropagation();setBarlinePick({si:firstCell.si,mi:firstCell.mi,side:'left'});}:undefined}
+                  onClick={editMode?(e)=>{e.stopPropagation();cycleBarline(firstCell.si,firstCell.mi,'left');}:undefined}
                   minH={barH} accentColor={INK_ACCENT} dotsColor={SIGN_ACCENT}/>
                 {addSiAtStart!=null&&(
                   <button onClick={()=>{addMeasureAtEnd(addSiAtStart);setCurrentPage(Math.ceil((allRows.length+1)/rowsPerPage)-1);}}
@@ -3709,7 +3730,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                               return[
                                 <div key="gm-sep"
                                   style={{width:20,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',cursor:editMode?'pointer':'default'}}
-                                  onClick={editMode?(e)=>{e.stopPropagation();setBarlinePick({si,mi,side:'right'});}:undefined}>
+                                  onClick={editMode?(e)=>{e.stopPropagation();cycleBarline(si,mi,'right');}:undefined}>
                                   {editMode&&<div style={{width:0,alignSelf:'stretch',borderLeft:`1.5px dashed ${isDark?'rgba(255,255,255,0.25)':'rgba(0,0,0,0.18)'}`}}/>}
                                 </div>,
                                 beatEl
@@ -3721,7 +3742,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                         {/* Spacer : compense la barline 'none' disparue pour aligner les rows */}
                         <div style={{width:10,flexShrink:0}}/>
                         <Barline type={cMm.barAfter||'normal'}
-                          onClick={editMode?(e)=>{e.stopPropagation();setBarlinePick({si:cSi,mi:cMi,side:'right'});}:undefined}
+                          onClick={editMode?(e)=>{e.stopPropagation();cycleBarline(cSi,cMi,'right');}:undefined}
                           minH={barH} accentColor={INK_ACCENT} dotsColor={SIGN_ACCENT}/>
                       </React.Fragment>
                     );
@@ -3756,7 +3777,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                           )}
                         </div>
                         <Barline type={measure.barAfter||'normal'}
-                          onClick={editMode?(e)=>{e.stopPropagation();setBarlinePick({si,mi,side:'right'});}:undefined}
+                          onClick={editMode?(e)=>{e.stopPropagation();cycleBarline(si,mi,'right');}:undefined}
                           minH={barH} accentColor={INK_ACCENT} dotsColor={SIGN_ACCENT}/>
                       </React.Fragment>
                     );
@@ -3800,7 +3821,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                         )}
                       </div>
                       <Barline type={isMaster?'none':(measure.barAfter||'normal')}
-                        onClick={editMode?(e)=>{e.stopPropagation();setBarlinePick({si,mi,side:'right'});}:undefined}
+                        onClick={editMode?(e)=>{e.stopPropagation();cycleBarline(si,mi,'right');}:undefined}
                         minH={barH} accentColor={INK_ACCENT} dotsColor={SIGN_ACCENT}/>
                     </React.Fragment>
                   );
@@ -4224,22 +4245,67 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
 
               {/* Rythme */}
               {GRP('Rythme', CRYTHME)}
-              {LBL('Temps', CRYTHME)}
-              <div style={{display:'flex',gap:5,marginBottom:14}}>
-                {(picker.localBeats||[]).map((_b,bi)=>{
-                  const bc=(picker.localBeats||[])[bi]?.c||'';
-                  const filled=bc&&!isSpec(bc);
-                  return(
-                    <button key={bi} onClick={()=>cpkBeat(bi)}
-                      style={{...B,flex:1,height:40,borderRadius:9,fontSize:12,fontWeight:800,
-                        background:sbi===bi?CRYTHME:(filled?(isDark?'#2E2C2A':'#E8E4DE'):'transparent'),
-                        color:sbi===bi?'#F2EDE4':(filled?(isDark?'#C0BAB0':'#6A6460'):IC),
-                        outline:`2px solid ${sbi===bi?CRYTHME:(filled?'#4A4845':BC)}`}}>
-                      {sbi===bi&&filled?applyPrefs(bc,prefs)||String(bi+1):String(bi+1)}
+              {LBL('Temps + barres', CRYTHME)}
+              {(()=>{
+                // Types de barres courantes
+                const cpkSec=cur.sections[picker.si];
+                const cpkLBT=picker.mi===0?(cpkSec?.startBar||'normal'):(cpkSec?.measures[picker.mi-1]?.barAfter||'normal');
+                const cpkRBT=cpkSec?.measures[picker.mi]?.barAfter||'normal';
+                // Rendu mini barre verticale
+                const MiniBar=({type})=>{
+                  const mc=CRYTHME;
+                  const isActive=type!=='normal';
+                  const thin={width:1.5,background:mc,alignSelf:'stretch',borderRadius:1};
+                  const thick={width:3,background:mc,alignSelf:'stretch',borderRadius:1};
+                  const dot={width:3.5,height:3.5,borderRadius:'50%',background:mc};
+                  if(type==='normal')return(<div style={{display:'flex',justifyContent:'center',alignSelf:'stretch',alignItems:'stretch',width:8}}><div style={thin}/></div>);
+                  if(type==='repeat-start')return(<div style={{display:'flex',alignItems:'center',alignSelf:'stretch',gap:2}}>
+                    <div style={thin}/><div style={{display:'flex',flexDirection:'column',gap:3}}><div style={dot}/><div style={dot}/></div>
+                  </div>);
+                  if(type==='repeat-end')return(<div style={{display:'flex',alignItems:'center',alignSelf:'stretch',gap:2}}>
+                    <div style={{display:'flex',flexDirection:'column',gap:3}}><div style={dot}/><div style={dot}/></div><div style={thin}/>
+                  </div>);
+                  if(type==='double')return(<div style={{display:'flex',alignItems:'stretch',alignSelf:'stretch',gap:2}}><div style={thin}/><div style={thin}/></div>);
+                  if(type==='final')return(<div style={{display:'flex',alignItems:'stretch',alignSelf:'stretch',gap:2}}><div style={thin}/><div style={thick}/></div>);
+                  if(type==='none')return(<div style={{display:'flex',justifyContent:'center',alignItems:'center',alignSelf:'stretch',width:8}}>
+                    <div style={{width:3,height:3,borderRadius:'50%',background:`${mc}50`}}/>
+                  </div>);
+                  return(<div style={{display:'flex',justifyContent:'center',alignSelf:'stretch',alignItems:'stretch',width:8}}><div style={thin}/></div>);
+                };
+                return(
+                  <div style={{display:'flex',gap:5,marginBottom:14,alignItems:'stretch'}}>
+                    {/* Barre gauche */}
+                    <button onClick={()=>cycleBarline(picker.si,picker.mi,'left')}
+                      title={`Barre gauche : ${cpkLBT}`}
+                      style={{...B,width:24,borderRadius:8,flexShrink:0,
+                        background:cpkLBT!=='normal'?`${CRYTHME}22`:'transparent',
+                        outline:`1.5px solid ${cpkLBT!=='normal'?CRYTHME:BC}`,padding:'0 2px'}}>
+                      <MiniBar type={cpkLBT}/>
                     </button>
-                  );
-                })}
-              </div>
+                    {(picker.localBeats||[]).map((_b,bi)=>{
+                      const bc=(picker.localBeats||[])[bi]?.c||'';
+                      const filled=bc&&!isSpec(bc);
+                      return(
+                        <button key={bi} onClick={()=>cpkBeat(bi)}
+                          style={{...B,flex:1,height:40,borderRadius:9,fontSize:12,fontWeight:800,
+                            background:sbi===bi?CRYTHME:(filled?(isDark?'#2E2C2A':'#E8E4DE'):'transparent'),
+                            color:sbi===bi?'#F2EDE4':(filled?(isDark?'#C0BAB0':'#6A6460'):IC),
+                            outline:`2px solid ${sbi===bi?CRYTHME:(filled?'#4A4845':BC)}`}}>
+                          {sbi===bi&&filled?applyPrefs(bc,prefs)||String(bi+1):String(bi+1)}
+                        </button>
+                      );
+                    })}
+                    {/* Barre droite */}
+                    <button onClick={()=>cycleBarline(picker.si,picker.mi,'right')}
+                      title={`Barre droite : ${cpkRBT}`}
+                      style={{...B,width:24,borderRadius:8,flexShrink:0,
+                        background:cpkRBT!=='normal'?`${CRYTHME}22`:'transparent',
+                        outline:`1.5px solid ${cpkRBT!=='normal'?CRYTHME:BC}`,padding:'0 2px'}}>
+                      <MiniBar type={cpkRBT}/>
+                    </button>
+                  </div>
+                );
+              })()}
 
               {/* Accords spéciaux */}
               {LBL('Spécial', CRYTHME)}
@@ -4518,6 +4584,50 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                 </div>
               )}
 
+              {/* Structure de la mesure */}
+              {GRP('Structure', '#8A6A3A')}
+              {(()=>{
+                const cpkMm=cur.sections[picker.si]?.measures[picker.mi];
+                const cpkIsSplit=!!(cpkMm&&cpkMm.split2);
+                const cpkSpacer=cpkMm?.rowSpacer||null;
+                const ACstr='#8A6A3A';
+                const strBtn=(label,icon,onClick,danger)=>(
+                  <button onClick={()=>{setPicker(pk=>({...pk,visible:false,cpkSub:null}));onClick();}}
+                    style={{...B,width:'100%',height:40,borderRadius:9,justifyContent:'flex-start',gap:10,
+                      padding:'0 12px',fontSize:12,fontWeight:700,
+                      background:'transparent',color:danger?'#C0392B':IC,
+                      outline:`1.5px solid ${danger?'#C03928':BC}`}}>
+                    <span style={{width:18,textAlign:'center',flexShrink:0,fontSize:15}}>{icon}</span>
+                    <span>{label}</span>
+                  </button>
+                );
+                return(<>
+                  <div style={{display:'flex',gap:5,marginBottom:10}}>
+                    {strBtn('Insérer avant','＋',()=>handleMeasureAction(picker.si,picker.mi,'addBefore'))}
+                    {strBtn('Insérer après','＋',()=>handleMeasureAction(picker.si,picker.mi,'addAfter'))}
+                  </div>
+                  <div style={{display:'flex',gap:5,marginBottom:10}}>
+                    {cpkIsSplit
+                      ?strBtn('Réunir les demi-mesures','⟺',()=>handleMeasureAction(picker.si,picker.mi,'unsplit'))
+                      :strBtn('Diviser en demi-mesures','⟨⟩',()=>handleMeasureAction(picker.si,picker.mi,'split'))
+                    }
+                  </div>
+                  <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:10}}>
+                    <span style={{fontSize:11,color:BC,flex:1}}>Espace avant la ligne</span>
+                    {[{s:'S',a:'setRowSpacerS'},{s:'M',a:'setRowSpacerM'},{s:'L',a:'setRowSpacerL'}].map(({s,a})=>{
+                      const sz={'setRowSpacerS':1,'setRowSpacerM':2,'setRowSpacerL':3}[a];
+                      const active=cpkSpacer===sz;
+                      return(<button key={s}
+                        onClick={()=>handleMeasureAction(picker.si,picker.mi,active?'clearRowSpacer':a)}
+                        style={{...B,width:34,height:34,borderRadius:8,fontSize:12,fontWeight:800,
+                          background:active?ACstr:'transparent',color:active?'#FFF':IC,
+                          outline:`1.5px solid ${active?ACstr:BC}`}}>{s}</button>);
+                    })}
+                  </div>
+                  {strBtn('Supprimer cette mesure','×',()=>handleMeasureAction(picker.si,picker.mi,'deleteMeasure'),true)}
+                </>);
+              })()}
+
             </>)}
 
           </div>
@@ -4528,15 +4638,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
         onInsert={(type,name)=>{insertSection(insertSheet,type,name);setInsertSheet(null);}}
         onClose={()=>setInsertSheet(null)}/>)}
 
-      {barlinePick&&(<BarlinePanel
-        si={barlinePick.si} mi={barlinePick.mi}
-        currentBarType={barlinePick.side==='right'
-          ?(cur.sections[barlinePick.si]?.measures[barlinePick.mi]?.barAfter||'normal')
-          :(barlinePick.mi===0?(cur.sections[barlinePick.si]?.startBar||'normal'):(cur.sections[barlinePick.si]?.measures[barlinePick.mi-1]?.barAfter||'normal'))}
-        measure={cur.sections[barlinePick.si]?.measures[barlinePick.mi]}
-        onSelectBarline={t=>updateBarline(barlinePick.si,barlinePick.mi,barlinePick.side,t)}
-        onAction={a=>{setBarlinePick(null);handleMeasureAction(barlinePick.si,barlinePick.mi,a);}}
-        onClose={()=>setBarlinePick(null)}/>)}
+      {/* BarlinePanel retiré — barres cyclées directement au clic dans la grille et dans le compact picker */}
 
     </div>
 
