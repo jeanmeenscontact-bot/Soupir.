@@ -163,7 +163,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='2.05';
+const APP_VERSION='2.06';
 const CHORD_FONT="'Barlow Semi Condensed','Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -3254,16 +3254,18 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
     const VOLTA_H=24;
 
     const isSel=editMode&&picker.visible&&!picker.isGrande&&picker.si===si&&picker.mi===mi&&picker.half===(half||'a');
-    // Annotations + badge — overlay flex en haut (signes gérés par temps dans beats.map)
+    // Overlay flex en haut : badge + signes beat-0 + annotations
+    // Signes beats 1-3 : rendus per-beat (position précise, pas de chevauchement possible)
+    const beat0Signs=beats[0]?.s||[];
     const measureAnnotations=beats.map(b=>b.t||'').filter(Boolean).join(' · ');
     const hasVoltaBeat0=!!beats[0]?.v;
-    const hasTopOverlay=!!measureAnnotations||!!secBadge;
+    const hasTopOverlay=!!measureAnnotations||!!secBadge||beat0Signs.length>0;
     return(
       <div style={{flex:1,display:'flex',minWidth:0,position:'relative',
         background:isSel?'rgba(58,155,213,0.09)':'transparent',
         transition:'background 0.12s'}}>
 
-        {/* ── Badge section + Annotation — overlay flex en haut ── */}
+        {/* ── Badge + signes beat-0 + annotations — une seule ligne flex en haut ── */}
         {hasTopOverlay&&(
           <div style={{position:'absolute',top:hasVoltaBeat0?VOLTA_H+2:2,left:1,right:1,
             display:'flex',alignItems:'center',gap:4,
@@ -3275,6 +3277,12 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                 padding:'2px 7px',lineHeight:1.4,letterSpacing:1.0,textTransform:'uppercase',
                 overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:'50%'}}>
                 {secBadge}
+              </span>
+            )}
+            {beat0Signs.length>0&&(
+              <span style={{fontSize:18,color:SIGN_COLOR,fontWeight:900,flexShrink:0,
+                background:SIGN_COLOR+'18',borderRadius:4,padding:'2px 5px',lineHeight:1.1,whiteSpace:'nowrap'}}>
+                {beat0Signs.map(s=>{const st=SIGN_TYPES.find(x=>x.id===s);return st?st.sym:s;}).join(' ')}
               </span>
             )}
             {measureAnnotations&&(
@@ -3317,8 +3325,8 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                   </span>
                 </div>
               )}
-              {/* Signes musicaux — positionnés au bon temps */}
-              {beat.s&&beat.s.length>0&&(
+              {/* Signes musicaux beats 1-3 — per-beat (beat 0 dans l'overlay flex ci-dessus) */}
+              {bi>0&&beat.s&&beat.s.length>0&&(
                 <div style={{position:'absolute',top:hasVolta?VOLTA_H+2:2,left:0,
                   display:'flex',pointerEvents:'none',zIndex:8,lineHeight:1}}>
                   <span style={{fontSize:18,color:SIGN_COLOR,fontWeight:900,
@@ -3612,11 +3620,12 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                             minWidth:0,overflow:'hidden',
                             background:editMode&&picker.visible&&picker.isGrande&&picker.si===si&&picker.mi===mi?'rgba(58,155,213,0.09)':'transparent',
                             transition:'background 0.12s'}}>
-                          {/* Badge section + Annotations — overlay flex en haut (grande mesure) */}
+                          {/* Badge + signes beat-0 + annotations — overlay flex en haut (grande mesure) */}
                           {(()=>{
+                            const gmBeat0Signs=allBeats[0]?.s||[];
                             const gmAnnotations=allBeats.map(b=>b.t||'').filter(Boolean).join(' · ');
                             const gmHasVolta=!!allBeats[0]?.v;
-                            const gmHasTop=!!gmAnnotations||(sectionStart&&!!sectionName);
+                            const gmHasTop=!!gmAnnotations||(sectionStart&&!!sectionName)||gmBeat0Signs.length>0;
                             return gmHasTop&&(
                               <div style={{position:'absolute',top:gmHasVolta?VOLTA_H+2:2,left:1,right:1,
                                 display:'flex',alignItems:'center',gap:5,
@@ -3628,6 +3637,12 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                                     padding:'2px 7px',lineHeight:1.4,letterSpacing:1.0,textTransform:'uppercase',
                                     overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:'50%'}}>
                                     {sectionName}
+                                  </span>
+                                )}
+                                {gmBeat0Signs.length>0&&(
+                                  <span style={{fontSize:18,color:SIGN_COLOR,fontWeight:900,flexShrink:0,
+                                    background:SIGN_COLOR+'18',borderRadius:4,padding:'2px 5px',lineHeight:1.1,whiteSpace:'nowrap'}}>
+                                    {gmBeat0Signs.map(s=>{const st=SIGN_TYPES.find(x=>x.id===s);return st?st.sym:s;}).join(' ')}
                                   </span>
                                 )}
                                 {gmAnnotations&&(
@@ -3665,8 +3680,8 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                                     <span style={{fontSize:12,fontWeight:900,color:SIGN_ACCENT,lineHeight:1,fontStyle:'italic'}}>{beat.v}.</span>
                                   </div>
                                 )}
-                                {/* Signes musicaux — positionnés au bon temps */}
-                                {beat.s&&beat.s.length>0&&(
+                                {/* Signes musicaux beats 1-7 — per-beat (beat 0 dans l'overlay flex) */}
+                                {bi>0&&beat.s&&beat.s.length>0&&(
                                   <div style={{position:'absolute',top:hasVolta?VOLTA_H+2:2,left:0,
                                     display:'flex',pointerEvents:'none',zIndex:8,lineHeight:1}}>
                                     <span style={{fontSize:18,color:SIGN_COLOR,fontWeight:900,
