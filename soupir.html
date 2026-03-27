@@ -163,7 +163,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='2.00';
+const APP_VERSION='2.01';
 const CHORD_FONT="'Barlow Semi Condensed','Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -1803,9 +1803,12 @@ function parseMusicXML(xmlString){
           const beatPos=Math.round(pos/divisions);
           harmonies.push({beatPos,chordStr:chordStr+bassStr});
         }
-        // Signes musicaux au beat courant (position réelle dans le flux de notes)
+        // Signes musicaux — position réelle + <offset> optionnel (en divisions)
         if(child.tagName==='direction'){
-          const bp=Math.min(Math.round(pos/divisions),numBeats-1);
+          const offsetEl=child.querySelector('offset');
+          const offsetVal=offsetEl?parseInt(offsetEl.textContent||'0'):0;
+          const dirPos=pos+offsetVal;
+          const bp=Math.min(Math.max(0,Math.round(dirPos/divisions)),numBeats-1);
           if(!dirsByBeat[bp])dirsByBeat[bp]=[];
           if(child.querySelector('segno')&&!dirsByBeat[bp].includes('segno'))dirsByBeat[bp].push('segno');
           if(child.querySelector('coda')&&!dirsByBeat[bp].includes('coda'))dirsByBeat[bp].push('coda');
@@ -3193,7 +3196,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
 
   // ── Rendu d'une demi-case — positionnement par temps ──────────────────────────
   // num = numéro de mesure (null pour half B d'un split)
-  function renderHalf(mm,half,si,mi,num){
+  function renderHalf(mm,half,si,mi,num,secBadge=null){
     const data=half==='b'?mm.split2:mm;
     const beats=getBeats(data);
     const nFilled=beats.filter(b=>b.c).length||1;
@@ -3210,17 +3213,26 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
     const hasMeasureSigns=measureSignIds.length>0;
     const measureAnnotations=beats.map(b=>b.t||'').filter(Boolean).join(' · ');
     const hasVoltaBeat0=!!beats[0]?.v;
-    const hasTopOverlay=hasMeasureSigns||!!measureAnnotations;
+    const hasTopOverlay=hasMeasureSigns||!!measureAnnotations||!!secBadge;
     return(
       <div style={{flex:1,display:'flex',minWidth:0,position:'relative',
         background:isSel?'rgba(58,155,213,0.09)':'transparent',
         transition:'background 0.12s'}}>
 
-        {/* ── Signes + annotation — une seule ligne flex en haut ── */}
+        {/* ── Badge section + Signes + Annotation — une seule ligne flex en haut ── */}
         {hasTopOverlay&&(
           <div style={{position:'absolute',top:hasVoltaBeat0?VOLTA_H+2:2,left:1,right:1,
-            display:'flex',alignItems:'center',gap:5,
-            pointerEvents:'none',zIndex:3,lineHeight:1,overflow:'hidden'}}>
+            display:'flex',alignItems:'center',gap:4,
+            pointerEvents:'none',zIndex:7,lineHeight:1,overflow:'hidden'}}>
+            {secBadge&&(
+              <span style={{fontSize:10,fontWeight:800,flexShrink:0,
+                background:isDark?'rgba(100,55,15,0.88)':'rgba(148,72,18,0.82)',
+                color:isDark?'#FFD4A0':'#FFE8C8',borderRadius:4,
+                padding:'2px 7px',lineHeight:1.4,letterSpacing:1.0,textTransform:'uppercase',
+                overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:'50%'}}>
+                {secBadge}
+              </span>
+            )}
             {hasMeasureSigns&&(
               <span style={{fontSize:20,color:SIGN_COLOR,fontWeight:900,
                 background:SIGN_COLOR+'18',borderRadius:4,padding:'2px 5px',lineHeight:1.1,whiteSpace:'nowrap',flexShrink:0}}>
@@ -3671,12 +3683,12 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
 
                           {isSplitCont?(
                             <>
-                              {renderHalf(measure,'a',si,mi,num)}
+                              {renderHalf(measure,'a',si,mi,num,sectionStart?sectionName:null)}
                               <div style={{width:1.5,background:INK_ACCENT,flexShrink:0,alignSelf:'stretch'}}/>
                               {renderHalf(measure,'b',si,mi,null)}
                             </>
                           ):(
-                            renderHalf(measure,'a',si,mi,num)
+                            renderHalf(measure,'a',si,mi,num,sectionStart?sectionName:null)
                           )}
                         </div>
                         <Barline type={measure.barAfter||'normal'}
@@ -3690,18 +3702,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                     <React.Fragment key={`${si}-${mi}`}>
                       <div style={{flex:1,position:'relative',display:'flex',flexDirection:'row',
                         minWidth:0,overflow:'hidden'}}>
-                        {/* Badge nom de section — première mesure de chaque section */}
-                        {sectionStart&&sectionName&&(
-                          <div style={{position:'absolute',top:4,left:ci===0?6:4,zIndex:7,
-                            background:isDark?'rgba(100,55,15,0.88)':'rgba(148,72,18,0.82)',
-                            color:isDark?'#FFD4A0':'#FFE8C8',borderRadius:4,
-                            fontSize:10,fontWeight:800,padding:'2px 7px',lineHeight:1.4,
-                            letterSpacing:1.0,textTransform:'uppercase',
-                            pointerEvents:'none',whiteSpace:'nowrap',
-                            maxWidth:'55%',overflow:'hidden',textOverflow:'ellipsis'}}>
-                            {sectionName}
-                          </div>
-                        )}
+                        {/* Badge section intégré dans renderHalf via secBadge */}
                         {measure.label&&(
                           <div style={{position:'absolute',top:3,left:ci===0?28:4,zIndex:6,
                             background:isDark?'#2A1A08':'#C47830',color:isDark?'#FFD090':'#FFF0D8',borderRadius:3,
@@ -3726,12 +3727,12 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
 
                         {isSplit?(
                           <>
-                            {renderHalf(measure,'a',si,mi,num)}
+                            {renderHalf(measure,'a',si,mi,num,sectionStart?sectionName:null)}
                             <div style={{width:1.5,background:INK_ACCENT,flexShrink:0,alignSelf:'stretch'}}/>
                             {renderHalf(measure,'b',si,mi,null)}
                           </>
                         ):(
-                          renderHalf(measure,'a',si,mi,num)
+                          renderHalf(measure,'a',si,mi,num,sectionStart?sectionName:null)
                         )}
                       </div>
                       <Barline type={isMaster?'none':(measure.barAfter||'normal')}
