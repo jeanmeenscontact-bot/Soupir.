@@ -163,7 +163,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='1.99';
+const APP_VERSION='2.00';
 const CHORD_FONT="'Barlow Semi Condensed','Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -3205,23 +3205,35 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
     const VOLTA_H=19;
 
     const isSel=editMode&&picker.visible&&!picker.isGrande&&picker.si===si&&picker.mi===mi&&picker.half===(half||'a');
-    // Signes sur l'ensemble de la mesure (toutes positions) → overlay centré en haut
+    // Signes + annotations — fusionnés en un seul overlay flex en haut
     const measureSignIds=[...new Set(beats.flatMap(b=>b.s||[]))];
     const hasMeasureSigns=measureSignIds.length>0;
+    const measureAnnotations=beats.map(b=>b.t||'').filter(Boolean).join(' · ');
     const hasVoltaBeat0=!!beats[0]?.v;
+    const hasTopOverlay=hasMeasureSigns||!!measureAnnotations;
     return(
       <div style={{flex:1,display:'flex',minWidth:0,position:'relative',
         background:isSel?'rgba(58,155,213,0.09)':'transparent',
         transition:'background 0.12s'}}>
 
-        {/* ── Signes musicaux — overlay en haut de la mesure entière ── */}
-        {hasMeasureSigns&&(
-          <div style={{position:'absolute',top:hasVoltaBeat0?VOLTA_H+2:1,left:1,
-            pointerEvents:'none',zIndex:3,lineHeight:1}}>
-            <span style={{fontSize:20,color:SIGN_COLOR,fontWeight:900,
-              background:SIGN_COLOR+'18',borderRadius:4,padding:'2px 5px',lineHeight:1.1,whiteSpace:'nowrap'}}>
-              {measureSignIds.map(s=>{const st=SIGN_TYPES.find(x=>x.id===s);return st?st.sym:s;}).join(' ')}
-            </span>
+        {/* ── Signes + annotation — une seule ligne flex en haut ── */}
+        {hasTopOverlay&&(
+          <div style={{position:'absolute',top:hasVoltaBeat0?VOLTA_H+2:2,left:1,right:1,
+            display:'flex',alignItems:'center',gap:5,
+            pointerEvents:'none',zIndex:3,lineHeight:1,overflow:'hidden'}}>
+            {hasMeasureSigns&&(
+              <span style={{fontSize:20,color:SIGN_COLOR,fontWeight:900,
+                background:SIGN_COLOR+'18',borderRadius:4,padding:'2px 5px',lineHeight:1.1,whiteSpace:'nowrap',flexShrink:0}}>
+                {measureSignIds.map(s=>{const st=SIGN_TYPES.find(x=>x.id===s);return st?st.sym:s;}).join(' ')}
+              </span>
+            )}
+            {measureAnnotations&&(
+              <span style={{fontSize:8,fontStyle:'italic',fontWeight:400,
+                fontFamily:"Georgia,'Times New Roman',serif",
+                color:'#9A7050',lineHeight:1.2,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+                {measureAnnotations}
+              </span>
+            )}
           </div>
         )}
 
@@ -3270,17 +3282,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                 <span style={{position:'absolute',left:0,top:'50%',transform:'translateY(-50%)',
                   fontSize:10,color:'#D0CAC0',fontWeight:300,lineHeight:1,userSelect:'none'}}>·</span>
               )}
-              {/* Annotation — absolu en haut, sous la volta si présente */}
-              {hasText&&(
-                <div style={{position:'absolute',top:hasVolta?VOLTA_H+2:3,left:0,right:0,
-                  textAlign:'center',fontSize:8,fontStyle:'italic',
-                  fontWeight:400,fontFamily:"Georgia,'Times New Roman',serif",
-                  color:'#9A7050',lineHeight:1.2,
-                  overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',
-                  pointerEvents:'none',zIndex:2}}>
-                  {beat.t}
-                </div>
-              )}
+              {/* annotation gérée dans l'overlay measure-level ci-dessus */}
             </div>
           );
         })}
@@ -3550,21 +3552,39 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                             minWidth:0,overflow:'hidden',
                             background:editMode&&picker.visible&&picker.isGrande&&picker.si===si&&picker.mi===mi?'rgba(58,155,213,0.09)':'transparent',
                             transition:'background 0.12s'}}>
-                          {/* Signes musicaux — overlay grande mesure */}
-                          {(()=>{const gmSignIds=[...new Set(allBeats.flatMap(b=>b.s||[]))];const gmHasVolta=!!allBeats[0]?.v;return gmSignIds.length>0&&(
-                            <div style={{position:'absolute',top:gmHasVolta?VOLTA_H+2:1,left:1,pointerEvents:'none',zIndex:3,lineHeight:1}}>
-                              <span style={{fontSize:20,color:SIGN_COLOR,fontWeight:900,background:SIGN_COLOR+'18',borderRadius:4,padding:'2px 5px',lineHeight:1.1,whiteSpace:'nowrap'}}>
-                                {gmSignIds.map(s=>{const st=SIGN_TYPES.find(x=>x.id===s);return st?st.sym:s;}).join(' ')}
-                              </span>
-                            </div>
-                          );})()}
+                          {/* Signes + annotations — overlay flex en haut (grande mesure) */}
+                          {(()=>{
+                            const gmSignIds=[...new Set(allBeats.flatMap(b=>b.s||[]))];
+                            const gmAnnotations=allBeats.map(b=>b.t||'').filter(Boolean).join(' · ');
+                            const gmHasVolta=!!allBeats[0]?.v;
+                            const gmHasTop=gmSignIds.length>0||!!gmAnnotations;
+                            return gmHasTop&&(
+                              <div style={{position:'absolute',top:gmHasVolta?VOLTA_H+2:2,left:1,right:1,
+                                display:'flex',alignItems:'center',gap:5,
+                                pointerEvents:'none',zIndex:3,lineHeight:1,overflow:'hidden'}}>
+                                {gmSignIds.length>0&&(
+                                  <span style={{fontSize:20,color:SIGN_COLOR,fontWeight:900,background:SIGN_COLOR+'18',borderRadius:4,padding:'2px 5px',lineHeight:1.1,whiteSpace:'nowrap',flexShrink:0}}>
+                                    {gmSignIds.map(s=>{const st=SIGN_TYPES.find(x=>x.id===s);return st?st.sym:s;}).join(' ')}
+                                  </span>
+                                )}
+                                {gmAnnotations&&(
+                                  <span style={{fontSize:8,fontStyle:'italic',fontWeight:400,
+                                    fontFamily:"Georgia,'Times New Roman',serif",
+                                    color:'#9A7050',lineHeight:1.2,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+                                    {gmAnnotations}
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })()}
                           {/* Badge nom de section — première grande mesure de chaque section */}
                           {sectionStart&&sectionName&&(
-                            <div style={{position:'absolute',bottom:3,left:ci===0?6:4,zIndex:7,
-                              background:isDark?'rgba(60,80,120,0.85)':'rgba(30,48,96,0.82)',
-                              color:'#B8D4FF',borderRadius:3,
-                              fontSize:8,fontWeight:900,padding:'1px 5px',lineHeight:1.5,
-                              letterSpacing:0.8,pointerEvents:'none',whiteSpace:'nowrap',
+                            <div style={{position:'absolute',top:4,left:ci===0?6:4,zIndex:7,
+                              background:isDark?'rgba(100,55,15,0.88)':'rgba(148,72,18,0.82)',
+                              color:isDark?'#FFD4A0':'#FFE8C8',borderRadius:4,
+                              fontSize:10,fontWeight:800,padding:'2px 7px',lineHeight:1.4,
+                              letterSpacing:1.0,textTransform:'uppercase',
+                              pointerEvents:'none',whiteSpace:'nowrap',
                               maxWidth:'40%',overflow:'hidden',textOverflow:'ellipsis'}}>
                               {sectionName}
                             </div>
@@ -3605,16 +3625,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                                   </span>
                                 )}
                                 {!hasChord&&editMode&&<span style={{position:'absolute',left:0,top:'50%',transform:'translateY(-50%)',fontSize:9,color:'#D8D4CE',lineHeight:1,userSelect:'none'}}>·</span>}
-                                {hasText&&(
-                                  <div style={{position:'absolute',top:hasVolta?VOLTA_H+2:3,left:0,right:0,
-                                    textAlign:'center',fontSize:7,fontStyle:'italic',
-                                    fontWeight:400,fontFamily:"Georgia,'Times New Roman',serif",
-                                    color:'#9A7050',lineHeight:1.2,
-                                    overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',
-                                    pointerEvents:'none',zIndex:2}}>
-                                    {beat.t}
-                                  </div>
-                                )}
+                                {/* annotation gérée dans l'overlay measure-level ci-dessus */}
                               </div>
                             );
                             // Séparateur central de 20px entre beat 3 et beat 4
