@@ -163,7 +163,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='2.04';
+const APP_VERSION='2.05';
 const CHORD_FONT="'Barlow Semi Condensed','Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -264,9 +264,9 @@ function Barline({type='normal',onClick,minH=106,accentColor='#1A1A1A',dotsColor
   const thickHook=(dir)=>(
     <div style={{position:'relative',overflow:'visible',...thick}}>
       <div style={{position:'absolute',...(dir==='right'?{left:0}:{right:0}),
-        top:0,width:6,height:2,background:RINK,borderRadius:0.5}}/>
+        top:0,width:10,height:2,background:RINK,borderRadius:0.5}}/>
       <div style={{position:'absolute',...(dir==='right'?{left:0}:{right:0}),
-        bottom:0,width:6,height:2,background:RINK,borderRadius:0.5}}/>
+        bottom:0,width:10,height:2,background:RINK,borderRadius:0.5}}/>
     </div>
   );
   const dots=(
@@ -1850,28 +1850,38 @@ function parseMusicXML(xmlString){
     }
 
     // ── Détection automatique du signe idem '%' ────────────────────────────────
-    // Si une mesure a exactement les mêmes accords que la précédente (même position),
-    // sans marque de section ni signe de renvoi, on la remplace par '%'.
-    // La référence ne change pas quand une mesure devient '%' → cascade possible.
+    // Règle : chaque paire de mesures identiques consécutives → 1re = accords, 2e = '%'
+    // Ex. : 4 mesures identiques → accords | % | accords | %
+    // La référence ne change pas pendant un run d'idem.
     {
       let refBeats=null;
+      let idemStreak=0; // nb de mesures consécutives correspondant à refBeats
       for(const m of rawMeasures){
-        const orig=m.beats.slice(); // snapshot avant toute transformation
-        if(!refBeats){refBeats=orig;continue;}
+        const orig=m.beats.slice();
+        if(!refBeats){refBeats=orig;idemStreak=0;continue;}
         const eligible=!m.rehearsal
           &&m.leftType==='normal'
-          &&orig.some(b=>b.c&&b.c!=='%')          // au moins un accord réel
-          &&!orig.some(b=>b.s&&b.s.length>0);     // pas de signe (coda/segno) sur cette mesure
+          &&orig.some(b=>b.c&&b.c!=='%')
+          &&!orig.some(b=>b.s&&b.s.length>0);
         if(eligible){
           const allMatch=orig.every((b,bi)=>(b.c||'')===(refBeats[bi]?.c||''));
           if(allMatch){
-            // Transformer en signe idem : beat 0 = '%', autres = vides ; volta conservé
-            const volta=orig[0]?.v||null;
-            m.beats=orig.map((b,bi)=>mkBeat(bi===0?'%':'',b.s||[],bi===0?volta:null,null));
-            continue; // refBeats inchangé → '%' en cascade possible
+            idemStreak++;
+            if(idemStreak%2===1){
+              // Position impaire dans le run → signe idem
+              const volta=orig[0]?.v||null;
+              m.beats=orig.map((b,bi)=>mkBeat(bi===0?'%':'',b.s||[],bi===0?volta:null,null));
+              continue; // refBeats inchangé
+            } else {
+              // Position paire → on réaffiche les accords et on repart
+              idemStreak=0;
+              refBeats=orig;
+              continue; // orig conservé tel quel
+            }
           }
         }
         refBeats=orig;
+        idemStreak=0;
       }
     }
 
@@ -3241,7 +3251,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
               :nFilled===3?Math.round(chordFsBase*0.88)
               :nFilled===2?Math.round(chordFsBase*0.93)
               :chordFsBase;
-    const VOLTA_H=19;
+    const VOLTA_H=24;
 
     const isSel=editMode&&picker.visible&&!picker.isGrande&&picker.si===si&&picker.mi===mi&&picker.half===(half||'a');
     // Annotations + badge — overlay flex en haut (signes gérés par temps dans beats.map)
@@ -3299,10 +3309,10 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
               {/* Crochet de volta — absolu */}
               {hasVolta&&(
                 <div style={{position:'absolute',top:0,left:0,right:0,height:VOLTA_H,
-                  borderLeft:`2.5px solid ${SIGN_ACCENT}`,borderTop:`2.5px solid ${SIGN_ACCENT}`,
+                  borderLeft:`3px solid ${SIGN_ACCENT}`,borderTop:`3px solid ${SIGN_ACCENT}`,
                   display:'flex',alignItems:'flex-start',paddingLeft:3,paddingTop:2,
                   pointerEvents:'none',zIndex:2}}>
-                  <span style={{fontSize:10,fontWeight:900,color:SIGN_ACCENT,lineHeight:1,fontStyle:'italic'}}>
+                  <span style={{fontSize:12,fontWeight:900,color:SIGN_ACCENT,lineHeight:1,fontStyle:'italic'}}>
                     {beat.v}.
                   </span>
                 </div>
@@ -3595,7 +3605,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                               :nFilled>=4?Math.round(chordFsBase*0.86)
                               :nFilled>=2?Math.round(chordFsBase*0.93)
                               :chordFsBase;
-                    const VOLTA_H=19;
+                    const VOLTA_H=24;
                     rendered.push(
                       <React.Fragment key={`${si}-${mi}-gm`}>
                         <div style={{flex:2,position:'relative',display:'flex',
@@ -3649,10 +3659,10 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                                 style={{flex:1,minWidth:0,overflow:'hidden',position:'relative',cursor:editMode?'pointer':'default'}}>
                                 {hasVolta&&(
                                   <div style={{position:'absolute',top:0,left:0,right:0,height:VOLTA_H,
-                                    borderLeft:`2.5px solid ${SIGN_ACCENT}`,borderTop:`2.5px solid ${SIGN_ACCENT}`,
+                                    borderLeft:`3px solid ${SIGN_ACCENT}`,borderTop:`3px solid ${SIGN_ACCENT}`,
                                     display:'flex',alignItems:'flex-start',paddingLeft:3,paddingTop:2,
                                     pointerEvents:'none',zIndex:2}}>
-                                    <span style={{fontSize:10,fontWeight:900,color:SIGN_ACCENT,lineHeight:1,fontStyle:'italic'}}>{beat.v}.</span>
+                                    <span style={{fontSize:12,fontWeight:900,color:SIGN_ACCENT,lineHeight:1,fontStyle:'italic'}}>{beat.v}.</span>
                                   </div>
                                 )}
                                 {/* Signes musicaux — positionnés au bon temps */}
