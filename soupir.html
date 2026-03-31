@@ -163,7 +163,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='2.17';
+const APP_VERSION='2.18';
 const CHORD_FONT="'Barlow Semi Condensed','Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -1076,22 +1076,29 @@ function ChordText({chord,fs=30,color='#1C1C1E',weight=500}){
     while(extRem){const e=sortedE.find(e=>extRem.startsWith(e.suffix));if(e){extSegs.push(e.suffix);extRem=extRem.slice(e.suffix.length);}else{extSegs.push(extRem[0]);extRem=extRem.slice(1);}}
     const qualColor=color;
     const extColor=color==='#1C1C1E'?'#6A6460':color;
-    const extGap=Math.round(Math.max(1,fs*0.04));
+    // Extensions en dessous (ligne 2) pour éviter le débordement horizontal
     return(
-      <span style={{display:'inline-flex',alignItems:'flex-end',gap:0,lineHeight:1,fontFamily:CF}}>
-        <span style={{fontSize:fs,fontWeight:weight,lineHeight:1,letterSpacing:0}}>{letter}</span>
-        {(acc||suffix)&&(
-          <span style={{display:'flex',flexDirection:'column',alignItems:'flex-start',lineHeight:1,
-            minHeight:fs,marginLeft:-2}}>
-            {acc&&<span style={{fontSize:accFs,fontWeight:600,lineHeight:1}}>{acc}</span>}
-            <span style={{display:'inline-flex',flexDirection:'row',alignItems:'flex-end',
-              lineHeight:1,gap:extGap,marginTop:'auto',
-              marginBottom:Math.round(fs*0.10),marginLeft:Math.round(fs*0.04)}}>
-              {qualPart&&<span style={{fontSize:qualFs,fontWeight:600,lineHeight:1,color:qualColor}}>{qualPart}</span>}
-              {extSegs.map((p,i)=>(
-                <span key={i} style={{fontSize:extFs,fontWeight:400,lineHeight:1,color:extColor,letterSpacing:'0.01em'}}>{p}</span>
-              ))}
+      <span style={{display:'inline-flex',flexDirection:'column',alignItems:'flex-start',gap:0,lineHeight:1,fontFamily:CF}}>
+        {/* Ligne 1 : racine + altération + qualité */}
+        <span style={{display:'inline-flex',alignItems:'flex-end',lineHeight:1}}>
+          <span style={{fontSize:fs,fontWeight:weight,lineHeight:1,letterSpacing:0}}>{letter}</span>
+          {(acc||qualPart)&&(
+            <span style={{display:'flex',flexDirection:'column',alignItems:'flex-start',lineHeight:1,
+              minHeight:fs,marginLeft:-2}}>
+              {acc&&<span style={{fontSize:accFs,fontWeight:600,lineHeight:1}}>{acc}</span>}
+              {qualPart&&<span style={{fontSize:qualFs,fontWeight:600,lineHeight:1,color:qualColor,
+                marginTop:'auto',marginBottom:Math.round(fs*0.10),marginLeft:Math.round(fs*0.04)}}>{qualPart}</span>}
             </span>
+          )}
+        </span>
+        {/* Ligne 2 : extensions en dessous, compactes */}
+        {extSegs.length>0&&(
+          <span style={{display:'inline-flex',flexDirection:'row',alignItems:'center',
+            gap:Math.round(Math.max(1,fs*0.03)),lineHeight:1,
+            marginTop:Math.round(fs*0.04),marginLeft:Math.round(fs*0.06)}}>
+            {extSegs.map((p,i)=>(
+              <span key={i} style={{fontSize:extFs,fontWeight:500,lineHeight:1,color:extColor,letterSpacing:'0.01em'}}>{p}</span>
+            ))}
           </span>
         )}
       </span>
@@ -3366,28 +3373,11 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
 
   // ── Rendu d'une demi-case — positionnement par temps ──────────────────────────
   // num = numéro de mesure (null pour half B d'un split)
-  function renderHalf(mm,half,si,mi,num,secBadge=null){
+  function renderHalf(mm,half,si,mi,num,secBadge=null,rowChFs=null){
     const data=half==='b'?mm.split2:mm;
     const beats=getBeats(data);
-    const nFilled=beats.filter(b=>b.c).length||1;
-    // Complexité max des accords dans la mesure (longueur du plus long)
-    const maxDispLen=beats.reduce((mx,b)=>{
-      if(!b.c)return mx;
-      const d=getDisp(b.c);
-      return Math.max(mx,d?d.replace(/[♭♯%]/g,'xx').length:0);
-    },0);
-    // Taille adaptative : combine densité (nFilled) ET complexité (maxDispLen)
-    const chFs=
-      nFilled>=4&&maxDispLen>=8?Math.round(chordFsBase*0.66)
-     :nFilled>=4&&maxDispLen>=6?Math.round(chordFsBase*0.73)
-     :nFilled>=4&&maxDispLen>=5?Math.round(chordFsBase*0.78)
-     :nFilled>=4              ?Math.round(chordFsBase*0.83)
-     :nFilled===3&&maxDispLen>=7?Math.round(chordFsBase*0.76)
-     :nFilled===3&&maxDispLen>=5?Math.round(chordFsBase*0.82)
-     :nFilled===3              ?Math.round(chordFsBase*0.88)
-     :nFilled===2&&maxDispLen>=6?Math.round(chordFsBase*0.86)
-     :nFilled===2              ?Math.round(chordFsBase*0.93)
-     :chordFsBase;
+    // chFs : utilise la valeur partagée de la ligne si disponible, sinon chordFsBase
+    const chFs=rowChFs||chordFsBase;
     const VOLTA_H=24;
 
     const isSel=editMode&&picker.visible&&!picker.isGrande&&picker.si===si&&picker.mi===mi&&picker.half===(half||'a');
@@ -3729,6 +3719,30 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
           const addSiAtStart=editMode?row._addMeasureSi:null;
           const rowSpacerSz=row.cells.reduce((acc,c)=>Math.max(acc,c.measure?.rowSpacer||0),0);
           const spacerMT=rowSpacerSz===1?Math.round(rowH*0.25):rowSpacerSz===2?Math.round(rowH*0.5):rowSpacerSz===3?Math.round(rowH*0.9):0;
+          // chFs partagé pour toute la ligne — toutes les mesures ont la même taille de police
+          const rowMaxNFilled=row.cells.reduce((mx,c)=>{
+            if(c.type!=='measure')return mx;
+            return Math.max(mx,getBeats(c.measure).filter(b=>b.c).length||1);
+          },1);
+          const rowMaxDispLen=row.cells.reduce((mx,c)=>{
+            if(c.type!=='measure')return mx;
+            return Math.max(mx,getBeats(c.measure).reduce((bmx,b)=>{
+              if(!b.c)return bmx;
+              const d=getDisp(b.c);
+              return Math.max(bmx,d?d.replace(/[♭♯%]/g,'xx').length:0);
+            },0));
+          },0);
+          const rowChFs=
+            rowMaxNFilled>=4&&rowMaxDispLen>=8?Math.round(chordFsBase*0.66)
+           :rowMaxNFilled>=4&&rowMaxDispLen>=6?Math.round(chordFsBase*0.73)
+           :rowMaxNFilled>=4&&rowMaxDispLen>=5?Math.round(chordFsBase*0.78)
+           :rowMaxNFilled>=4              ?Math.round(chordFsBase*0.83)
+           :rowMaxNFilled===3&&rowMaxDispLen>=7?Math.round(chordFsBase*0.76)
+           :rowMaxNFilled===3&&rowMaxDispLen>=5?Math.round(chordFsBase*0.82)
+           :rowMaxNFilled===3              ?Math.round(chordFsBase*0.88)
+           :rowMaxNFilled===2&&rowMaxDispLen>=6?Math.round(chordFsBase*0.86)
+           :rowMaxNFilled===2              ?Math.round(chordFsBase*0.93)
+           :chordFsBase;
           return(
             <div key={ri} style={{height:rowH,flexShrink:0,display:'flex',alignItems:'stretch',position:'relative',
               overflow:'visible',
@@ -3903,12 +3917,12 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
 
                           {isSplitCont?(
                             <>
-                              {renderHalf(measure,'a',si,mi,num,sectionStart?sectionName:null)}
+                              {renderHalf(measure,'a',si,mi,num,sectionStart?sectionName:null,rowChFs)}
                               <div style={{width:1.5,background:INK_ACCENT,flexShrink:0,alignSelf:'stretch'}}/>
-                              {renderHalf(measure,'b',si,mi,null)}
+                              {renderHalf(measure,'b',si,mi,null,null,rowChFs)}
                             </>
                           ):(
-                            renderHalf(measure,'a',si,mi,num,sectionStart?sectionName:null)
+                            renderHalf(measure,'a',si,mi,num,sectionStart?sectionName:null,rowChFs)
                           )}
                         </div>
                         <Barline type={measure.barAfter||'normal'}
@@ -3947,12 +3961,12 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
 
                         {isSplit?(
                           <>
-                            {renderHalf(measure,'a',si,mi,num,sectionStart?sectionName:null)}
+                            {renderHalf(measure,'a',si,mi,num,sectionStart?sectionName:null,rowChFs)}
                             <div style={{width:1.5,background:INK_ACCENT,flexShrink:0,alignSelf:'stretch'}}/>
-                            {renderHalf(measure,'b',si,mi,null)}
+                            {renderHalf(measure,'b',si,mi,null,null,rowChFs)}
                           </>
                         ):(
-                          renderHalf(measure,'a',si,mi,num,sectionStart?sectionName:null)
+                          renderHalf(measure,'a',si,mi,num,sectionStart?sectionName:null,rowChFs)
                         )}
                       </div>
                       <Barline type={isMaster?'none':(measure.barAfter||'normal')}
