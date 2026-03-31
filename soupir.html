@@ -163,7 +163,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='2.22';
+const APP_VERSION='2.23';
 const CHORD_FONT="'Barlow Semi Condensed','Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -3432,7 +3432,6 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
           const disp=spec?chord:(idem?'%':getDisp(chord));
           const chColor=idem?'#B0A08A':(degreeMode&&!spec?(isDia?TH.text:'#8A3020'):TH.text);
           // Réduction de police pour les accords longs (évite débordement)
-          const dispLen=disp?disp.replace(/[♭♯%]/g,'xx').length:0;
           const dispLen=disp?disp.replace(/[♭♯%]/g,'xx').length:0;
           const lenScale=dispLen>=8?0.78:dispLen>=6?0.86:dispLen>=5?0.93:1;
           const effectiveFs=Math.round(chFs*lenScale);
