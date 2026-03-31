@@ -163,7 +163,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='2.21';
+const APP_VERSION='2.22';
 const CHORD_FONT="'Barlow Semi Condensed','Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -1059,12 +1059,10 @@ function ChordText({chord,fs=30,color='#1C1C1E',weight=500}){
     return(isExt&&!hasQual)?rawRoot[0]:rawRoot;
   })();
   const accFs=Math.round(fs*0.52);
-  const qualFs=Math.round(fs*0.50);
-  const extFs=Math.round(fs*0.38);
-  // Parsing : distingue qualité (reste dans la colonne latérale) et vraies extensions (aussi dans la colonne)
-  // La règle : tout ce qui ne matche pas EXTENSIONS est traité comme qualité (gère mΔ, ø, △, etc.)
-  const extSegs=[];
-  let fullQualSuffix='';
+  const sfxFs=Math.round(fs*0.44);
+  // Parsing du suffixe : qualité + extensions dans la même colonne latérale
+  // Les symboles qui ne matchent pas QUALITIES (mΔ, ø, etc.) sont traités comme qualité via qualOverflow
+  const sfxParts=[];
   if(root){
     const suffix=mainChord.slice(root.length);
     const sortedQ=[...QUALITIES].filter(q=>q.suffix!=='').sort((a,b)=>b.suffix.length-a.suffix.length);
@@ -1074,31 +1072,32 @@ function ChordText({chord,fs=30,color='#1C1C1E',weight=500}){
     const qualOverflow=[];
     while(extRem){
       const e=sortedE.find(e=>extRem.startsWith(e.suffix));
-      if(e){extSegs.push(e.suffix);extRem=extRem.slice(e.suffix.length);}
+      if(e){sfxParts.push(e.suffix);extRem=extRem.slice(e.suffix.length);}
       else{qualOverflow.push(extRem[0]);extRem=extRem.slice(1);}
     }
-    fullQualSuffix=qualPart+qualOverflow.join('');
+    if(qualPart||qualOverflow.length)sfxParts.unshift(qualPart+qualOverflow.join(''));
   }
-  const extColor=color==='#1C1C1E'?'#6A6460':color;
+  const sfxColor=color==='#1C1C1E'?'#525252':color;
+  const extGap=Math.round(Math.max(1,fs*0.06));
   const renderMain=root?(()=>{
     const letter=root[0];
     const acc=root.slice(1);
-    const gap=Math.round(Math.max(1,fs*0.04));
     return(
       <span style={{display:'inline-flex',alignItems:'flex-end',gap:0,lineHeight:1,fontFamily:CF}}>
         <span style={{fontSize:fs,fontWeight:weight,lineHeight:1,letterSpacing:0}}>{letter}</span>
-        {(acc||fullQualSuffix||extSegs.length>0)&&(
+        {(acc||sfxParts.length>0)&&(
           <span style={{display:'flex',flexDirection:'column',alignItems:'flex-start',lineHeight:1,
             minHeight:fs,marginLeft:-2}}>
-            {acc&&<span style={{fontSize:accFs,fontWeight:600,lineHeight:1}}>{acc}</span>}
-            <span style={{display:'inline-flex',flexDirection:'row',alignItems:'flex-end',
-              lineHeight:1,gap,marginTop:'auto',
-              marginBottom:Math.round(fs*0.10),marginLeft:Math.round(fs*0.04)}}>
-              {fullQualSuffix&&<span style={{fontSize:qualFs,fontWeight:600,lineHeight:1,color}}>{fullQualSuffix}</span>}
-              {extSegs.map((p,i)=>(
-                <span key={i} style={{fontSize:extFs,fontWeight:400,lineHeight:1,color:extColor}}>{p}</span>
-              ))}
-            </span>
+            {acc&&<span style={{fontSize:accFs,fontWeight:500,lineHeight:1}}>{acc}</span>}
+            {sfxParts.length>0&&(
+              <span style={{display:'inline-flex',flexDirection:'row',alignItems:'flex-end',
+                lineHeight:1,gap:extGap,marginTop:'auto',
+                marginBottom:Math.round(fs*0.12),marginLeft:Math.round(fs*0.04)}}>
+                {sfxParts.map((p,i)=>(
+                  <span key={i} style={{fontSize:sfxFs,fontWeight:400,lineHeight:1,color:sfxColor}}>{p}</span>
+                ))}
+              </span>
+            )}
           </span>
         )}
       </span>
@@ -3434,16 +3433,13 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
           const chColor=idem?'#B0A08A':(degreeMode&&!spec?(isDia?TH.text:'#8A3020'):TH.text);
           // Réduction de police pour les accords longs (évite débordement)
           const dispLen=disp?disp.replace(/[♭♯%]/g,'xx').length:0;
-          const effectiveFs=Math.round(chFs*(dispLen>=9?0.88:dispLen>=7?0.93:1));
-          // spanSlots : nombre de slots disponibles jusqu'au prochain accord rempli
-          // L'accord peut s'étendre dans les slots vides qui suivent, sans déborder sur le suivant
-          const nextChordAt=beats.slice(bi+1).findIndex(b=>b.c);
-          const spanSlots=nextChordAt===-1?beats.length-bi:nextChordAt+1;
+          const dispLen=disp?disp.replace(/[♭♯%]/g,'xx').length:0;
+          const lenScale=dispLen>=8?0.78:dispLen>=6?0.86:dispLen>=5?0.93:1;
+          const effectiveFs=Math.round(chFs*lenScale);
           return(
             <div key={bi}
               onClick={editMode?(e)=>{e.stopPropagation();openMeasurePicker(si,mi,half,e,bi);}:undefined}
               style={{flex:1,minWidth:0,overflow:'visible',position:'relative',cursor:editMode?'pointer':'default'}}>
-              {/* Crochet de volta — absolu */}
               {hasVolta&&(
                 <div style={{position:'absolute',top:0,left:0,right:0,height:VOLTA_H,
                   borderLeft:`3px solid ${SIGN_ACCENT}`,borderTop:`3px solid ${SIGN_ACCENT}`,
@@ -3454,7 +3450,6 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                   </span>
                 </div>
               )}
-              {/* Signes musicaux beats 1-3 */}
               {bi>0&&beat.s&&beat.s.length>0&&(
                 <div style={{position:'absolute',top:hasVolta?VOLTA_H+2:2,left:0,
                   display:'flex',pointerEvents:'none',zIndex:8,lineHeight:1}}>
@@ -3464,10 +3459,8 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                   </span>
                 </div>
               )}
-              {/* Accord : maxWidth = spanSlots × 100% du beat → utilise l'espace dispo sans chevaucher */}
               {hasChord&&(
                 <span style={{position:'absolute',left:0,top:'50%',transform:'translateY(-50%)',
-                  maxWidth:`${spanSlots*100}%`,overflow:'hidden',
                   background:degreeMode&&!isDia&&!spec&&!idem?'#F5DDD8':'transparent',
                   borderRadius:4,lineHeight:1,display:'inline-flex',alignItems:'center',zIndex:1,whiteSpace:'nowrap'}}>
                   {spec?(<span style={{fontSize:effectiveFs,fontWeight:700,color:chColor,letterSpacing:'0.05em',lineHeight:1}}>{disp}</span>)
@@ -3720,8 +3713,11 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
           const addSiAtStart=editMode?row._addMeasureSi:null;
           const rowSpacerSz=row.cells.reduce((acc,c)=>Math.max(acc,c.measure?.rowSpacer||0),0);
           const spacerMT=rowSpacerSz===1?Math.round(rowH*0.25):rowSpacerSz===2?Math.round(rowH*0.5):rowSpacerSz===3?Math.round(rowH*0.9):0;
-          // chFs partagé pour toute la ligne — basé uniquement sur la complexité des suffixes,
-          // jamais sur le nombre d'accords (évite tout saut visuel lors de l'ajout d'un accord)
+          // chFs partagé pour toute la ligne : densité × complexité
+          const rowMaxNFilled=row.cells.reduce((mx,c)=>{
+            if(c.type!=='measure')return mx;
+            return Math.max(mx,getBeats(c.measure).filter(b=>b.c).length||1);
+          },1);
           const rowMaxDispLen=row.cells.reduce((mx,c)=>{
             if(c.type!=='measure')return mx;
             return Math.max(mx,getBeats(c.measure).reduce((bmx,b)=>{
@@ -3731,9 +3727,12 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
             },0));
           },0);
           const rowChFs=
-            rowMaxDispLen>=8?Math.round(chordFsBase*0.74)
-           :rowMaxDispLen>=6?Math.round(chordFsBase*0.82)
-           :rowMaxDispLen>=5?Math.round(chordFsBase*0.89)
+            rowMaxNFilled>=4&&rowMaxDispLen>=7?Math.round(chordFsBase*0.70)
+           :rowMaxNFilled>=4&&rowMaxDispLen>=5?Math.round(chordFsBase*0.76)
+           :rowMaxNFilled>=4               ?Math.round(chordFsBase*0.82)
+           :rowMaxNFilled===3&&rowMaxDispLen>=6?Math.round(chordFsBase*0.80)
+           :rowMaxNFilled===3               ?Math.round(chordFsBase*0.87)
+           :rowMaxNFilled===2               ?Math.round(chordFsBase*0.93)
            :chordFsBase;
           return(
             <div key={ri} style={{height:rowH,flexShrink:0,display:'flex',alignItems:'stretch',position:'relative',
