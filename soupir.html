@@ -163,7 +163,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='2.19';
+const APP_VERSION='2.20';
 const CHORD_FONT="'Barlow Semi Condensed','Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -3724,11 +3724,8 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
           const addSiAtStart=editMode?row._addMeasureSi:null;
           const rowSpacerSz=row.cells.reduce((acc,c)=>Math.max(acc,c.measure?.rowSpacer||0),0);
           const spacerMT=rowSpacerSz===1?Math.round(rowH*0.25):rowSpacerSz===2?Math.round(rowH*0.5):rowSpacerSz===3?Math.round(rowH*0.9):0;
-          // chFs partagé pour toute la ligne — toutes les mesures ont la même taille de police
-          const rowMaxNFilled=row.cells.reduce((mx,c)=>{
-            if(c.type!=='measure')return mx;
-            return Math.max(mx,getBeats(c.measure).filter(b=>b.c).length||1);
-          },1);
+          // chFs partagé pour toute la ligne — basé uniquement sur la complexité des suffixes,
+          // jamais sur le nombre d'accords (évite tout saut visuel lors de l'ajout d'un accord)
           const rowMaxDispLen=row.cells.reduce((mx,c)=>{
             if(c.type!=='measure')return mx;
             return Math.max(mx,getBeats(c.measure).reduce((bmx,b)=>{
@@ -3738,15 +3735,9 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
             },0));
           },0);
           const rowChFs=
-            rowMaxNFilled>=4&&rowMaxDispLen>=8?Math.round(chordFsBase*0.66)
-           :rowMaxNFilled>=4&&rowMaxDispLen>=6?Math.round(chordFsBase*0.73)
-           :rowMaxNFilled>=4&&rowMaxDispLen>=5?Math.round(chordFsBase*0.78)
-           :rowMaxNFilled>=4              ?Math.round(chordFsBase*0.83)
-           :rowMaxNFilled===3&&rowMaxDispLen>=7?Math.round(chordFsBase*0.76)
-           :rowMaxNFilled===3&&rowMaxDispLen>=5?Math.round(chordFsBase*0.82)
-           :rowMaxNFilled===3              ?Math.round(chordFsBase*0.88)
-           :rowMaxNFilled===2&&rowMaxDispLen>=6?Math.round(chordFsBase*0.86)
-           :rowMaxNFilled===2              ?Math.round(chordFsBase*0.93)
+            rowMaxDispLen>=8?Math.round(chordFsBase*0.74)
+           :rowMaxDispLen>=6?Math.round(chordFsBase*0.82)
+           :rowMaxDispLen>=5?Math.round(chordFsBase*0.89)
            :chordFsBase;
           return(
             <div key={ri} style={{height:rowH,flexShrink:0,display:'flex',alignItems:'stretch',position:'relative',
