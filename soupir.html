@@ -163,7 +163,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='2.15';
+const APP_VERSION='2.16';
 const CHORD_FONT="'Barlow Semi Condensed','Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -1059,39 +1059,39 @@ function ChordText({chord,fs=30,color='#1C1C1E',weight=500}){
     return(isExt&&!hasQual)?rawRoot[0]:rawRoot;
   })();
   const accFs=Math.round(fs*0.52);
-  const sfxFs=Math.round(fs*0.44);
+  const qualFs=Math.round(fs*0.50);
+  const extFs=Math.round(fs*0.38);
   const sfxTop=Math.round(fs*0.20);
   const renderMain=root?(()=>{
     const letter=root[0];
     const rawAcc=root.slice(1);
     const acc=rawAcc; // format brut : 'b', '#' ou ''
     const suffix=mainChord.slice(root.length);
-    // Découper le suffix en partie qualité + parties extensions pour micro-espacement
+    // Découper le suffix en partie qualité + parties extensions — avec hiérarchie visuelle distincte
     const sortedQ=[...QUALITIES].filter(q=>q.suffix!=='').sort((a,b)=>b.suffix.length-a.suffix.length);
     const qualPart=sortedQ.find(q=>suffix.startsWith(q.suffix))?.suffix||'';
     let extRem=suffix.slice(qualPart.length);
     const sortedE=[...EXTENSIONS].sort((a,b)=>b.suffix.length-a.suffix.length);
     const extSegs=[];
     while(extRem){const e=sortedE.find(e=>extRem.startsWith(e.suffix));if(e){extSegs.push(e.suffix);extRem=extRem.slice(e.suffix.length);}else{extSegs.push(extRem[0]);extRem=extRem.slice(1);}}
-    const sfxParts=[...(qualPart?[qualPart]:[]),...extSegs];
-    const sfxColor=color==='#1C1C1E'?'#525252':color;
-    const extGap=Math.round(Math.max(1,fs*0.06));
+    const qualColor=color;
+    const extColor=color==='#1C1C1E'?'#6A6460':color;
+    const extGap=Math.round(Math.max(1,fs*0.04));
     return(
       <span style={{display:'inline-flex',alignItems:'flex-end',gap:0,lineHeight:1,fontFamily:CF}}>
         <span style={{fontSize:fs,fontWeight:weight,lineHeight:1,letterSpacing:0}}>{letter}</span>
         {(acc||suffix)&&(
           <span style={{display:'flex',flexDirection:'column',alignItems:'flex-start',lineHeight:1,
             minHeight:fs,marginLeft:-2}}>
-            {acc&&<span style={{fontSize:accFs,fontWeight:500,lineHeight:1}}>{acc}</span>}
-            {sfxParts.length>0&&(
-              <span style={{display:'inline-flex',flexDirection:'row',alignItems:'flex-end',
-                lineHeight:1,gap:extGap,marginTop:'auto',
-                marginBottom:Math.round(fs*0.12),marginLeft:Math.round(fs*0.04)}}>
-                {sfxParts.map((p,i)=>(
-                  <span key={i} style={{fontSize:sfxFs,fontWeight:400,lineHeight:1,color:sfxColor}}>{p}</span>
-                ))}
-              </span>
-            )}
+            {acc&&<span style={{fontSize:accFs,fontWeight:600,lineHeight:1}}>{acc}</span>}
+            <span style={{display:'inline-flex',flexDirection:'row',alignItems:'flex-end',
+              lineHeight:1,gap:extGap,marginTop:'auto',
+              marginBottom:Math.round(fs*0.10),marginLeft:Math.round(fs*0.04)}}>
+              {qualPart&&<span style={{fontSize:qualFs,fontWeight:600,lineHeight:1,color:qualColor}}>{qualPart}</span>}
+              {extSegs.map((p,i)=>(
+                <span key={i} style={{fontSize:extFs,fontWeight:400,lineHeight:1,color:extColor,letterSpacing:'0.01em'}}>{p}</span>
+              ))}
+            </span>
           </span>
         )}
       </span>
@@ -2883,6 +2883,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
   const [drawPath,setDrawPath]=useState([]);
   const drawSvgRef=useRef(null);
   const drawUndoRef=useRef([]);
+  const gridTouchRef=useRef(null);
   const metroRef=useRef(null),beatRef=useRef(0);
   const barsHideRef=useRef(null);
   const undoStack=useRef([]);
@@ -3034,7 +3035,6 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
     }));
   }
   // ── Layout pages ────────────────────────────────────────────────────────────
-  const rowsPerPage=cur.rowsPerPage||10;
   function computeRows(sections){
     const rows=[];let row=[];let mCount=0;
     sections.forEach((section,si)=>{
@@ -3065,7 +3065,12 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
   const fullscreen=!editMode&&!barsVisible;
   const availH=(typeof window!=='undefined'?window.innerHeight:900)
     -(fullscreen?0:TOPBAR_H)-(fullscreen?0:BOTTOMBAR_H)-(fullscreen?0:INFO_H);
-  const rowH=Math.max(56,Math.floor(availH/rowsPerPage));
+  // Espacement automatique : les lignes s'adaptent à la taille du morceau
+  const MIN_ROW_H=editMode?72:60;
+  const MAX_ROW_H=editMode?120:150;
+  const autoRowH=allRows.length>0?Math.floor(availH/allRows.length):MAX_ROW_H;
+  const rowH=Math.max(MIN_ROW_H,Math.min(MAX_ROW_H,autoRowH));
+  const rowsPerPage=Math.max(1,Math.floor(availH/rowH));
   const ROW_PAD=7; // espace vertical au-dessus et en dessous du contenu de chaque rangée
   const barH=Math.max(36,rowH-ROW_PAD*2); // hauteur effective des barlines
   const totalPages=Math.max(1,Math.ceil(allRows.length/rowsPerPage));
@@ -3623,8 +3628,34 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
 
       {/* Grille pages */}
       <div className="grid-paper" onClick={!editMode&&!drawMode?showBarsTemp:undefined}
+        onTouchStart={!editMode&&!drawMode?e=>{gridTouchRef.current={x:e.touches[0].clientX,y:e.touches[0].clientY};}:undefined}
+        onTouchEnd={!editMode&&!drawMode?e=>{
+          if(!gridTouchRef.current)return;
+          const dx=e.changedTouches[0].clientX-gridTouchRef.current.x;
+          const dy=e.changedTouches[0].clientY-gridTouchRef.current.y;
+          gridTouchRef.current=null;
+          if(Math.abs(dx)>60&&Math.abs(dx)>Math.abs(dy)*1.5){
+            if(dx<0)setCurrentPage(p=>Math.min(totalPages-1,p+1));
+            else setCurrentPage(p=>Math.max(0,p-1));
+          }
+        }:undefined}
         style={{flex:1,display:'flex',flexDirection:'column',overflow:'auto',background:TH.gridBg,
           position:'relative',cursor:!editMode&&!drawMode?'pointer':undefined}}>
+        {/* Zones de tap pour navigation entre pages (mode lecture uniquement) */}
+        {!editMode&&!drawMode&&totalPages>1&&(
+          <>
+            {safePage>0&&(
+              <div onClick={e=>{e.stopPropagation();setCurrentPage(p=>Math.max(0,p-1));}}
+                style={{position:'absolute',left:0,top:0,width:'18%',height:'100%',zIndex:5,
+                  cursor:'pointer',WebkitTapHighlightColor:'transparent'}}/>
+            )}
+            {safePage<totalPages-1&&(
+              <div onClick={e=>{e.stopPropagation();setCurrentPage(p=>Math.min(totalPages-1,p+1));}}
+                style={{position:'absolute',right:0,top:0,width:'18%',height:'100%',zIndex:5,
+                  cursor:'pointer',WebkitTapHighlightColor:'transparent'}}/>
+            )}
+          </>
+        )}
         {/* Pre-pass : détecter les rows dont la section se termine à pleine capacité
             → le "+" doit apparaître au début de la row suivante, ou dans la 1re ligne vide */}
         {(()=>{
