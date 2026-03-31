@@ -163,7 +163,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='2.16';
+const APP_VERSION='2.17';
 const CHORD_FONT="'Barlow Semi Condensed','Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -3370,11 +3370,24 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
     const data=half==='b'?mm.split2:mm;
     const beats=getBeats(data);
     const nFilled=beats.filter(b=>b.c).length||1;
-    // Taille adaptative : 4 beats = légèrement réduit, 1 beat = pleine taille
-    const chFs=nFilled>=4?Math.round(chordFsBase*0.82)
-              :nFilled===3?Math.round(chordFsBase*0.88)
-              :nFilled===2?Math.round(chordFsBase*0.93)
-              :chordFsBase;
+    // Complexité max des accords dans la mesure (longueur du plus long)
+    const maxDispLen=beats.reduce((mx,b)=>{
+      if(!b.c)return mx;
+      const d=getDisp(b.c);
+      return Math.max(mx,d?d.replace(/[♭♯%]/g,'xx').length:0);
+    },0);
+    // Taille adaptative : combine densité (nFilled) ET complexité (maxDispLen)
+    const chFs=
+      nFilled>=4&&maxDispLen>=8?Math.round(chordFsBase*0.66)
+     :nFilled>=4&&maxDispLen>=6?Math.round(chordFsBase*0.73)
+     :nFilled>=4&&maxDispLen>=5?Math.round(chordFsBase*0.78)
+     :nFilled>=4              ?Math.round(chordFsBase*0.83)
+     :nFilled===3&&maxDispLen>=7?Math.round(chordFsBase*0.76)
+     :nFilled===3&&maxDispLen>=5?Math.round(chordFsBase*0.82)
+     :nFilled===3              ?Math.round(chordFsBase*0.88)
+     :nFilled===2&&maxDispLen>=6?Math.round(chordFsBase*0.86)
+     :nFilled===2              ?Math.round(chordFsBase*0.93)
+     :chordFsBase;
     const VOLTA_H=24;
 
     const isSel=editMode&&picker.visible&&!picker.isGrande&&picker.si===si&&picker.mi===mi&&picker.half===(half||'a');
@@ -3432,7 +3445,8 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
           const chColor=idem?'#B0A08A':(degreeMode&&!spec?(isDia?TH.text:'#8A3020'):TH.text);
           // Réduction de police pour les accords longs (évite débordement)
           const dispLen=disp?disp.replace(/[♭♯%]/g,'xx').length:0;
-          const lenScale=dispLen>=8?0.76:dispLen>=7?0.83:dispLen>=6?0.90:dispLen>=5?0.95:1;
+          // lenScale : micro-ajustement résiduel pour les cas où un accord est plus long que le max de la mesure
+          const lenScale=dispLen>=9?0.88:dispLen>=7?0.93:1;
           const effectiveFs=Math.round(chFs*lenScale);
           return(
             <div key={bi}
