@@ -163,7 +163,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='2.23';
+const APP_VERSION='2.24';
 const CHORD_FONT="'Barlow Semi Condensed','Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -1092,7 +1092,7 @@ function ChordText({chord,fs=30,color='#1C1C1E',weight=500}){
             {sfxParts.length>0&&(
               <span style={{display:'inline-flex',flexDirection:'row',alignItems:'flex-end',
                 lineHeight:1,gap:extGap,marginTop:'auto',
-                marginBottom:Math.round(fs*0.12),marginLeft:Math.round(fs*0.04)}}>
+                marginLeft:Math.round(fs*0.04)}}>
                 {sfxParts.map((p,i)=>(
                   <span key={i} style={{fontSize:sfxFs,fontWeight:400,lineHeight:1,color:sfxColor}}>{p}</span>
                 ))}
@@ -3777,7 +3777,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                     rendered.push(
                       <React.Fragment key={`${si}-${mi}-gm`}>
                         <div style={{flex:2,position:'relative',display:'flex',
-                            minWidth:0,overflow:'hidden',
+                            minWidth:0,overflow:'visible',
                             background:editMode&&picker.visible&&picker.isGrande&&picker.si===si&&picker.mi===mi?'rgba(58,155,213,0.09)':'transparent',
                             transition:'background 0.12s'}}>
                           {/* Badge + signes beat-0 + annotations — overlay flex en haut (grande mesure) */}
@@ -3831,7 +3831,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                             const beatEl=(
                               <div key={beat.key}
                                 onClick={editMode?(e)=>{e.stopPropagation();openGrandeMeasurePicker(si,mi,cSi,cMi,e,bi);}:undefined}
-                                style={{flex:1,minWidth:0,overflow:'hidden',position:'relative',cursor:editMode?'pointer':'default'}}>
+                                style={{flex:1,minWidth:0,overflow:'visible',position:'relative',cursor:editMode?'pointer':'default'}}>
                                 {hasVolta&&(
                                   <div style={{position:'absolute',top:0,left:0,right:0,height:VOLTA_H,
                                     borderLeft:`3px solid ${SIGN_ACCENT}`,borderTop:`3px solid ${SIGN_ACCENT}`,
@@ -3864,13 +3864,20 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                                 {/* annotation gérée dans l'overlay measure-level ci-dessus */}
                               </div>
                             );
-                            // Séparateur central de 20px entre beat 3 et beat 4
+                            // Séparateur central : largeur 0 (pas de décalage), visuel absolu
                             if(bi===4){
                               return[
                                 <div key="gm-sep"
-                                  style={{width:20,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',cursor:editMode?'pointer':'default'}}
+                                  style={{width:0,flexShrink:0,position:'relative',overflow:'visible',zIndex:10,
+                                    cursor:editMode?'pointer':'default'}}
                                   onClick={editMode?(e)=>{e.stopPropagation();cycleBarline(si,mi,'right');}:undefined}>
-                                  {editMode&&<div style={{width:0,alignSelf:'stretch',borderLeft:`1.5px dashed ${isDark?'rgba(255,255,255,0.25)':'rgba(0,0,0,0.18)'}`}}/>}
+                                  {editMode&&(
+                                    <div style={{position:'absolute',top:0,bottom:0,left:-8,width:16,
+                                      display:'flex',alignItems:'center',justifyContent:'center',
+                                      pointerEvents:'none'}}>
+                                      <div style={{width:0,height:'100%',borderLeft:`1.5px dashed ${isDark?'rgba(255,255,255,0.25)':'rgba(0,0,0,0.18)'}`}}/>
+                                    </div>
+                                  )}
                                 </div>,
                                 beatEl
                               ];
@@ -3878,8 +3885,6 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                             return[beatEl];
                           })}
                         </div>
-                        {/* Spacer : compense la barline 'none' disparue pour aligner les rows */}
-                        <div style={{width:10,flexShrink:0}}/>
                         <Barline type={cMm.barAfter||'normal'}
                           onClick={editMode?(e)=>{e.stopPropagation();cycleBarline(cSi,cMi,'right');}:undefined}
                           minH={barH} accentColor={INK_ACCENT} dotsColor={SIGN_ACCENT}/>
