@@ -45,6 +45,15 @@
     .sheet-bg{animation:fadeIn 0.16s ease;}
     .sheet-panel{animation:slideUp 0.28s cubic-bezier(0.32,0.72,0,1);}
     .home-btn{animation:floatIn 0.38s ease both;}
+    @media print{
+      @page{margin:0;}
+      html,body{overflow:visible!important;height:auto!important;}
+      body::before{display:none!important;}
+      body>*{display:none!important;}
+      #soupir-print-all{display:flex!important;flex-direction:column;}
+      .soupir-print-page{page-break-after:always;overflow:hidden;}
+      .grid-paper::after{display:none!important;}
+    }
   </style>
 </head>
 <body>
@@ -163,7 +172,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='2.24';
+const APP_VERSION='2.25';
 const CHORD_FONT="'Barlow Semi Condensed','Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -2893,6 +2902,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
   const barsHideRef=useRef(null);
   const undoStack=useRef([]);
   const [showPieceInfo,setShowPieceInfo]=useState(false);
+  const [pdfExport,setPdfExport]=useState(false);
 
   const cur=library.find(p=>p.id===piece.id)||piece;
   const timeSig=cur.timeSig||'4/4';
@@ -2902,6 +2912,19 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
   const INK_ACCENT=isDark?'#E8E4DC':'#3A2410';  // barlines : toujours encre chaude, jamais rouge
   const SIGN_ACCENT=prefs?.accentColor==='red'?'#C0392B':INK_ACCENT; // points répétition + voltas
   const SIGN_COLOR=prefs?.accentColor==='red'?'#C0392B':'#2A5A2A';
+
+  useEffect(()=>{
+    if(!pdfExport)return;
+    const W=window.innerWidth,H=window.innerHeight;
+    const s=document.createElement('style');
+    s.id='soupir-pdf-sz';
+    s.textContent=`@media print{@page{size:${W}px ${H}px;}}`;
+    document.head.appendChild(s);
+    const cleanup=()=>{setPdfExport(false);const el=document.getElementById('soupir-pdf-sz');if(el)el.remove();};
+    window.addEventListener('afterprint',cleanup,{once:true});
+    const t=setTimeout(()=>window.print(),250);
+    return()=>{clearTimeout(t);window.removeEventListener('afterprint',cleanup);const el=document.getElementById('soupir-pdf-sz');if(el)el.remove();};
+  },[pdfExport]);
 
   useEffect(()=>{
     if(metroOn){const ms=60000/bpm;metroRef.current=setInterval(()=>{beatRef.current=(beatRef.current+1)%4;setBeat(beatRef.current);},ms);}
@@ -3495,186 +3518,9 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
     modeSwBg:isDark?'#2A2826':'#D8D0C0',
     modeSwActive:isDark?'#3A3836':'#FAF6EE',
   };
-  return(<div className="app-screen" style={{display:'flex',flexDirection:'column',background:TH.bg}}>
-
-    {/* TOP BAR */}
-    <div style={{background:TH.topBar,backdropFilter:'blur(20px)',WebkitBackdropFilter:'blur(20px)',
-      borderBottom:`0.5px solid ${TH.border}`,height:52,
-      display:fullscreen?'none':'flex',alignItems:'center',padding:'0 12px',gap:7,flexShrink:0}}>
-      <button onClick={onBack}
-        style={{background:'transparent',border:'none',color:TH.text,fontSize:20,cursor:'pointer',padding:'4px 6px 4px 0',fontFamily:'inherit',flexShrink:0}}>←</button>
-      <div style={{display:'flex',alignItems:'center',gap:5,flexShrink:0}}>
-        <SoupirLogo size={16}/><span style={{fontSize:14,fontWeight:900,letterSpacing:'-0.5px'}}>Soupir.</span>
-      </div>
-      <div style={{width:1,height:16,background:TH.btnBorder,flexShrink:0}}/>
-      <span style={{fontSize:13,fontWeight:700,flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',color:TH.text}}>{cur.title}</span>
-      <button onClick={()=>setShowTimeSig(true)} className="icon-btn"
-        style={{background:TH.btnBg,border:`1.5px solid ${TH.btnBorder}`,borderRadius:100,padding:'3px 10px',cursor:'pointer',flexShrink:0,fontFamily:'inherit',color:TH.text}}>
-        <span style={{fontSize:12,fontWeight:800}}>{timeSig}</span>
-      </button>
-      <button onClick={()=>setShowKeyPicker(true)} className="icon-btn"
-        style={{display:'flex',alignItems:'center',gap:3,background:TH.btnBg,border:`1.5px solid ${TH.btnBorder}`,borderRadius:100,padding:'3px 10px',cursor:'pointer',flexShrink:0}}>
-        <span style={{fontSize:9,color:TH.subText,fontWeight:600}}>Ton.</span>
-        <span style={{fontSize:12,fontWeight:800,color:TH.text}}>{displayKey}{displayMode==='min'?'m':''}</span>
-      </button>
-      <button onClick={()=>setDegreeMode(d=>!d)}
-        style={{background:degreeMode?TH.text:'transparent',border:`1.5px solid ${TH.text}`,color:degreeMode?(isDark?'#1A1A1A':'#F2EDE4'):TH.text,
-          padding:'3px 9px',borderRadius:100,fontSize:10,fontWeight:700,cursor:'pointer',whiteSpace:'nowrap',flexShrink:0,fontFamily:'inherit'}}>
-        {degreeMode?'Degrés':'Acc.'}
-      </button>
-      <div style={{display:'flex',alignItems:'center',gap:4,background:TH.btnBg,border:`1.5px solid ${TH.btnBorder}`,borderRadius:100,padding:'3px 7px',flexShrink:0}}>
-        <div style={{display:'flex',gap:2}}>
-          {[0,1,2,3].map(i=>(<div key={i} style={{width:4,height:4,borderRadius:'50%',transition:'all 0.06s',
-            background:metroOn&&beat===i?(i===0?TH.text:'#6B6560'):'#C0BAB0',
-            transform:metroOn&&beat===i?'scale(1.35)':'scale(1)'}}/>))}
-        </div>
-        <input type="number" value={bpm} min={40} max={300} onChange={e=>setBpm(Number(e.target.value))}
-          style={{width:30,background:'transparent',border:'none',color:TH.text,fontSize:11,fontWeight:700,textAlign:'center',outline:'none',fontFamily:'inherit'}}/>
-        <button onClick={()=>setMetroOn(m=>!m)}
-          style={{background:metroOn?TH.text:'transparent',border:`1.5px solid ${metroOn?TH.text:TH.btnBorder}`,
-            color:metroOn?(isDark?'#1A1A1A':'#F2EDE4'):TH.subText,width:18,height:18,borderRadius:'50%',cursor:'pointer',
-            fontSize:7,display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'inherit'}}>
-          {metroOn?'■':'▶'}
-        </button>
-      </div>
-      <button onClick={()=>setShowDegrees(v=>!v)}
-        style={{background:showDegrees?TH.text:'transparent',border:`1.5px solid ${showDegrees?TH.text:TH.btnBorder}`,
-          color:showDegrees?(isDark?'#1A1A1A':'#F2EDE4'):TH.subText,height:26,borderRadius:100,cursor:'pointer',
-          fontSize:9,fontWeight:700,padding:'0 7px',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontFamily:'inherit',whiteSpace:'nowrap'}}>Gamme</button>
-      <button onClick={()=>exportPDF(cur,displayKey,displayMode,prefs)}
-        title="Exporter en PDF"
-        style={{background:'transparent',border:`1.5px solid ${TH.btnBorder}`,color:TH.subText,height:26,borderRadius:100,cursor:'pointer',
-          fontSize:9,fontWeight:700,padding:'0 8px',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontFamily:'inherit',whiteSpace:'nowrap',gap:3}}>
-        <span style={{fontSize:11}}>↓</span>PDF
-      </button>
-    </div>
-
-    {/* CONTENT — page plein écran, zéro scroll */}
-    <div style={{flex:1,overflow:'hidden',position:'relative',background:TH.bg,display:'flex',flexDirection:'column'}}>
-
-      {/* ── Overlay titre + compositeur (fullscreen uniquement) ── */}
-      {fullscreen&&(
-        <div style={{position:'absolute',top:0,left:0,right:0,zIndex:10,
-          padding:'10px 16px 8px',pointerEvents:'none',
-          background:`linear-gradient(to bottom,${isDark?'rgba(26,24,22,0.55)':'rgba(255,255,255,0.55)'} 0%,transparent 100%)`}}>
-          <div style={{fontSize:14,fontWeight:800,color:TH.text,opacity:0.55,
-            letterSpacing:'-0.3px',lineHeight:1.2,
-            overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{cur.title}</div>
-          {cur.composer&&<div style={{fontSize:10,fontWeight:500,color:TH.subText,opacity:0.55,
-            marginTop:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{cur.composer}</div>}
-        </div>
-      )}
-
-      {/* ── Métronome visuel (dot pulsant, fullscreen + metroOn) ── */}
-      {!editMode&&metroOn&&(
-        <div style={{position:'absolute',bottom:14,right:14,zIndex:20,
-          display:'flex',alignItems:'center',gap:5,pointerEvents:'none'}}>
-          {[0,1,2,3].map(i=>(
-            <div key={i} style={{
-              width: beat===i&&metroOn ? (i===0?14:10) : (i===0?10:7),
-              height: beat===i&&metroOn ? (i===0?14:10) : (i===0?10:7),
-              borderRadius:'50%',
-              background: beat===i ? (i===0?(isDark?'#F2EDE4':'#1A1A1A'):(isDark?'#9A9490':'#6B6560')) : (isDark?'rgba(255,255,255,0.18)':'rgba(0,0,0,0.15)'),
-              transition:'all 0.07s ease',
-              flexShrink:0
-            }}/>
-          ))}
-        </div>
-      )}
-
-      {/* Bandeau titre + sélecteur Lecture/Édition */}
-      <div style={{display:fullscreen?'none':'flex',alignItems:'center',padding:'0 10px',gap:8,borderBottom:`0.5px solid ${TH.border}`,
-        background:TH.infoBg,height:INFO_H,flexShrink:0}}>
-        <button onClick={()=>setShowPieceInfo(true)}
-          style={{background:'transparent',border:'none',padding:0,cursor:'pointer',fontFamily:'inherit',
-            flex:1,textAlign:'left',overflow:'hidden'}}>
-          <span style={{fontSize:13,fontWeight:800,letterSpacing:'-0.4px',color:TH.text,
-            overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',display:'block'}}>{cur.title}</span>
-          {cur.composer&&<span style={{fontSize:10,fontWeight:500,color:TH.subText,
-            overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',display:'block'}}>{cur.composer}</span>}
-        </button>
-        {degreeMode&&<span style={{fontSize:9,fontWeight:700,color:'#4A3F2F',background:'#F5DDD8',
-          borderRadius:4,padding:'1px 5px',flexShrink:0}}>Degrés</span>}
-        {/* Bouton dessin */}
-        <button onClick={()=>setDrawMode(d=>!d)}
-          style={{background:drawMode?TH.text:'transparent',
-            border:`1.5px solid ${drawMode?TH.text:TH.btnBorder}`,
-            borderRadius:100,padding:'3px 10px',fontSize:12,cursor:'pointer',
-            fontFamily:'inherit',color:drawMode?(isDark?'#1A1A1A':'#F2EDE4'):TH.subText,
-            fontWeight:700,flexShrink:0,transition:'all 0.12s'}}>
-          ✎
-        </button>
-        {/* Sélecteur Lecture / Édition */}
-        <div style={{display:'flex',background:TH.modeSwBg,borderRadius:8,padding:2,gap:1,flexShrink:0}}>
-          <button onClick={()=>{setEditMode(false);setBarsVisible(false);clearTimeout(barsHideRef.current);}}
-            style={{background:!editMode?TH.modeSwActive:'transparent',border:'none',
-              borderRadius:6,padding:'3px 9px',fontSize:10,fontWeight:700,
-              cursor:'pointer',fontFamily:'inherit',color:!editMode?TH.text:TH.subText,
-              boxShadow:!editMode?'0 1px 3px rgba(0,0,0,0.12)':'none',transition:'all 0.12s'}}>
-            👁 Lire
-          </button>
-          <button onClick={()=>{setEditMode(true);setBarsVisible(true);clearTimeout(barsHideRef.current);}}
-            style={{background:editMode?'#1A1A1A':'transparent',border:'none',
-              borderRadius:6,padding:'3px 9px',fontSize:10,fontWeight:700,
-              cursor:'pointer',fontFamily:'inherit',color:editMode?'#F2EDE4':TH.subText,
-              boxShadow:editMode?'0 1px 3px rgba(0,0,0,0.12)':'none',transition:'all 0.12s'}}>
-            ✏ Éditer
-          </button>
-        </div>
-      </div>
-
-      {/* Grille pages */}
-      <div className="grid-paper" onClick={!editMode&&!drawMode?showBarsTemp:undefined}
-        onTouchStart={!editMode&&!drawMode?e=>{gridTouchRef.current={x:e.touches[0].clientX,y:e.touches[0].clientY};}:undefined}
-        onTouchEnd={!editMode&&!drawMode?e=>{
-          if(!gridTouchRef.current)return;
-          const dx=e.changedTouches[0].clientX-gridTouchRef.current.x;
-          const dy=e.changedTouches[0].clientY-gridTouchRef.current.y;
-          gridTouchRef.current=null;
-          if(Math.abs(dx)>60&&Math.abs(dx)>Math.abs(dy)*1.5){
-            if(dx<0)setCurrentPage(p=>Math.min(totalPages-1,p+1));
-            else setCurrentPage(p=>Math.max(0,p-1));
-          }
-        }:undefined}
-        style={{flex:1,display:'flex',flexDirection:'column',overflow:'auto',background:TH.gridBg,
-          position:'relative',cursor:!editMode&&!drawMode?'pointer':undefined}}>
-        {/* Zones de tap pour navigation entre pages (mode lecture uniquement) */}
-        {!editMode&&!drawMode&&totalPages>1&&(
-          <>
-            {safePage>0&&(
-              <div onClick={e=>{e.stopPropagation();setCurrentPage(p=>Math.max(0,p-1));}}
-                style={{position:'absolute',left:0,top:0,width:'18%',height:'100%',zIndex:5,
-                  cursor:'pointer',WebkitTapHighlightColor:'transparent'}}/>
-            )}
-            {safePage<totalPages-1&&(
-              <div onClick={e=>{e.stopPropagation();setCurrentPage(p=>Math.min(totalPages-1,p+1));}}
-                style={{position:'absolute',right:0,top:0,width:'18%',height:'100%',zIndex:5,
-                  cursor:'pointer',WebkitTapHighlightColor:'transparent'}}/>
-            )}
-          </>
-        )}
-        {/* Pre-pass : détecter les rows dont la section se termine à pleine capacité
-            → le "+" doit apparaître au début de la row suivante, ou dans la 1re ligne vide */}
-        {(()=>{
-          if(editMode){
-            pageRows._addSiForFiller=null;
-            pageRows.forEach((row,ri)=>{
-              if(row.rowType!=='measures')return;
-              const lc=row.cells[row.cells.length-1];
-              if(!lc||lc.type!=='measure')return;
-              const sec=cur.sections[lc.si];
-              if(sec?.type&&sec.type!=='grid')return;
-              if(lc.mi===sec.measures.length-1&&!lc.isContinuation&&row.cells.length===GCOLS){
-                // tag la row suivante si elle existe, sinon la 1re ligne vide
-                const nextRow=pageRows[ri+1];
-                if(nextRow)nextRow._addMeasureSi=lc.si;
-                else pageRows._addSiForFiller=lc.si;
-              }
-            });
-          }
-          return null;
-        })()}
-        {pageRows.map((row,ri)=>{
+  function renderGridRows(rows){
+    return(<>
+        {rows.map((row,ri)=>{
           if(row.rowType==='staff'){
             const item=row.cells[0];
             return(
@@ -4000,8 +3846,8 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
           );
         })}
         {/* Lignes vides pour remplir la page */}
-        {Array.from({length:Math.max(0,rowsPerPage-pageRows.length)}).map((_,ei)=>{
-          const addSiFiller=ei===0&&editMode?pageRows._addSiForFiller:null;
+        {Array.from({length:Math.max(0,rowsPerPage-rows.length)}).map((_,ei)=>{
+          const addSiFiller=ei===0&&editMode?rows._addSiForFiller:null;
           return(
           <div key={`e${ei}`} style={{height:rowH,flexShrink:0,display:'flex',alignItems:'stretch',
             background:TH.fillerBg,
@@ -4016,6 +3862,199 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
           </div>
           );
         })}
+    </>);
+  }
+
+  return(<div className="app-screen" style={{display:'flex',flexDirection:'column',background:TH.bg}}>
+
+    {/* TOP BAR */}
+    <div style={{background:TH.topBar,backdropFilter:'blur(20px)',WebkitBackdropFilter:'blur(20px)',
+      borderBottom:`0.5px solid ${TH.border}`,height:52,
+      display:fullscreen?'none':'flex',alignItems:'center',padding:'0 12px',gap:7,flexShrink:0}}>
+      <button onClick={onBack}
+        style={{background:'transparent',border:'none',color:TH.text,fontSize:20,cursor:'pointer',padding:'4px 6px 4px 0',fontFamily:'inherit',flexShrink:0}}>←</button>
+      <div style={{display:'flex',alignItems:'center',gap:5,flexShrink:0}}>
+        <SoupirLogo size={16}/><span style={{fontSize:14,fontWeight:900,letterSpacing:'-0.5px'}}>Soupir.</span>
+      </div>
+      <div style={{width:1,height:16,background:TH.btnBorder,flexShrink:0}}/>
+      <span style={{fontSize:13,fontWeight:700,flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',color:TH.text}}>{cur.title}</span>
+      <button onClick={()=>setShowTimeSig(true)} className="icon-btn"
+        style={{background:TH.btnBg,border:`1.5px solid ${TH.btnBorder}`,borderRadius:100,padding:'3px 10px',cursor:'pointer',flexShrink:0,fontFamily:'inherit',color:TH.text}}>
+        <span style={{fontSize:12,fontWeight:800}}>{timeSig}</span>
+      </button>
+      <button onClick={()=>setShowKeyPicker(true)} className="icon-btn"
+        style={{display:'flex',alignItems:'center',gap:3,background:TH.btnBg,border:`1.5px solid ${TH.btnBorder}`,borderRadius:100,padding:'3px 10px',cursor:'pointer',flexShrink:0}}>
+        <span style={{fontSize:9,color:TH.subText,fontWeight:600}}>Ton.</span>
+        <span style={{fontSize:12,fontWeight:800,color:TH.text}}>{displayKey}{displayMode==='min'?'m':''}</span>
+      </button>
+      <button onClick={()=>setDegreeMode(d=>!d)}
+        style={{background:degreeMode?TH.text:'transparent',border:`1.5px solid ${TH.text}`,color:degreeMode?(isDark?'#1A1A1A':'#F2EDE4'):TH.text,
+          padding:'3px 9px',borderRadius:100,fontSize:10,fontWeight:700,cursor:'pointer',whiteSpace:'nowrap',flexShrink:0,fontFamily:'inherit'}}>
+        {degreeMode?'Degrés':'Acc.'}
+      </button>
+      <div style={{display:'flex',alignItems:'center',gap:4,background:TH.btnBg,border:`1.5px solid ${TH.btnBorder}`,borderRadius:100,padding:'3px 7px',flexShrink:0}}>
+        <div style={{display:'flex',gap:2}}>
+          {[0,1,2,3].map(i=>(<div key={i} style={{width:4,height:4,borderRadius:'50%',transition:'all 0.06s',
+            background:metroOn&&beat===i?(i===0?TH.text:'#6B6560'):'#C0BAB0',
+            transform:metroOn&&beat===i?'scale(1.35)':'scale(1)'}}/>))}
+        </div>
+        <input type="number" value={bpm} min={40} max={300} onChange={e=>setBpm(Number(e.target.value))}
+          style={{width:30,background:'transparent',border:'none',color:TH.text,fontSize:11,fontWeight:700,textAlign:'center',outline:'none',fontFamily:'inherit'}}/>
+        <button onClick={()=>setMetroOn(m=>!m)}
+          style={{background:metroOn?TH.text:'transparent',border:`1.5px solid ${metroOn?TH.text:TH.btnBorder}`,
+            color:metroOn?(isDark?'#1A1A1A':'#F2EDE4'):TH.subText,width:18,height:18,borderRadius:'50%',cursor:'pointer',
+            fontSize:7,display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'inherit'}}>
+          {metroOn?'■':'▶'}
+        </button>
+      </div>
+      <button onClick={()=>setShowDegrees(v=>!v)}
+        style={{background:showDegrees?TH.text:'transparent',border:`1.5px solid ${showDegrees?TH.text:TH.btnBorder}`,
+          color:showDegrees?(isDark?'#1A1A1A':'#F2EDE4'):TH.subText,height:26,borderRadius:100,cursor:'pointer',
+          fontSize:9,fontWeight:700,padding:'0 7px',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontFamily:'inherit',whiteSpace:'nowrap'}}>Gamme</button>
+      <button onClick={()=>exportPDF(cur,displayKey,displayMode,prefs)}
+        title="Exporter en PDF"
+        style={{background:'transparent',border:`1.5px solid ${TH.btnBorder}`,color:TH.subText,height:26,borderRadius:100,cursor:'pointer',
+          fontSize:9,fontWeight:700,padding:'0 8px',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontFamily:'inherit',whiteSpace:'nowrap',gap:3}}>
+        <span style={{fontSize:11}}>↓</span>PDF
+      </button>
+    </div>
+
+    {/* CONTENT — page plein écran, zéro scroll */}
+    <div style={{flex:1,overflow:'hidden',position:'relative',background:TH.bg,display:'flex',flexDirection:'column'}}>
+
+      {/* ── Overlay titre + compositeur (fullscreen uniquement) ── */}
+      {fullscreen&&(
+        <div style={{position:'absolute',top:0,left:0,right:0,zIndex:10,
+          padding:'10px 16px 8px',pointerEvents:'none',
+          background:`linear-gradient(to bottom,${isDark?'rgba(26,24,22,0.55)':'rgba(255,255,255,0.55)'} 0%,transparent 100%)`}}>
+          <div style={{fontSize:14,fontWeight:800,color:TH.text,opacity:0.55,
+            letterSpacing:'-0.3px',lineHeight:1.2,
+            overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{cur.title}</div>
+          {cur.composer&&<div style={{fontSize:10,fontWeight:500,color:TH.subText,opacity:0.55,
+            marginTop:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{cur.composer}</div>}
+        </div>
+      )}
+
+      {/* ── Métronome visuel (dot pulsant, fullscreen + metroOn) ── */}
+      {!editMode&&metroOn&&(
+        <div style={{position:'absolute',bottom:14,right:14,zIndex:20,
+          display:'flex',alignItems:'center',gap:5,pointerEvents:'none'}}>
+          {[0,1,2,3].map(i=>(
+            <div key={i} style={{
+              width: beat===i&&metroOn ? (i===0?14:10) : (i===0?10:7),
+              height: beat===i&&metroOn ? (i===0?14:10) : (i===0?10:7),
+              borderRadius:'50%',
+              background: beat===i ? (i===0?(isDark?'#F2EDE4':'#1A1A1A'):(isDark?'#9A9490':'#6B6560')) : (isDark?'rgba(255,255,255,0.18)':'rgba(0,0,0,0.15)'),
+              transition:'all 0.07s ease',
+              flexShrink:0
+            }}/>
+          ))}
+        </div>
+      )}
+
+      {/* Bandeau titre + sélecteur Lecture/Édition */}
+      <div style={{display:fullscreen?'none':'flex',alignItems:'center',padding:'0 10px',gap:8,borderBottom:`0.5px solid ${TH.border}`,
+        background:TH.infoBg,height:INFO_H,flexShrink:0}}>
+        <button onClick={()=>setShowPieceInfo(true)}
+          style={{background:'transparent',border:'none',padding:0,cursor:'pointer',fontFamily:'inherit',
+            flex:1,textAlign:'left',overflow:'hidden'}}>
+          <span style={{fontSize:13,fontWeight:800,letterSpacing:'-0.4px',color:TH.text,
+            overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',display:'block'}}>{cur.title}</span>
+          {cur.composer&&<span style={{fontSize:10,fontWeight:500,color:TH.subText,
+            overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',display:'block'}}>{cur.composer}</span>}
+        </button>
+        {degreeMode&&<span style={{fontSize:9,fontWeight:700,color:'#4A3F2F',background:'#F5DDD8',
+          borderRadius:4,padding:'1px 5px',flexShrink:0}}>Degrés</span>}
+        {/* Bouton dessin */}
+        <button onClick={()=>setDrawMode(d=>!d)}
+          style={{background:drawMode?TH.text:'transparent',
+            border:`1.5px solid ${drawMode?TH.text:TH.btnBorder}`,
+            borderRadius:100,padding:'3px 10px',fontSize:12,cursor:'pointer',
+            fontFamily:'inherit',color:drawMode?(isDark?'#1A1A1A':'#F2EDE4'):TH.subText,
+            fontWeight:700,flexShrink:0,transition:'all 0.12s'}}>
+          ✎
+        </button>
+        {/* PDF export — mode lecture */}
+        {!editMode&&(
+          <button onClick={()=>setPdfExport(true)}
+            style={{background:'transparent',border:`1.5px solid ${TH.btnBorder}`,
+              borderRadius:100,padding:'3px 10px',fontSize:11,cursor:'pointer',
+              fontFamily:'inherit',color:TH.subText,fontWeight:700,flexShrink:0,
+              transition:'all 0.12s',letterSpacing:0.3}}>
+            PDF
+          </button>
+        )}
+        {/* Sélecteur Lecture / Édition */}
+        <div style={{display:'flex',background:TH.modeSwBg,borderRadius:8,padding:2,gap:1,flexShrink:0}}>
+          <button onClick={()=>{setEditMode(false);setBarsVisible(false);clearTimeout(barsHideRef.current);}}
+            style={{background:!editMode?TH.modeSwActive:'transparent',border:'none',
+              borderRadius:6,padding:'3px 9px',fontSize:10,fontWeight:700,
+              cursor:'pointer',fontFamily:'inherit',color:!editMode?TH.text:TH.subText,
+              boxShadow:!editMode?'0 1px 3px rgba(0,0,0,0.12)':'none',transition:'all 0.12s'}}>
+            👁 Lire
+          </button>
+          <button onClick={()=>{setEditMode(true);setBarsVisible(true);clearTimeout(barsHideRef.current);}}
+            style={{background:editMode?'#1A1A1A':'transparent',border:'none',
+              borderRadius:6,padding:'3px 9px',fontSize:10,fontWeight:700,
+              cursor:'pointer',fontFamily:'inherit',color:editMode?'#F2EDE4':TH.subText,
+              boxShadow:editMode?'0 1px 3px rgba(0,0,0,0.12)':'none',transition:'all 0.12s'}}>
+            ✏ Éditer
+          </button>
+        </div>
+      </div>
+
+      {/* Grille pages */}
+      <div className="grid-paper" onClick={!editMode&&!drawMode?showBarsTemp:undefined}
+        onTouchStart={!editMode&&!drawMode?e=>{gridTouchRef.current={x:e.touches[0].clientX,y:e.touches[0].clientY};}:undefined}
+        onTouchEnd={!editMode&&!drawMode?e=>{
+          if(!gridTouchRef.current)return;
+          const dx=e.changedTouches[0].clientX-gridTouchRef.current.x;
+          const dy=e.changedTouches[0].clientY-gridTouchRef.current.y;
+          gridTouchRef.current=null;
+          if(Math.abs(dx)>60&&Math.abs(dx)>Math.abs(dy)*1.5){
+            if(dx<0)setCurrentPage(p=>Math.min(totalPages-1,p+1));
+            else setCurrentPage(p=>Math.max(0,p-1));
+          }
+        }:undefined}
+        style={{flex:1,display:'flex',flexDirection:'column',overflow:'auto',background:TH.gridBg,
+          position:'relative',cursor:!editMode&&!drawMode?'pointer':undefined}}>
+        {/* Zones de tap pour navigation entre pages (mode lecture uniquement) */}
+        {!editMode&&!drawMode&&totalPages>1&&(
+          <>
+            {safePage>0&&(
+              <div onClick={e=>{e.stopPropagation();setCurrentPage(p=>Math.max(0,p-1));}}
+                style={{position:'absolute',left:0,top:0,width:'18%',height:'100%',zIndex:5,
+                  cursor:'pointer',WebkitTapHighlightColor:'transparent'}}/>
+            )}
+            {safePage<totalPages-1&&(
+              <div onClick={e=>{e.stopPropagation();setCurrentPage(p=>Math.min(totalPages-1,p+1));}}
+                style={{position:'absolute',right:0,top:0,width:'18%',height:'100%',zIndex:5,
+                  cursor:'pointer',WebkitTapHighlightColor:'transparent'}}/>
+            )}
+          </>
+        )}
+        {/* Pre-pass : détecter les rows dont la section se termine à pleine capacité
+            → le "+" doit apparaître au début de la row suivante, ou dans la 1re ligne vide */}
+        {(()=>{
+          if(editMode){
+            pageRows._addSiForFiller=null;
+            pageRows.forEach((row,ri)=>{
+              if(row.rowType!=='measures')return;
+              const lc=row.cells[row.cells.length-1];
+              if(!lc||lc.type!=='measure')return;
+              const sec=cur.sections[lc.si];
+              if(sec?.type&&sec.type!=='grid')return;
+              if(lc.mi===sec.measures.length-1&&!lc.isContinuation&&row.cells.length===GCOLS){
+                // tag la row suivante si elle existe, sinon la 1re ligne vide
+                const nextRow=pageRows[ri+1];
+                if(nextRow)nextRow._addMeasureSi=lc.si;
+                else pageRows._addSiForFiller=lc.si;
+              }
+            });
+          }
+          return null;
+        })()}
+        {renderGridRows(pageRows)}
       {/* ── Calque annotations — toujours visible ── */}
       {!drawMode&&getPageDrawings().length>0&&(
         <svg style={{position:'absolute',inset:0,width:'100%',height:'100%',
@@ -4873,6 +4912,24 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
         </button>
       </>}
     </div>
+      {/* PDF Export — portal toutes pages */}
+      {pdfExport&&ReactDOM.createPortal(
+        <div id="soupir-print-all" style={{position:'fixed',top:0,left:0,width:'100vw',
+          background:TH.gridBg,zIndex:9999,display:'flex',flexDirection:'column'}}>
+          {Array.from({length:totalPages}).map((_,pi)=>{
+            const pdfRows=allRows.slice(pi*rowsPerPage,(pi+1)*rowsPerPage);
+            return(
+              <div key={pi} className="soupir-print-page" style={{
+                width:'100vw',height:'100vh',
+                overflow:'hidden',display:'flex',flexDirection:'column',
+                background:TH.gridBg,boxSizing:'border-box'}}>
+                {renderGridRows(pdfRows)}
+              </div>
+            );
+          })}
+        </div>,
+        document.body
+      )}
   </div>);
 }
 
