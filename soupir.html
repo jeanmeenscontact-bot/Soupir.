@@ -163,7 +163,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='2.18';
+const APP_VERSION='2.19';
 const CHORD_FONT="'Barlow Semi Condensed','Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -1061,44 +1061,39 @@ function ChordText({chord,fs=30,color='#1C1C1E',weight=500}){
   const accFs=Math.round(fs*0.52);
   const qualFs=Math.round(fs*0.50);
   const extFs=Math.round(fs*0.38);
-  const sfxTop=Math.round(fs*0.20);
-  const renderMain=root?(()=>{
-    const letter=root[0];
-    const rawAcc=root.slice(1);
-    const acc=rawAcc; // format brut : 'b', '#' ou ''
+  // Parsing hors de renderMain pour séparer vraies extensions (ci-dessous en absolu)
+  // de la qualité (qui reste dans la colonne latérale, peu importe le symbole affiché)
+  const extSegsBelow=[];
+  let fullQualSuffix='';
+  if(root){
     const suffix=mainChord.slice(root.length);
-    // Découper le suffix en partie qualité + parties extensions — avec hiérarchie visuelle distincte
     const sortedQ=[...QUALITIES].filter(q=>q.suffix!=='').sort((a,b)=>b.suffix.length-a.suffix.length);
     const qualPart=sortedQ.find(q=>suffix.startsWith(q.suffix))?.suffix||'';
     let extRem=suffix.slice(qualPart.length);
     const sortedE=[...EXTENSIONS].sort((a,b)=>b.suffix.length-a.suffix.length);
-    const extSegs=[];
-    while(extRem){const e=sortedE.find(e=>extRem.startsWith(e.suffix));if(e){extSegs.push(e.suffix);extRem=extRem.slice(e.suffix.length);}else{extSegs.push(extRem[0]);extRem=extRem.slice(1);}}
-    const qualColor=color;
-    const extColor=color==='#1C1C1E'?'#6A6460':color;
-    // Extensions en dessous (ligne 2) pour éviter le débordement horizontal
+    const qualOverflow=[];
+    // Seuls les suffixes qui matchent exactement EXTENSIONS vont en bas
+    // Tout le reste (ex: mΔ, ø, △...) reste dans la colonne qualité
+    while(extRem){
+      const e=sortedE.find(e=>extRem.startsWith(e.suffix));
+      if(e){extSegsBelow.push(e.suffix);extRem=extRem.slice(e.suffix.length);}
+      else{qualOverflow.push(extRem[0]);extRem=extRem.slice(1);}
+    }
+    fullQualSuffix=qualPart+qualOverflow.join('');
+  }
+  const extColor=color==='#1C1C1E'?'#6A6460':color;
+  const renderMain=root?(()=>{
+    const letter=root[0];
+    const acc=root.slice(1);
     return(
-      <span style={{display:'inline-flex',flexDirection:'column',alignItems:'flex-start',gap:0,lineHeight:1,fontFamily:CF}}>
-        {/* Ligne 1 : racine + altération + qualité */}
-        <span style={{display:'inline-flex',alignItems:'flex-end',lineHeight:1}}>
-          <span style={{fontSize:fs,fontWeight:weight,lineHeight:1,letterSpacing:0}}>{letter}</span>
-          {(acc||qualPart)&&(
-            <span style={{display:'flex',flexDirection:'column',alignItems:'flex-start',lineHeight:1,
-              minHeight:fs,marginLeft:-2}}>
-              {acc&&<span style={{fontSize:accFs,fontWeight:600,lineHeight:1}}>{acc}</span>}
-              {qualPart&&<span style={{fontSize:qualFs,fontWeight:600,lineHeight:1,color:qualColor,
-                marginTop:'auto',marginBottom:Math.round(fs*0.10),marginLeft:Math.round(fs*0.04)}}>{qualPart}</span>}
-            </span>
-          )}
-        </span>
-        {/* Ligne 2 : extensions en dessous, compactes */}
-        {extSegs.length>0&&(
-          <span style={{display:'inline-flex',flexDirection:'row',alignItems:'center',
-            gap:Math.round(Math.max(1,fs*0.03)),lineHeight:1,
-            marginTop:Math.round(fs*0.04),marginLeft:Math.round(fs*0.06)}}>
-            {extSegs.map((p,i)=>(
-              <span key={i} style={{fontSize:extFs,fontWeight:500,lineHeight:1,color:extColor,letterSpacing:'0.01em'}}>{p}</span>
-            ))}
+      <span style={{display:'inline-flex',alignItems:'flex-end',gap:0,lineHeight:1,fontFamily:CF}}>
+        <span style={{fontSize:fs,fontWeight:weight,lineHeight:1,letterSpacing:0}}>{letter}</span>
+        {(acc||fullQualSuffix)&&(
+          <span style={{display:'flex',flexDirection:'column',alignItems:'flex-start',lineHeight:1,
+            minHeight:fs,marginLeft:-2}}>
+            {acc&&<span style={{fontSize:accFs,fontWeight:600,lineHeight:1}}>{acc}</span>}
+            {fullQualSuffix&&<span style={{fontSize:qualFs,fontWeight:600,lineHeight:1,color,
+              marginTop:'auto',marginBottom:Math.round(fs*0.10),marginLeft:Math.round(fs*0.04)}}>{fullQualSuffix}</span>}
           </span>
         )}
       </span>
@@ -1107,16 +1102,26 @@ function ChordText({chord,fs=30,color='#1C1C1E',weight=500}){
   const bassRoot=bassStr?parseRoot(bassStr):null;
   const bassLetter=bassRoot?bassRoot[0]:(bassStr?bassStr[0]||'':'');
   const bassRawAcc=bassRoot?bassRoot.slice(1):'';
-  const bassAccDisp=bassRawAcc; // format brut : 'b', '#' ou ''
+  const bassAccDisp=bassRawAcc;
   const bassFs=Math.round(fs*0.46);
-  const bassTop=Math.round(fs*0.92);   // légèrement descendu
-  const bassLeft=Math.round(fs*0.28);  // légèrement à droite
-  // Même wrapper inline-block dans les deux cas → pas de saut de position
+  const bassTop=Math.round(fs*0.92);
+  const bassLeft=Math.round(fs*0.28);
   return(
     <span style={{display:'inline-block',position:'relative',lineHeight:1,color,fontFamily:CF,
       paddingRight:bassStr?Math.round(bassFs*1.2):0,
       overflow:'visible'}}>
       {renderMain}
+      {/* Extensions en absolu sous le chord — n'affectent pas la hauteur du conteneur */}
+      {extSegsBelow.length>0&&(
+        <span style={{position:'absolute',top:'100%',left:Math.round(fs*0.06),
+          marginTop:Math.round(fs*0.04),
+          display:'inline-flex',gap:Math.round(Math.max(1,fs*0.03)),
+          lineHeight:1,whiteSpace:'nowrap',pointerEvents:'none'}}>
+          {extSegsBelow.map((p,i)=>(
+            <span key={i} style={{fontSize:extFs,fontWeight:500,lineHeight:1,color:extColor}}>{p}</span>
+          ))}
+        </span>
+      )}
       {bassStr&&(
         <span style={{position:'absolute',top:bassTop,left:bassLeft,
           display:'inline-flex',alignItems:'baseline',gap:0,lineHeight:1}}>
