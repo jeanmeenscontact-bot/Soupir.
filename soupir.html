@@ -163,7 +163,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='2.10';
+const APP_VERSION='2.14';
 const CHORD_FONT="'Barlow Semi Condensed','Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -2663,161 +2663,183 @@ async function exportPDF(piece,displayKey,displayMode,prefs){
   const {jsPDF}=window.jspdf;
   const doc=new jsPDF({unit:'mm',format:'a4'});
 
-  // ── Palette ──────────────────────────────────────────────────────────────────
-  const INK=[44,31,15];        // brun très sombre
-  const FAINT=[195,175,145];   // séparateurs chauds
-  const ACCENT=[148,72,18];    // terracotta (compositeur, barres d'accentuation)
-  const CREAM=[252,249,243];   // fond des mesures
-  const BADGE=[148,72,18];     // badge de section (même terracotta)
-  const DLINE=[220,205,185];   // ligne de grille légère
+  // ── Palette exacte du thème clair de l'appli ─────────────────────────────────
+  const INK   =[44,31,15];         // #2C1F0F  texte principal
+  const BAR   =[58,36,16];         // #3A2410  barlines (INK_ACCENT)
+  const GRID  =[250,246,238];      // #FAF6EE  fond de grille
+  const BORDER=[196,184,164];      // #C4B8A4  bords de cellule
+  const META  =[138,112,96];       // #8A7060  méta (sous-texte)
+  const BADGE =[148,72,18];        // terracotta badge section
+  const BTXT  =[255,232,200];      // #FFE8C8  texte badge
+  const IDEM  =[176,160,138];      // #B0A08A  couleur %
 
-  const W=210,H=297,mL=14,mR=14,mT=16;
-  const usableW=W-mL-mR;   // 182mm
-  const CPR=4;              // Mesures par rangée
-  const mW=usableW/CPR;     // ~45.5mm
-  const mH=20;              // Hauteur mesure — plus généreux
-  let y=mT;
+  const W=210,H=297;
+  const mL=8,mR=8,mT=10,mB=8;
+  const usableW=W-mL-mR;          // 194mm
+  const CPR=4;
+  const mW=usableW/CPR;            // 48.5mm
 
-  // ── Helper barlines ───────────────────────────────────────────────────────────
+  // ── Pré-calcul du nombre de rangées pour ajuster mH ──────────────────────────
+  const gridSections=(piece.sections||[]).filter(s=>s.type==='grid'||!s.type);
+  let totalRows=0;
+  for(const s of gridSections){
+    totalRows+=Math.ceil((s.measures||[]).length/CPR);
+  }
+  // Hauteur réservée à l'en-tête (approximation)
+  const hdrH=11+(piece.composer?6:0)+5+3;
+  const avail=H-mT-mB-hdrH;
+  const rawMH=totalRows>0?avail/totalRows:22;
+  const mH=Math.round(Math.max(11,Math.min(32,rawMH)));
+
+  // ── Barlines helper ───────────────────────────────────────────────────────────
   function drawBar(type,x,y0,y1){
-    const ht=0.65,th=0.25,dr=0.75,dg=1.3;
-    const mid=(y0+y1)/2;
     if(type==='none')return;
+    const ht=0.75,th=0.22;
+    const dg=Math.max(1.1,mH*0.09),dr=Math.max(0.6,mH*0.045);
+    const mid=(y0+y1)/2;
+    doc.setDrawColor(...BAR);
     if(type==='double'){
-      doc.setLineWidth(th);doc.setDrawColor(...INK);
-      doc.line(x-0.7,y0,x-0.7,y1);doc.line(x,y0,x,y1);
+      doc.setLineWidth(th);doc.line(x-0.8,y0,x-0.8,y1);doc.line(x,y0,x,y1);
     } else if(type==='final'){
-      doc.setLineWidth(th);doc.setDrawColor(...INK);doc.line(x-1.4,y0,x-1.4,y1);
+      doc.setLineWidth(th);doc.line(x-1.5,y0,x-1.5,y1);
       doc.setLineWidth(ht);doc.line(x,y0,x,y1);
     } else if(type==='repeat-start'){
-      doc.setLineWidth(ht);doc.setDrawColor(...INK);doc.line(x,y0,x,y1);
-      doc.setLineWidth(th);doc.line(x+1.3,y0,x+1.3,y1);
-      doc.setFillColor(...INK);
-      doc.circle(x+3,mid-dg,dr,'F');doc.circle(x+3,mid+dg,dr,'F');
-    } else if(type==='repeat-end'){
-      doc.setLineWidth(th);doc.setDrawColor(...INK);doc.line(x-1.3,y0,x-1.3,y1);
       doc.setLineWidth(ht);doc.line(x,y0,x,y1);
-      doc.setFillColor(...INK);
-      doc.circle(x-3,mid-dg,dr,'F');doc.circle(x-3,mid+dg,dr,'F');
+      doc.setLineWidth(th);doc.line(x+1.4,y0,x+1.4,y1);
+      doc.setFillColor(...BAR);
+      doc.circle(x+3.2,mid-dg,dr,'F');doc.circle(x+3.2,mid+dg,dr,'F');
+    } else if(type==='repeat-end'){
+      doc.setLineWidth(th);doc.line(x-1.4,y0,x-1.4,y1);
+      doc.setLineWidth(ht);doc.line(x,y0,x,y1);
+      doc.setFillColor(...BAR);
+      doc.circle(x-3.2,mid-dg,dr,'F');doc.circle(x-3.2,mid+dg,dr,'F');
     } else if(type==='repeat-end-start'){
-      doc.setLineWidth(ht);doc.setDrawColor(...INK);doc.line(x,y0,x,y1);
-      doc.setLineWidth(th);doc.line(x-1.3,y0,x-1.3,y1);doc.line(x+1.3,y0,x+1.3,y1);
-      doc.setFillColor(...INK);
-      doc.circle(x-3,mid-dg,dr,'F');doc.circle(x-3,mid+dg,dr,'F');
-      doc.circle(x+3,mid-dg,dr,'F');doc.circle(x+3,mid+dg,dr,'F');
+      doc.setLineWidth(ht);doc.line(x,y0,x,y1);
+      doc.setLineWidth(th);doc.line(x-1.4,y0,x-1.4,y1);doc.line(x+1.4,y0,x+1.4,y1);
+      doc.setFillColor(...BAR);
+      doc.circle(x-3.2,mid-dg,dr,'F');doc.circle(x-3.2,mid+dg,dr,'F');
+      doc.circle(x+3.2,mid-dg,dr,'F');doc.circle(x+3.2,mid+dg,dr,'F');
     } else {
-      doc.setLineWidth(th);doc.setDrawColor(...INK);doc.line(x,y0,x,y1);
+      doc.setLineWidth(th);doc.line(x,y0,x,y1);
     }
   }
 
-  // ── En-tête ───────────────────────────────────────────────────────────────────
-  doc.setFont('helvetica','bold');doc.setFontSize(22);doc.setTextColor(...INK);
-  doc.text(piece.title||'Sans titre',mL,y+8);
-  y+=11;
+  let y=mT;
+
+  // ── En-tête compact ───────────────────────────────────────────────────────────
+  doc.setFont('helvetica','bold');doc.setFontSize(15);doc.setTextColor(...INK);
+  doc.text(piece.title||'Sans titre',mL,y+7);y+=9;
   if(piece.composer){
-    doc.setFont('helvetica','italic');doc.setFontSize(10);doc.setTextColor(...ACCENT);
-    doc.text(piece.composer,mL,y+4);y+=6;
+    doc.setFont('helvetica','italic');doc.setFontSize(8.5);doc.setTextColor(...META);
+    doc.text(piece.composer,mL,y+3);y+=5;
   }
   const key=(displayKey||piece.key||'C')+(displayMode==='min'?'m':'');
-  const metaStr=[`Tonalité ${key}`,`${piece.bpm||120} BPM`,piece.timeSig||'4/4',piece.style||''].filter(Boolean).join('   ·   ');
-  doc.setFont('helvetica','normal');doc.setFontSize(8.5);doc.setTextColor(...FAINT);
-  doc.text(metaStr,mL,y+3.5);y+=6;
-  // Filet chaud
-  doc.setDrawColor(...FAINT);doc.setLineWidth(0.5);
-  doc.line(mL,y,W-mR,y);y+=7;
+  const metaStr=[`Ton. ${key}`,`${piece.bpm||120} BPM`,piece.timeSig||'4/4',piece.style||''].filter(Boolean).join('  ·  ');
+  doc.setFont('helvetica','normal');doc.setFontSize(7);doc.setTextColor(...META);
+  doc.text(metaStr,mL,y+3);y+=4;
+  doc.setDrawColor(...BORDER);doc.setLineWidth(0.35);doc.line(mL,y,W-mR,y);y+=3;
 
-  // ── Sections ─────────────────────────────────────────────────────────────────
-  const gridSections=(piece.sections||[]).filter(s=>s.type==='grid'||!s.type);
+  // ── Fond de grille (une passe, si tout tient sur une page) ────────────────────
+  const gridH=totalRows*mH;
+  if(y+gridH<=H-mB){
+    doc.setFillColor(...GRID);doc.rect(mL,y,usableW,gridH,'F');
+  }
+
+  // ── Grille des mesures ────────────────────────────────────────────────────────
   for(const section of gridSections){
     const measures=section.measures||[];
     if(!measures.length)continue;
-
-    // Badge de section
-    if(section.name){
-      if(y+mH+14>H-mT){doc.addPage();y=mT;}
-      const label=section.name.toUpperCase();
-      doc.setFont('helvetica','bold');doc.setFontSize(7);
-      const bw=doc.getTextWidth(label)+7;
-      doc.setFillColor(...BADGE);
-      doc.roundedRect(mL,y,bw,5.5,1.2,1.2,'F');
-      doc.setTextColor(255,255,255);
-      doc.text(label,mL+3.5,y+3.8);
-      y+=8;
-    }
-
-    // Rangées
     const nRows=Math.ceil(measures.length/CPR);
+
     for(let row=0;row<nRows;row++){
-      if(y+mH+2>H-mT){doc.addPage();y=mT;}
+      if(y+mH>H-mB){
+        doc.addPage();y=mT;
+        // Fond de grille sur la nouvelle page
+        doc.setFillColor(...GRID);doc.rect(mL,y,usableW,H-mT-mB,'F');
+      }
       const rowMM=measures.slice(row*CPR,(row+1)*CPR);
       const rowY=y;
       const rowW=rowMM.length*mW;
 
-      // Fond crème
-      doc.setFillColor(...CREAM);
-      doc.rect(mL,rowY,rowW,mH,'F');
-
-      // Lignes hautes/basses
-      doc.setDrawColor(...DLINE);doc.setLineWidth(0.3);
+      // Ligne haute et basse
+      doc.setDrawColor(...BORDER);doc.setLineWidth(0.2);
       doc.line(mL,rowY,mL+rowW,rowY);
       doc.line(mL,rowY+mH,mL+rowW,rowY+mH);
-
-      // Séparateurs internes légers
-      for(let mi=1;mi<rowMM.length;mi++){
-        doc.setDrawColor(...DLINE);doc.setLineWidth(0.2);
-        doc.line(mL+mi*mW,rowY+1,mL+mi*mW,rowY+mH-1);
-      }
 
       for(let mi=0;mi<rowMM.length;mi++){
         const mm=rowMM[mi];
         const mx=mL+mi*mW;
         const absIdx=row*CPR+mi;
 
-        // Type barline gauche
-        const lType=absIdx===0
-          ?(section.startBar||'normal')
-          :(measures[absIdx-1]?.barAfter||'normal');
+        // Barline gauche
+        const lType=absIdx===0?(section.startBar||'normal'):(measures[absIdx-1]?.barAfter||'normal');
         drawBar(lType,mx,rowY,rowY+mH);
+
+        // Séparateur interne léger entre mesures (barlines 'normal')
+        if(mi>0&&(lType==='normal'||!lType)){
+          doc.setDrawColor(...BORDER);doc.setLineWidth(0.15);
+          doc.line(mx,rowY,mx,rowY+mH);
+        }
+
+        // Badge de section — intégré dans la première mesure (comme dans l'appli)
+        const hasBadge=absIdx===0&&!!section.name;
+        const badgeH=hasBadge?Math.max(3.5,mH*0.23):0;
+        if(hasBadge){
+          const label=section.name.toUpperCase();
+          const bfs=Math.max(5,mH*0.26);
+          doc.setFont('helvetica','bold');doc.setFontSize(bfs);
+          const bw=doc.getTextWidth(label)+4.5;
+          doc.setFillColor(...BADGE);
+          doc.roundedRect(mx+1,rowY+0.8,bw,badgeH,0.7,0.7,'F');
+          doc.setTextColor(...BTXT);
+          doc.text(label,mx+2.5,rowY+0.8+badgeH*0.78);
+        }
 
         // Accords
         const beats=getBeats(mm);
         const active=beats.map((b,bi)=>({c:b.c,bi})).filter(({c})=>c&&c!=='');
         if(!active.length)continue;
 
+        // Zone disponible pour les accords (sous le badge éventuel)
+        const chAreaTop=rowY+badgeH+(badgeH>0?1:0);
+        const chAreaH=mH-badgeH-(badgeH>0?1:0);
+        const chY=chAreaTop+chAreaH*0.65;
+
         // Signe % (idem)
         if(active.length===1&&active[0].c==='%'){
-          doc.setFont('helvetica','bold');doc.setFontSize(22);doc.setTextColor(...FAINT);
+          const fs=Math.max(8,mH*0.62);
+          doc.setFont('helvetica','normal');doc.setFontSize(fs);doc.setTextColor(...IDEM);
           const sw=doc.getTextWidth('%');
-          doc.text('%',mx+mW/2-sw/2,rowY+mH*0.7);
+          doc.text('%',mx+mW/2-sw/2,chY);
           continue;
         }
 
-        // Accords
-        const fs=active.length===1?15:active.length===2?13:active.length===3?11:9.5;
+        // Taille de police proportionnelle à mH et nombre d'accords
+        const n=active.length;
+        const fs=Math.max(7,
+          n===1?Math.min(mH*0.62,16):
+          n===2?Math.min(mH*0.55,14):
+          n===3?Math.min(mH*0.47,11.5):
+               Math.min(mH*0.42,10));
         doc.setFont('helvetica','bold');doc.setFontSize(fs);doc.setTextColor(...INK);
         active.forEach(({c,bi})=>{
           const disp=applyPrefs(c,prefs)||c;
-          const cx=mx+2.5+(bi/4)*mW*0.95;
-          doc.text(disp,cx,rowY+mH*0.67,{maxWidth:mW*0.46});
+          const cx=mx+1.5+(bi/4)*mW*0.96;
+          doc.text(disp,cx,chY,{maxWidth:mW*0.46});
         });
       }
 
-      // Barline droite finale
-      const lastMM=rowMM[rowMM.length-1];
-      const rType=lastMM?.barAfter||'normal';
-      drawBar(rType,mL+rowW,rowY,rowY+mH);
+      // Barline droite
+      drawBar(rowMM[rowMM.length-1]?.barAfter||'normal',mL+rowW,rowY,rowY+mH);
 
       y+=mH;
     }
-    y+=5;
   }
 
   // ── Pied de page ──────────────────────────────────────────────────────────────
-  doc.setDrawColor(...FAINT);doc.setLineWidth(0.3);
-  doc.line(mL,H-11,W-mR,H-11);
-  doc.setFont('helvetica','normal');doc.setFontSize(7);doc.setTextColor(...FAINT);
-  doc.text('Soupir.',mL,H-7);
-  doc.text(new Date().toLocaleDateString('fr-FR'),W-mR,H-7,{align:'right'});
+  doc.setFont('helvetica','normal');doc.setFontSize(6.5);doc.setTextColor(...META);
+  doc.text('Soupir.',mL,H-3);
+  doc.text(new Date().toLocaleDateString('fr-FR'),W-mR,H-3,{align:'right'});
 
   const safe=(piece.title||'grille').replace(/[^\w\u00C0-\u024F\s\-]/g,'').trim();
   doc.save((safe||'grille')+'.pdf');
@@ -3028,8 +3050,8 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
           const prevM=mi>0?section.measures[mi-1]:null;
           const isContinuation=!!(prevM&&prevM.barAfter==='none');
           if(!isContinuation){mCount++;lastMasterMi=mi;}
-          // Saut de ligne forcé (lineBreak) ou espace avant ligne (rowSpacer) → nouvelle rangée
-          if((measure.lineBreak||measure.rowSpacer)&&row.length>0&&!isContinuation){rows.push({cells:row,rowType:'measures'});row=[];}
+          // Saut de ligne forcé (lineBreak seul — rowSpacer n'implique plus de saut de ligne)
+          if(measure.lineBreak&&row.length>0&&!isContinuation){rows.push({cells:row,rowType:'measures'});row=[];}
           row.push({type:'measure',si,mi,measure,section,sectionStart:mi===0,sectionName:section.name,num:isContinuation?null:mCount,isContinuation,masterMi:isContinuation?lastMasterMi:mi});
           if(row.length===GCOLS){rows.push({cells:row,rowType:'measures'});row=[];}
         });
@@ -3200,7 +3222,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
 
   // Cycle barre de mesure au clic — sans ouvrir de panel
   const BAR_LEFT_CYCLE=['normal','repeat-start'];
-  const BAR_RIGHT_CYCLE=['normal','repeat-end','repeat-end-start','double','final','none'];
+  const BAR_RIGHT_CYCLE=['normal','repeat-end','repeat-end-start','repeat-start','double','final','none'];
   function cycleBarline(si,mi,side){
     saveUndo();
     const sec=cur.sections[si];
@@ -3673,14 +3695,6 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                   type={firstCell.mi===0?(cur.sections[firstCell.si].startBar||'normal'):'normal'}
                   onClick={editMode?(e)=>{e.stopPropagation();cycleBarline(firstCell.si,firstCell.mi,'left');}:undefined}
                   minH={barH} accentColor={INK_ACCENT} dotsColor={SIGN_ACCENT}/>
-                {addSiAtStart!=null&&(
-                  <button onClick={()=>{addMeasureAtEnd(addSiAtStart);setCurrentPage(Math.ceil((allRows.length+1)/rowsPerPage)-1);}}
-                    style={{position:'absolute',left:'50%',top:'50%',transform:'translate(-50%,-50%)',
-                      width:26,height:26,background:'#F2F0EB',border:'1.5px solid #D0CAC0',borderRadius:'50%',
-                      fontSize:18,cursor:'pointer',color:'#8A847C',display:'flex',alignItems:'center',
-                      justifyContent:'center',fontWeight:300,padding:0,lineHeight:1,zIndex:20,
-                      boxShadow:'0 1px 4px rgba(0,0,0,0.15)'}}>+</button>
-                )}
               </div>
               {/* Mesures */}
               {(()=>{
@@ -3904,19 +3918,26 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                 });
                 return rendered;
               })()}
-              {/* Cellules vides fin de ligne — première = bouton "+" si fin de section */}
+              {/* Cellules fantômes fin de ligne — cliquables en mode édition */}
               {row.cells.length<GCOLS&&Array.from({length:GCOLS-row.cells.length}).map((_,pi)=>(
                 <React.Fragment key={`pad${pi}`}>
-                  {pi===0&&isLastOfSection?(
-                    <div style={{flex:1,minHeight:barH,minWidth:0,overflow:'hidden',position:'relative'}}>
-                      <button onClick={()=>{addMeasureAtEnd(lastRealSi);setCurrentPage(Math.ceil((allRows.length+1)/rowsPerPage)-1);}}
-                        style={{position:'absolute',left:14,top:'50%',transform:'translateY(-50%)',
-                          width:26,height:26,background:'rgba(0,0,0,0.06)',border:'none',borderRadius:'50%',
-                          fontSize:18,cursor:'pointer',color:'#8A847C',display:'flex',alignItems:'center',
-                          justifyContent:'center',fontWeight:300,padding:0,lineHeight:1}}>+</button>
+                  {isLastOfSection?(
+                    <div
+                      onClick={()=>addMeasureAtEnd(lastRealSi)}
+                      onMouseEnter={e=>{e.currentTarget.style.background=isDark?'rgba(255,255,255,0.06)':'rgba(80,50,10,0.07)';e.currentTarget.style.borderColor=isDark?'rgba(200,180,150,0.35)':'rgba(140,100,40,0.45)';}}
+                      onMouseLeave={e=>{e.currentTarget.style.background=isDark?'rgba(255,255,255,0.02)':'rgba(80,50,10,0.025)';e.currentTarget.style.borderColor=isDark?'rgba(200,180,150,0.18)':'rgba(160,130,80,0.25)';}}
+                      style={{flex:1,minWidth:0,cursor:'pointer',
+                        margin:`${ROW_PAD}px 2px`,
+                        background:isDark?'rgba(255,255,255,0.02)':'rgba(80,50,10,0.025)',
+                        border:`1.5px dashed ${isDark?'rgba(200,180,150,0.18)':'rgba(160,130,80,0.25)'}`,
+                        borderRadius:6,
+                        display:'flex',alignItems:'center',justifyContent:'center',
+                        transition:'background 0.12s,border-color 0.12s'}}>
+                      <span style={{fontSize:22,fontWeight:200,lineHeight:1,userSelect:'none',
+                        color:isDark?'rgba(200,180,150,0.3)':'rgba(120,90,40,0.28)'}}>+</span>
                     </div>
                   ):(
-                    <div style={{flex:1,minHeight:barH,minWidth:0,overflow:'hidden'}}/>
+                    <div style={{flex:1,minHeight:barH,minWidth:0}}/>
                   )}
                   <Barline type="none" minH={barH} accentColor={INK_ACCENT} dotsColor={SIGN_ACCENT}/>
                 </React.Fragment>
@@ -3934,17 +3955,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
             <div style={{width:10,flexShrink:0}}/>
             {Array.from({length:GCOLS}).map((_,ci)=>(
               <React.Fragment key={ci}>
-                {ci===0&&addSiFiller!=null?(
-                  <div style={{flex:1,minWidth:0,overflow:'hidden',position:'relative'}}>
-                    <button onClick={()=>{addMeasureAtEnd(addSiFiller);setCurrentPage(Math.ceil((allRows.length+1)/rowsPerPage)-1);}}
-                      style={{position:'absolute',left:42,top:'50%',transform:'translateY(-50%)',
-                        width:26,height:26,background:'rgba(0,0,0,0.06)',border:'none',borderRadius:'50%',
-                        fontSize:18,cursor:'pointer',color:'#8A847C',display:'flex',alignItems:'center',
-                        justifyContent:'center',fontWeight:300,padding:0,lineHeight:1}}>+</button>
-                  </div>
-                ):(
-                  <div style={{flex:1,minWidth:0,overflow:'hidden'}}/>
-                )}
+                <div style={{flex:1,minWidth:0,overflow:'hidden'}}/>
                 <Barline type="none" minH={barH} accentColor={INK_ACCENT} dotsColor={SIGN_ACCENT}/>
               </React.Fragment>
             ))}
@@ -4324,7 +4335,12 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
               {/* Rythme */}
               {GRP('Rythme', CRYTHME)}
               {LBL('Temps', CRYTHME)}
-              <div style={{display:'flex',gap:5,marginBottom:14}}>
+              <div style={{display:'flex',alignItems:'stretch',gap:5,marginBottom:14}}>
+                {/* + Insérer une mesure AVANT */}
+                <button title="Insérer une mesure avant" onClick={()=>{handleMeasureAction(picker.si,picker.mi,'addBefore');setPicker(pk=>({...pk,visible:false}));}}
+                  style={{...B,width:26,flexShrink:0,borderRadius:9,fontSize:18,fontWeight:300,
+                    background:'transparent',color:IC,outline:`1.5px dashed ${BC}`,letterSpacing:0}}>+</button>
+                {/* 4 temps */}
                 {(picker.localBeats||[]).map((_b,bi)=>{
                   const bc=(picker.localBeats||[])[bi]?.c||'';
                   const filled=bc&&!isSpec(bc);
@@ -4338,6 +4354,10 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                     </button>
                   );
                 })}
+                {/* + Insérer une mesure APRÈS */}
+                <button title="Insérer une mesure après" onClick={()=>{handleMeasureAction(picker.si,picker.mi,'addAfter');setPicker(pk=>({...pk,visible:false}));}}
+                  style={{...B,width:26,flexShrink:0,borderRadius:9,fontSize:18,fontWeight:300,
+                    background:'transparent',color:IC,outline:`1.5px dashed ${BC}`,letterSpacing:0}}>+</button>
               </div>
 
               {/* Accords spéciaux */}
