@@ -163,7 +163,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='2.14';
+const APP_VERSION='2.15';
 const CHORD_FONT="'Barlow Semi Condensed','Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -3927,7 +3927,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                       onMouseEnter={e=>{e.currentTarget.style.background=isDark?'rgba(255,255,255,0.06)':'rgba(80,50,10,0.07)';e.currentTarget.style.borderColor=isDark?'rgba(200,180,150,0.35)':'rgba(140,100,40,0.45)';}}
                       onMouseLeave={e=>{e.currentTarget.style.background=isDark?'rgba(255,255,255,0.02)':'rgba(80,50,10,0.025)';e.currentTarget.style.borderColor=isDark?'rgba(200,180,150,0.18)':'rgba(160,130,80,0.25)';}}
                       style={{flex:1,minWidth:0,cursor:'pointer',
-                        margin:`${ROW_PAD}px 2px`,
+                        margin:`${ROW_PAD}px 0`,
                         background:isDark?'rgba(255,255,255,0.02)':'rgba(80,50,10,0.025)',
                         border:`1.5px dashed ${isDark?'rgba(200,180,150,0.18)':'rgba(160,130,80,0.25)'}`,
                         borderRadius:6,
@@ -3939,7 +3939,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                   ):(
                     <div style={{flex:1,minHeight:barH,minWidth:0}}/>
                   )}
-                  <Barline type="none" minH={barH} accentColor={INK_ACCENT} dotsColor={SIGN_ACCENT}/>
+                  <div style={{width:20,flexShrink:0}}/>
                 </React.Fragment>
               ))}
             </div>
