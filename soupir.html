@@ -188,7 +188,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='2.27';
+const APP_VERSION='2.28';
 const CHORD_FONT="'Barlow Semi Condensed','Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -2692,6 +2692,8 @@ async function exportPDF(piece,displayKey,displayMode,prefs){
   await loadJsPDF();
   const {jsPDF}=window.jspdf;
   const doc=new jsPDF({unit:'mm',format:'a4'});
+  // Résolution améliorée
+  doc.setProperties({title:piece.title||'Grille'});
 
   // ── Palette exacte du thème clair de l'appli ─────────────────────────────────
   const INK   =[44,31,15];         // #2C1F0F  texte principal
@@ -2791,25 +2793,14 @@ async function exportPDF(piece,displayKey,displayMode,prefs){
       const rowY=y;
       const rowW=rowMM.length*mW;
 
-      // Ligne haute et basse
-      doc.setDrawColor(...BORDER);doc.setLineWidth(0.2);
-      doc.line(mL,rowY,mL+rowW,rowY);
-      doc.line(mL,rowY+mH,mL+rowW,rowY+mH);
-
       for(let mi=0;mi<rowMM.length;mi++){
         const mm=rowMM[mi];
         const mx=mL+mi*mW;
         const absIdx=row*CPR+mi;
 
-        // Barline gauche
+        // Barline gauche uniquement (pas de lignes horizontales entre rangées)
         const lType=absIdx===0?(section.startBar||'normal'):(measures[absIdx-1]?.barAfter||'normal');
         drawBar(lType,mx,rowY,rowY+mH);
-
-        // Séparateur interne léger entre mesures (barlines 'normal')
-        if(mi>0&&(lType==='normal'||!lType)){
-          doc.setDrawColor(...BORDER);doc.setLineWidth(0.15);
-          doc.line(mx,rowY,mx,rowY+mH);
-        }
 
         // Badge de section — intégré dans la première mesure (comme dans l'appli)
         const hasBadge=absIdx===0&&!!section.name;
@@ -2825,37 +2816,83 @@ async function exportPDF(piece,displayKey,displayMode,prefs){
           doc.text(label,mx+2.5,rowY+0.8+badgeH*0.78);
         }
 
-        // Accords
+        // Accords — rendu notation musicale
         const beats=getBeats(mm);
         const active=beats.map((b,bi)=>({c:b.c,bi})).filter(({c})=>c&&c!=='');
         if(!active.length)continue;
 
-        // Zone disponible pour les accords (sous le badge éventuel)
         const chAreaTop=rowY+badgeH+(badgeH>0?1:0);
         const chAreaH=mH-badgeH-(badgeH>0?1:0);
-        const chY=chAreaTop+chAreaH*0.65;
+        const chY=chAreaTop+chAreaH*0.68;
+        const slotW=mW/4;
 
-        // Signe % (idem)
-        if(active.length===1&&active[0].c==='%'){
-          const fs=Math.max(8,mH*0.62);
-          doc.setFont('helvetica','normal');doc.setFontSize(fs);doc.setTextColor(...IDEM);
-          const sw=doc.getTextWidth('%');
-          doc.text('%',mx+mW/2-sw/2,chY);
-          continue;
-        }
-
-        // Taille de police proportionnelle à mH et nombre d'accords
-        const n=active.length;
-        const fs=Math.max(7,
-          n===1?Math.min(mH*0.62,16):
-          n===2?Math.min(mH*0.55,14):
-          n===3?Math.min(mH*0.47,11.5):
-               Math.min(mH*0.42,10));
-        doc.setFont('helvetica','bold');doc.setFontSize(fs);doc.setTextColor(...INK);
-        active.forEach(({c,bi})=>{
+        // ── Helper : dessine un accord en notation musicale ──────────────────────
+        function drawChordMusical(c,bX){
+          if(!c)return;
+          // Signe % (idem)
+          if(c==='%'){
+            const fs=Math.max(7,mH*0.52);
+            doc.setFont('helvetica','normal');doc.setFontSize(fs);doc.setTextColor(...IDEM);
+            doc.text('%',bX+slotW*0.38,chY);
+            return;
+          }
           const disp=applyPrefs(c,prefs)||c;
-          const cx=mx+1.5+(bi/4)*mW*0.96;
-          doc.text(disp,cx,chY,{maxWidth:mW*0.46});
+          // Parsing : lettre + accidentel (b/#) + qualité + /basse
+          const letter=(disp.match(/^[A-G]/)||[''])[0];
+          let rest=disp.slice(letter.length);
+          let acc='';
+          if(rest[0]==='#'){acc='♯';rest=rest.slice(1);}
+          else if(rest[0]==='b'){acc='♭';rest=rest.slice(1);}
+          let qual=rest,bass='';
+          const si2=rest.indexOf('/');
+          if(si2>=0){qual=rest.slice(0,si2);bass=rest.slice(si2+1);}
+
+          const rootFs=Math.max(7,mH*0.58);
+          const sideFs=Math.round(rootFs*0.52);
+          const bassFs=Math.round(rootFs*0.42);
+
+          // 1. Lettre principale — grande et bold
+          doc.setFont('helvetica','bold');doc.setFontSize(rootFs);doc.setTextColor(...INK);
+          doc.text(letter,bX,chY);
+          const rootW=doc.getTextWidth(letter);
+          let sideX=bX+rootW;
+
+          // 2. Accidentel en exposant
+          if(acc){
+            doc.setFont('helvetica','bold');doc.setFontSize(sideFs);
+            doc.text(acc,sideX,chY-rootFs*0.30);
+            doc.setFontSize(sideFs);
+            sideX+=doc.getTextWidth(acc)+0.2;
+          }
+
+          // 3. Qualité (m, m7, maj7, dim…)
+          if(qual){
+            doc.setFont('helvetica','bold');doc.setFontSize(sideFs);doc.setTextColor(...INK);
+            doc.text(qual,sideX,chY);
+          }
+
+          // 4. Note de basse — dessous, plus petite
+          if(bass){
+            const bLetter=(bass.match(/^[A-G]/)||[''])[0];
+            let bRest=bass.slice(bLetter.length);
+            let bAcc='';
+            if(bRest[0]==='#'){bAcc='♯';bRest=bRest.slice(1);}
+            else if(bRest[0]==='b'){bAcc='♭';bRest=bRest.slice(1);}
+            const bassY=chY+rootFs*0.42;
+            doc.setFont('helvetica','normal');doc.setFontSize(bassFs);doc.setTextColor(...META);
+            const prefix='/'+bLetter;
+            doc.text(prefix,bX+rootW*0.1,bassY);
+            if(bAcc){
+              doc.setFontSize(bassFs*0.76);
+              doc.text(bAcc,bX+rootW*0.1+doc.getTextWidth(prefix),bassY-bassFs*0.22);
+            }
+          }
+        }
+        // ────────────────────────────────────────────────────────────────────────
+
+        active.forEach(({c,bi})=>{
+          const bX=mx+1.5+(bi/4)*mW*0.96;
+          drawChordMusical(c,bX);
         });
       }
 
