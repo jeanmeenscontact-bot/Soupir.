@@ -50,9 +50,25 @@
       html,body{overflow:visible!important;height:auto!important;}
       body::before{display:none!important;}
       body>*{display:none!important;}
-      #soupir-print-all{display:flex!important;flex-direction:column;}
-      .soupir-print-page{page-break-after:always;overflow:hidden;}
+      #soupir-print-all{
+        display:block!important;
+        position:static!important;
+        width:100vw!important;
+        height:auto!important;
+        overflow:visible!important;
+      }
+      .soupir-print-page{
+        break-after:page;
+        page-break-after:always;
+        overflow:hidden!important;
+        width:100vw!important;
+        height:100vh!important;
+        display:flex!important;
+        flex-direction:column!important;
+        box-sizing:border-box!important;
+      }
       .grid-paper::after{display:none!important;}
+      ::-webkit-scrollbar{display:none!important;}
     }
   </style>
 </head>
@@ -172,7 +188,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='2.25';
+const APP_VERSION='2.27';
 const CHORD_FONT="'Barlow Semi Condensed','Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -3163,9 +3179,25 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
 
   // Applique les beats en temps réel sans fermer le picker (compact mode)
   function applyMeasureLive(pk){
-    const{si,mi,half,localBeats,timeSig}=pk||picker;
+    const{si,mi,half,localBeats,timeSig,isGrande,cSi,cMi}=pk||picker;
     const clean=bs=>bs.map(b=>({c:b.c||'',s:b.s||[],v:b.v||null,t:b.t||''}));
     const safeC=bs=>{const c=bs.map(b=>b.c).filter(c=>c);return c.length?c:[''];};
+    if(isGrande){
+      const mb=clean((localBeats||[]).slice(0,4));
+      const cb=clean((localBeats||[]).slice(4,8));
+      setLibrary(lib=>lib.map(p=>{
+        if(p.id!==piece.id)return p;
+        return{...p,sections:p.sections.map((s,sI)=>{
+          if(sI!==si)return s;
+          return{...s,measures:s.measures.map((mm,mI)=>{
+            if(mI===mi)return{...mm,beats:mb,chords:safeC(mb)};
+            if(mI===cMi)return{...mm,beats:cb,chords:safeC(cb)};
+            return mm;
+          })};
+        })};
+      }));
+      return;
+    }
     const cleanBeats=clean(localBeats||[mkBeat(),mkBeat(),mkBeat(),mkBeat()]);
     const safeChords=safeC(cleanBeats);
     const tsVal=timeSig||null;
@@ -3518,7 +3550,9 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
     modeSwBg:isDark?'#2A2826':'#D8D0C0',
     modeSwActive:isDark?'#3A3836':'#FAF6EE',
   };
-  function renderGridRows(rows){
+  function renderGridRows(rows,pdfRPP=null){
+    // pdfRPP : si fourni, on est en mode PDF → les filler rows se basent sur pdfRPP
+    const effectiveRPP=pdfRPP!==null?pdfRPP:rowsPerPage;
     return(<>
         {rows.map((row,ri)=>{
           if(row.rowType==='staff'){
@@ -3714,13 +3748,13 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                             if(bi===4){
                               return[
                                 <div key="gm-sep"
-                                  style={{width:0,flexShrink:0,position:'relative',overflow:'visible',zIndex:10,
-                                    cursor:editMode?'pointer':'default'}}
-                                  onClick={editMode?(e)=>{e.stopPropagation();cycleBarline(si,mi,'right');}:undefined}>
+                                  style={{width:0,flexShrink:0,position:'relative',overflow:'visible',zIndex:10}}>
                                   {editMode&&(
-                                    <div style={{position:'absolute',top:0,bottom:0,left:-8,width:16,
-                                      display:'flex',alignItems:'center',justifyContent:'center',
-                                      pointerEvents:'none'}}>
+                                    <div
+                                      onClick={(e)=>{e.stopPropagation();cycleBarline(si,mi,'right');}}
+                                      style={{position:'absolute',top:0,bottom:0,left:-8,width:16,
+                                        display:'flex',alignItems:'center',justifyContent:'center',
+                                        cursor:'pointer',pointerEvents:'auto'}}>
                                       <div style={{width:0,height:'100%',borderLeft:`1.5px dashed ${isDark?'rgba(255,255,255,0.25)':'rgba(0,0,0,0.18)'}`}}/>
                                     </div>
                                   )}
@@ -3846,7 +3880,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
           );
         })}
         {/* Lignes vides pour remplir la page */}
-        {Array.from({length:Math.max(0,rowsPerPage-rows.length)}).map((_,ei)=>{
+        {Array.from({length:Math.max(0,effectiveRPP-rows.length)}).map((_,ei)=>{
           const addSiFiller=ei===0&&editMode?rows._addSiForFiller:null;
           return(
           <div key={`e${ei}`} style={{height:rowH,flexShrink:0,display:'flex',alignItems:'stretch',
@@ -4198,35 +4232,8 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
         </div>
       </Sheet>)}
 
-      {picker.visible&&picker.isGrande&&<ChordPicker picker={picker}
-        onChange={(upd)=>{
-          // Synchronise localBeats[selectedBeat].c avec l'état de l'éditeur (root/quality/ext/bass)
-          const prevSbi=picker.selectedBeat??0;
-          const sbi=upd.selectedBeat??0;
-          const nSlots=upd.isGrande?8:4;
-          const emptyBeats=Array.from({length:nSlots},()=>mkBeat());
-          if(sbi===prevSbi){
-            const root=upd.letter+(upd.acc==='#'?'#':upd.acc==='b'?'b':'');
-            const bass=(upd.bass||'')+((upd.bass&&upd.bassAcc)?upd.bassAcc:'');
-            const newChord=buildChordStr(root,upd.qualityId,upd.extensions,bass);
-            const newBeats=(upd.localBeats||emptyBeats).map((b,i)=>{
-              if(i!==sbi)return b;
-              if(isSpec(b.c))return b;
-              return{...b,c:newChord};
-            });
-            setPicker({...upd,localBeats:newBeats});
-          } else {
-            setPicker({...upd});
-          }
-        }}
-        onConfirm={confirmMeasure}
-        onCancel={()=>setPicker(pk=>({...pk,visible:false}))}
-        sectionName={cur.sections[picker.si]?.name||''}
-        onRenameSection={renameSectionAtPicker}
-        prefs={prefs} displayKey={displayKey} displayMode={displayMode} autoHarmonize={!!prefs?.autoHarmonize}/>}
-
-      {/* ── Compact ChordPicker flottant (Option B) ── */}
-      {editMode&&picker.visible&&!picker.isGrande&&(()=>{
+      {/* ── Compact ChordPicker flottant — mesures normales ET grandes ── */}
+      {editMode&&picker.visible&&(()=>{
         const sbi=picker.selectedBeat??0;
         const bassStr=(picker.bass||'')+((picker.bass&&picker.bassAcc)?picker.bassAcc:'');
         const selBeat=(picker.localBeats||[])[sbi]||mkBeat();
@@ -4429,11 +4436,11 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
               {GRP('Rythme', CRYTHME)}
               {LBL('Temps', CRYTHME)}
               <div style={{display:'flex',alignItems:'stretch',gap:5,marginBottom:14}}>
-                {/* + Insérer une mesure AVANT */}
-                <button title="Insérer une mesure avant" onClick={()=>{handleMeasureAction(picker.si,picker.mi,'addBefore');setPicker(pk=>({...pk,visible:false}));}}
+                {/* + Insérer une mesure AVANT — masqué pour grande mesure */}
+                {!picker.isGrande&&<button title="Insérer une mesure avant" onClick={()=>{handleMeasureAction(picker.si,picker.mi,'addBefore');setPicker(pk=>({...pk,visible:false}));}}
                   style={{...B,width:26,flexShrink:0,borderRadius:9,fontSize:18,fontWeight:300,
-                    background:'transparent',color:IC,outline:`1.5px dashed ${BC}`,letterSpacing:0}}>+</button>
-                {/* 4 temps */}
+                    background:'transparent',color:IC,outline:`1.5px dashed ${BC}`,letterSpacing:0}}>+</button>}
+                {/* beats (4 ou 8) */}
                 {(picker.localBeats||[]).map((_b,bi)=>{
                   const bc=(picker.localBeats||[])[bi]?.c||'';
                   const filled=bc&&!isSpec(bc);
@@ -4447,10 +4454,10 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                     </button>
                   );
                 })}
-                {/* + Insérer une mesure APRÈS */}
-                <button title="Insérer une mesure après" onClick={()=>{handleMeasureAction(picker.si,picker.mi,'addAfter');setPicker(pk=>({...pk,visible:false}));}}
+                {/* + Insérer une mesure APRÈS — masqué pour grande mesure */}
+                {!picker.isGrande&&<button title="Insérer une mesure après" onClick={()=>{handleMeasureAction(picker.si,picker.mi,'addAfter');setPicker(pk=>({...pk,visible:false}));}}
                   style={{...B,width:26,flexShrink:0,borderRadius:9,fontSize:18,fontWeight:300,
-                    background:'transparent',color:IC,outline:`1.5px dashed ${BC}`,letterSpacing:0}}>+</button>
+                    background:'transparent',color:IC,outline:`1.5px dashed ${BC}`,letterSpacing:0}}>+</button>}
               </div>
 
               {/* Accords spéciaux */}
@@ -4579,7 +4586,8 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                 </button>
               )}
 
-              {/* Rythme — Signature */}
+              {/* Rythme — Signature (masqué pour les grandes mesures) */}
+              {!picker.isGrande&&(<>
               {GRP('Rythme', CRYTHME)}
               {LBL('Signature', CRYTHME)}
               <div style={{display:'grid',gridTemplateColumns:`repeat(${TIME_SIGS.length},1fr)`,gap:5}}>
@@ -4598,6 +4606,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                   );
                 })}
               </div>
+              </>)}
 
               {/* Annotations */}
               {GRP('Annotations', CANNOT)}
@@ -4913,21 +4922,33 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
       </>}
     </div>
       {/* PDF Export — portal toutes pages */}
-      {pdfExport&&ReactDOM.createPortal(
-        <div id="soupir-print-all" style={{position:'fixed',top:0,left:0,width:'100vw',
-          background:TH.gridBg,zIndex:9999,display:'flex',flexDirection:'column'}}>
-          {Array.from({length:totalPages}).map((_,pi)=>{
-            const pdfRows=allRows.slice(pi*rowsPerPage,(pi+1)*rowsPerPage);
+      {pdfExport&&ReactDOM.createPortal((()=>{
+        // Rows per page pour le PDF : fenêtre entière (pas de chrome UI)
+        const pdfRPP=Math.max(1,Math.floor(window.innerHeight/rowH));
+        const pdfTotalPages=Math.max(1,Math.ceil(allRows.length/pdfRPP));
+        return(
+        <div id="soupir-print-all" style={{
+          /* Écran : overlay couvrant tout, sans scrollbar */
+          position:'fixed',top:0,left:0,
+          width:'100vw',height:'100vh',
+          overflow:'hidden',
+          background:TH.gridBg,zIndex:9999,
+          /* Flex uniquement pour le preview écran ; @media print override à block+static */
+          display:'flex',flexDirection:'column'}}>
+          {Array.from({length:pdfTotalPages}).map((_,pi)=>{
+            const pdfRows=allRows.slice(pi*pdfRPP,(pi+1)*pdfRPP);
             return(
-              <div key={pi} className="soupir-print-page" style={{
-                width:'100vw',height:'100vh',
+              <div key={pi} className="soupir-print-page grid-paper" style={{
+                width:'100vw',height:'100vh',flexShrink:0,
                 overflow:'hidden',display:'flex',flexDirection:'column',
-                background:TH.gridBg,boxSizing:'border-box'}}>
-                {renderGridRows(pdfRows)}
+                background:TH.gridBg,boxSizing:'border-box',position:'relative'}}>
+                {renderGridRows(pdfRows,pdfRPP)}
               </div>
             );
           })}
-        </div>,
+        </div>
+        );
+      })(),
         document.body
       )}
   </div>);
