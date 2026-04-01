@@ -169,6 +169,8 @@ function autoHarmonizeTriad(letter,acc,key,mode='maj'){
 const DEFAULT_PREFS={minor:'m',dim:'°',aug:'+',maj7:'maj7',hdim:'ø',accentColor:'black',autoHarmonize:true,darkMode:false};
 function loadPrefs(){try{const s=localStorage.getItem('soupir_prefs');return s?{...DEFAULT_PREFS,...JSON.parse(s)}:DEFAULT_PREFS;}catch{return DEFAULT_PREFS;}}
 function savePrefs(p){try{localStorage.setItem('soupir_prefs',JSON.stringify(p));}catch{}}
+function loadRecents(){try{return JSON.parse(localStorage.getItem('soupir_recents')||'[]');}catch{return[];}}
+function saveRecents(r){try{localStorage.setItem('soupir_recents',JSON.stringify(r));}catch{}}
 function applyPrefs(chord,prefs){
   if(!chord||chord==='%'||chord==='/'||chord==='—')return chord;
   // Extraire la note de basse avant d'appliquer les préférences
@@ -188,7 +190,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='2.28';
+const APP_VERSION='2.29';
 const CHORD_FONT="'Barlow Semi Condensed','Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -1516,33 +1518,93 @@ function StaffSectionView({section,onUpdate,onDelete,editMode=true,prefs}){
 
 
 // ─── HOME SCREEN ─────────────────────────────────────────────────────────────
-function HomeScreen({onNavigate}){
-  const items=[{l:'Mes morceaux',k:'library'},{l:'Préférences',k:'prefs'}];
-  return(<div style={{height:'100vh',display:'flex',flexDirection:'column',alignItems:'center',
-    justifyContent:'center',padding:'40px 40px 60px',background:'#F2F0EB'}}>
-    <div style={{display:'flex',flexDirection:'column',gap:12,width:'100%',maxWidth:340,marginBottom:50}}>
-      {items.map((item,i)=>(
-        <button key={item.k}
-          style={{background:'transparent',border:'2px solid #1A1A1A',color:'#1A1A1A',
-            padding:'17px 32px',borderRadius:100,fontSize:17,fontWeight:700,cursor:'pointer',
-            fontFamily:'inherit',textAlign:'center',width:'100%',transition:'all 0.15s'}}
-          onClick={()=>onNavigate(item.k)}>
-          {item.l}
+function HomeScreen({library,onSelect,onNavigate}){
+  const BG='#F2F0EB',INK='#1A1A1A',SUB='#8A847C',BORDER='#D0CAC0';
+  const recents=loadRecents().map(id=>library.find(p=>p.id===id)).filter(Boolean).slice(0,3);
+  return(
+    <div style={{height:'100vh',display:'flex',flexDirection:'column',background:BG,overflowY:'auto'}}>
+      {/* ── En-tête ── */}
+      <div style={{padding:'52px 24px 20px',display:'flex',alignItems:'flex-start',justifyContent:'space-between'}}>
+        <div style={{display:'flex',alignItems:'center',gap:10}}>
+          <SoupirLogo size={26}/>
+          <span style={{fontSize:24,fontWeight:900,letterSpacing:'-0.5px',color:INK,lineHeight:1}}>Soupir.</span>
+        </div>
+        <button onClick={()=>onNavigate('prefs')}
+          style={{background:'transparent',border:`1.5px solid ${BORDER}`,borderRadius:100,
+            padding:'6px 14px',fontSize:12,fontWeight:600,color:SUB,cursor:'pointer',fontFamily:'inherit',marginTop:4}}>
+          Préférences
         </button>
-      ))}
+      </div>
+
+      {/* ── Morceaux récents ── */}
+      {recents.length>0&&(
+        <div style={{padding:'4px 24px 20px'}}>
+          <div style={{fontSize:11,fontWeight:700,color:SUB,textTransform:'uppercase',
+            letterSpacing:1.3,marginBottom:12}}>Récents</div>
+          {recents.map((p,i)=>(
+            <div key={p.id} onClick={()=>onSelect(p)} className="home-btn"
+              style={{animationDelay:`${i*0.06}s`,
+                background:i===0?INK:'#FFFFFF',
+                border:`1.5px solid ${i===0?INK:BORDER}`,
+                borderRadius:16,padding:i===0?'18px 20px':'14px 18px',
+                marginBottom:8,cursor:'pointer',
+                display:'flex',alignItems:'center',justifyContent:'space-between',
+                transition:'all 0.12s',gap:12}}>
+              <div style={{minWidth:0,flex:1}}>
+                <div style={{fontSize:i===0?17:15,fontWeight:800,lineHeight:1.2,
+                  color:i===0?'#F2EDE4':INK,
+                  overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+                  {p.title}
+                </div>
+                {p.composer&&(
+                  <div style={{fontSize:12,color:i===0?'#C0B0A0':SUB,marginTop:3,
+                    overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+                    {p.composer}
+                  </div>
+                )}
+                <div style={{fontSize:11,color:i===0?'#7A7470':SUB,marginTop:i===0?5:3}}>
+                  {p.key} · {p.bpm} BPM · {p.timeSig||'4/4'}
+                </div>
+              </div>
+              <span style={{fontSize:i===0?13:12,fontWeight:700,flexShrink:0,
+                color:i===0?'#A09A90':'#C0BAB0',whiteSpace:'nowrap'}}>
+                {i===0?'Reprendre →':'→'}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── Actions ── */}
+      <div style={{padding:'0 24px 16px',display:'flex',flexDirection:'column',gap:10,
+        marginTop:recents.length===0?'auto':0}}>
+        {recents.length===0&&<div style={{height:60}}/>}
+        <button onClick={()=>onNavigate('library')}
+          style={{background:INK,color:'#F2EDE4',border:'none',
+            borderRadius:100,padding:'17px 32px',fontSize:16,fontWeight:700,
+            cursor:'pointer',fontFamily:'inherit',textAlign:'center',width:'100%',transition:'all 0.15s'}}>
+          Tous les morceaux
+        </button>
+      </div>
+
+      {/* ── Version ── */}
+      <div style={{padding:'8px 24px 36px',textAlign:'center',marginTop:'auto'}}>
+        <span style={{fontSize:11,fontWeight:600,color:'#C0BAB0',letterSpacing:'0.05em'}}>{APP_VERSION}</span>
+      </div>
     </div>
-    <div style={{display:'flex',flexDirection:'column',alignItems:'center',opacity:0.85}}>
-      <SoupirLogo size={68}/>
-      <span style={{marginTop:10,fontSize:11,fontWeight:700,letterSpacing:'0.08em',
-        color:'#8A847C',fontFamily:'inherit'}}>{APP_VERSION}</span>
-    </div>
-  </div>);
+  );
 }
 
 // ─── LIBRARY SCREEN ───────────────────────────────────────────────────────────
-function LibraryScreen({library,activePieceId,onSelect,onBack,onCreate,onImport}){
+function LibraryScreen({library,activePieceId,onSelect,onBack,onCreate,onImport,onDelete}){
   const fileRef=React.useRef(null);
   const [importErr,setImportErr]=React.useState(null);
+  const [search,setSearch]=React.useState('');
+  const [sort,setSort]=React.useState('recent');
+  const [editMode,setEditMode]=React.useState(false);
+  const [confirmId,setConfirmId]=React.useState(null);
+  const BG='#F2F0EB',INK='#1A1A1A',SUB='#8A847C',BORDER='#D0CAC0';
+  const SORT_OPTS=[{k:'recent',l:'Récents'},{k:'title',l:'Titre'},{k:'composer',l:'Artiste'},{k:'key',l:'Tonalité'}];
 
   function handleFileChange(e){
     const file=e.target.files[0];
@@ -1550,7 +1612,6 @@ function LibraryScreen({library,activePieceId,onSelect,onBack,onCreate,onImport}
     const reader=new FileReader();
     reader.onload=ev=>{
       const text=ev.target.result;
-      // Détecter le format : iReal Pro HTML (.html) ou MusicXML (.xml/.musicxml)
       const result=file.name.toLowerCase().endsWith('.html')
         ?parseIRealProHTML(text)
         :parseMusicXML(text);
@@ -1561,58 +1622,174 @@ function LibraryScreen({library,activePieceId,onSelect,onBack,onCreate,onImport}
     e.target.value='';
   }
 
-  return(<div style={{height:'100vh',display:'flex',flexDirection:'column',background:'#F2F0EB'}}>
-    <div style={{padding:'18px 24px 14px',borderBottom:'1px solid #D0CAC0',
-      display:'flex',alignItems:'center',gap:14,background:'rgba(255,255,255,0.9)'}}>
-      <button onClick={onBack}
-        style={{background:'transparent',border:'none',color:'#1A1A1A',fontSize:20,
-          cursor:'pointer',padding:'4px',fontFamily:'inherit'}}>←</button>
-      <span style={{fontSize:18,fontWeight:800,letterSpacing:'-0.4px'}}>Mes morceaux</span>
-    </div>
-    <div style={{flex:1,overflowY:'auto',padding:'12px 20px'}}>
-      {library.map(p=>(
-        <div key={p.id} onClick={()=>onSelect(p)}
-          style={{display:'flex',alignItems:'center',justifyContent:'space-between',
-            padding:'16px 18px',borderRadius:14,marginBottom:6,cursor:'pointer',
-            background:p.id===activePieceId?'#1A1A1A':'#FFFFFF',
-            border:`1.5px solid ${p.id===activePieceId?'#1A1A1A':'#D0CAC0'}`,transition:'all 0.12s'}}>
-          <div>
-            <div style={{fontSize:16,fontWeight:700,color:p.id===activePieceId?'#F2EDE4':'#1A1A1A'}}>{p.title}</div>
-            <div style={{fontSize:12,color:p.id===activePieceId?'#A09A90':'#8A847C',marginTop:3}}>
-              {p.key} · {p.bpm} BPM · {p.timeSig||'4/4'}
+  const recents=loadRecents();
+  const q=search.trim().toLowerCase();
+  let filtered=library.filter(p=>!q||
+    (p.title||'').toLowerCase().includes(q)||
+    (p.composer||'').toLowerCase().includes(q));
+  if(sort==='title')    filtered=[...filtered].sort((a,b)=>(a.title||'').localeCompare(b.title||'',undefined,{sensitivity:'base'}));
+  else if(sort==='composer') filtered=[...filtered].sort((a,b)=>(a.composer||'').localeCompare(b.composer||'',undefined,{sensitivity:'base'}));
+  else if(sort==='key') filtered=[...filtered].sort((a,b)=>(a.key||'').localeCompare(b.key||''));
+  else filtered=[...filtered].sort((a,b)=>{
+    const ai=recents.indexOf(a.id),bi2=recents.indexOf(b.id);
+    if(ai<0&&bi2<0)return 0;if(ai<0)return 1;if(bi2<0)return-1;return ai-bi2;
+  });
+
+  const confirmPiece=confirmId?library.find(p=>p.id===confirmId):null;
+
+  return(
+    <div style={{height:'100vh',display:'flex',flexDirection:'column',background:BG}}>
+      {/* ── En-tête ── */}
+      <div style={{background:'rgba(242,240,235,0.97)',backdropFilter:'blur(20px)',
+        WebkitBackdropFilter:'blur(20px)',borderBottom:`1px solid ${BORDER}`,
+        padding:'16px 20px 0',flexShrink:0}}>
+        <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:10}}>
+          <button onClick={onBack}
+            style={{background:'transparent',border:'none',color:INK,fontSize:20,
+              cursor:'pointer',padding:'4px 6px 4px 0',fontFamily:'inherit',flexShrink:0}}>←</button>
+          <span style={{fontSize:18,fontWeight:800,letterSpacing:'-0.4px',flex:1}}>Mes morceaux</span>
+          <button onClick={()=>{setEditMode(m=>!m);setConfirmId(null);}}
+            style={{background:editMode?INK:'transparent',color:editMode?'#F2EDE4':SUB,
+              border:`1.5px solid ${editMode?INK:BORDER}`,borderRadius:100,
+              padding:'5px 14px',fontSize:12,fontWeight:700,cursor:'pointer',fontFamily:'inherit',flexShrink:0}}>
+            {editMode?'OK':'Modifier'}
+          </button>
+        </div>
+        {/* Recherche */}
+        <div style={{display:'flex',alignItems:'center',background:'rgba(0,0,0,0.06)',
+          borderRadius:12,padding:'8px 12px',gap:8,marginBottom:10}}>
+          <span style={{color:SUB,fontSize:14,flexShrink:0}}>⌕</span>
+          <input value={search} onChange={e=>setSearch(e.target.value)}
+            placeholder="Titre, artiste…"
+            style={{background:'transparent',border:'none',outline:'none',flex:1,
+              fontSize:14,color:INK,fontFamily:'inherit'}}/>
+          {search&&(
+            <button onClick={()=>setSearch('')}
+              style={{background:'transparent',border:'none',color:SUB,
+                fontSize:18,cursor:'pointer',padding:0,fontFamily:'inherit',lineHeight:1}}>×</button>
+          )}
+        </div>
+        {/* Tri */}
+        <div style={{display:'flex',gap:6,paddingBottom:12,overflowX:'auto'}}>
+          {SORT_OPTS.map(o=>(
+            <button key={o.k} onClick={()=>setSort(o.k)}
+              style={{background:sort===o.k?INK:'transparent',color:sort===o.k?'#F2EDE4':SUB,
+                border:`1.5px solid ${sort===o.k?INK:BORDER}`,borderRadius:100,
+                padding:'4px 13px',fontSize:12,fontWeight:700,cursor:'pointer',
+                fontFamily:'inherit',whiteSpace:'nowrap',flexShrink:0,transition:'all 0.1s'}}>
+              {o.l}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Liste ── */}
+      <div style={{flex:1,overflowY:'auto',padding:'12px 20px'}}>
+        {filtered.length===0&&q&&(
+          <div style={{textAlign:'center',padding:'48px 0',color:SUB,fontSize:14}}>
+            Aucun résultat pour « {search} »
+          </div>
+        )}
+        {filtered.map(p=>{
+          const isAct=p.id===activePieceId;
+          return(
+            <div key={p.id}
+              style={{display:'flex',alignItems:'stretch',borderRadius:14,marginBottom:6,
+                background:isAct?INK:'#FFFFFF',
+                border:`1.5px solid ${isAct?INK:BORDER}`,
+                overflow:'hidden',transition:'all 0.12s'}}>
+              <div onClick={()=>!editMode&&onSelect(p)}
+                style={{flex:1,padding:'14px 18px',cursor:editMode?'default':'pointer',minWidth:0}}>
+                <div style={{fontSize:15,fontWeight:700,lineHeight:1.2,
+                  color:isAct?'#F2EDE4':INK,
+                  overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+                  {p.title}
+                </div>
+                {p.composer&&(
+                  <div style={{fontSize:12,color:isAct?'#C0A890':SUB,marginTop:2,
+                    overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+                    {p.composer}
+                  </div>
+                )}
+                <div style={{fontSize:11,color:isAct?'#A09A90':SUB,marginTop:3}}>
+                  {p.key} · {p.bpm} BPM · {p.timeSig||'4/4'}
+                </div>
+              </div>
+              {editMode?(
+                <button onClick={()=>setConfirmId(p.id)}
+                  style={{background:'transparent',border:'none',borderLeft:`1px solid ${isAct?'#3A3634':BORDER}`,
+                    color:'#C84040',fontSize:18,cursor:'pointer',
+                    padding:'0 20px',flexShrink:0,fontFamily:'inherit'}}>
+                  ✕
+                </button>
+              ):(
+                <div onClick={()=>onSelect(p)}
+                  style={{display:'flex',alignItems:'center',padding:'0 18px',
+                    cursor:'pointer',flexShrink:0,
+                    fontSize:18,color:isAct?'#F2EDE4':'#C0BAB0'}}>→</div>
+              )}
+            </div>
+          );
+        })}
+
+        {/* Nouveau + Import (masqué en mode édition ou recherche) */}
+        {!editMode&&!q&&(<>
+          <div onClick={onCreate}
+            style={{padding:'15px 18px',borderRadius:14,border:'1.5px dashed #C0BAB0',
+              display:'flex',alignItems:'center',gap:10,cursor:'pointer',marginTop:4,
+              background:'transparent'}}>
+            <span style={{fontSize:22,color:'#C0BAB0',lineHeight:1}}>+</span>
+            <span style={{fontSize:15,color:SUB,fontWeight:500}}>Nouveau morceau</span>
+          </div>
+          <div onClick={()=>fileRef.current&&fileRef.current.click()}
+            style={{padding:'15px 18px',borderRadius:14,border:'1.5px dashed #C0BAB0',
+              display:'flex',alignItems:'center',gap:10,cursor:'pointer',marginTop:6,
+              background:'transparent'}}>
+            <span style={{fontSize:18,color:'#C0BAB0',lineHeight:1}}>↑</span>
+            <div>
+              <div style={{fontSize:15,color:SUB,fontWeight:500}}>Importer</div>
+              <div style={{fontSize:11,color:'#A0A0A0',marginTop:1}}>iReal Pro · MusicXML</div>
+            </div>
+            <input ref={fileRef} type="file" accept=".musicxml,.xml,.html"
+              style={{display:'none'}} onChange={handleFileChange}/>
+          </div>
+          {importErr&&(
+            <div style={{marginTop:8,padding:'10px 14px',borderRadius:10,
+              background:'#FFF0F0',border:'1px solid #F0C0C0',
+              fontSize:12,color:'#C05050',lineHeight:1.4}}>
+              {importErr}
+            </div>
+          )}
+        </>)}
+      </div>
+
+      {/* ── Confirmation suppression ── */}
+      {confirmId&&confirmPiece&&(
+        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.35)',
+          display:'flex',alignItems:'flex-end',zIndex:300}}
+          onClick={()=>setConfirmId(null)}>
+          <div onClick={e=>e.stopPropagation()}
+            style={{background:'#FAF8F4',borderRadius:'20px 20px 0 0',
+              padding:'24px 24px 44px',width:'100%',boxSizing:'border-box'}}>
+            <div style={{fontSize:16,fontWeight:800,color:INK,marginBottom:6,lineHeight:1.3}}>
+              Supprimer « {confirmPiece.title} » ?
+            </div>
+            <div style={{fontSize:13,color:SUB,marginBottom:24}}>Cette action est irréversible.</div>
+            <div style={{display:'flex',gap:10}}>
+              <button onClick={()=>setConfirmId(null)}
+                style={{flex:1,padding:'14px',borderRadius:100,border:`1.5px solid ${BORDER}`,
+                  background:'transparent',fontSize:15,fontWeight:700,cursor:'pointer',
+                  fontFamily:'inherit',color:INK}}>Annuler</button>
+              <button onClick={()=>{onDelete(confirmId);setConfirmId(null);setEditMode(false);}}
+                style={{flex:1,padding:'14px',borderRadius:100,border:'none',
+                  background:'#C84040',fontSize:15,fontWeight:700,cursor:'pointer',
+                  fontFamily:'inherit',color:'#FFF'}}>Supprimer</button>
             </div>
           </div>
-          <span style={{fontSize:18,color:p.id===activePieceId?'#F2EDE4':'#C0BAB0'}}>→</span>
-        </div>
-      ))}
-      <div onClick={onCreate}
-        style={{padding:'16px 18px',borderRadius:14,border:'1.5px dashed #C0BAB0',
-          display:'flex',alignItems:'center',gap:10,cursor:'pointer',marginTop:4,
-          background:'transparent'}}>
-        <span style={{fontSize:22,color:'#C0BAB0'}}>+</span>
-        <span style={{fontSize:15,color:'#8A847C',fontWeight:500}}>Nouveau morceau</span>
-      </div>
-      <div onClick={()=>fileRef.current&&fileRef.current.click()}
-        style={{padding:'16px 18px',borderRadius:14,border:'1.5px dashed #C0BAB0',
-          display:'flex',alignItems:'center',gap:10,cursor:'pointer',marginTop:6,
-          background:'transparent'}}>
-        <span style={{fontSize:18,color:'#C0BAB0'}}>↑</span>
-        <div>
-          <div style={{fontSize:15,color:'#8A847C',fontWeight:500}}>Importer</div>
-          <div style={{fontSize:11,color:'#A0A0A0',marginTop:1}}>MusicXML</div>
-        </div>
-        <input ref={fileRef} type="file" accept=".musicxml,.xml"
-          style={{display:'none'}} onChange={handleFileChange}/>
-      </div>
-      {importErr&&(
-        <div style={{marginTop:8,padding:'10px 14px',borderRadius:10,
-          background:'#FFF0F0',border:'1px solid #F0C0C0',
-          fontSize:12,color:'#C05050',lineHeight:1.4}}>
-          {importErr}
         </div>
       )}
     </div>
-  </div>);
+  );
 }
 
 // ─── MUSICXML IMPORTER ────────────────────────────────────────────────────────
@@ -5001,7 +5178,18 @@ function App(){
   const [prefs,setPrefs]=useState(loadPrefs);
   function updatePrefs(p){setPrefs(p);savePrefs(p);}
   const piece=library.find(p=>p.id===pieceId)||library[0];
-  function selectPiece(p){setPieceId(p.id);setDisplayKey(p.key);setView('editor');}
+  function selectPiece(p){
+    const r=[p.id,...loadRecents().filter(id=>id!==p.id)].slice(0,3);
+    saveRecents(r);
+    setPieceId(p.id);setDisplayKey(p.key);setView('editor');
+  }
+  function deletePiece(id){
+    setLibrary(lib=>{
+      const next=lib.filter(p=>p.id!==id);
+      if(pieceId===id&&next.length>0)setPieceId(next[0].id);
+      return next;
+    });
+  }
   function createPiece(){
     const newId=Date.now();
     const newPiece={id:newId,title:'Nouveau morceau',composer:'',key:'C',bpm:120,style:'',timeSig:'4/4',
@@ -5016,8 +5204,8 @@ function App(){
     setLibrary(lib=>[...lib,newPiece]);
     setPieceId(newId);setDisplayKey(parsed.key||'C');setView('editor');
   }
-  if(view==='home')    return <HomeScreen    onNavigate={v=>setView(v)}/>;
-  if(view==='library') return <LibraryScreen library={library} activePieceId={pieceId} onSelect={selectPiece} onBack={()=>setView('home')} onCreate={createPiece} onImport={importPiece}/>;
+  if(view==='home')    return <HomeScreen    library={library} onSelect={selectPiece} onNavigate={v=>setView(v)}/>;
+  if(view==='library') return <LibraryScreen library={library} activePieceId={pieceId} onSelect={selectPiece} onBack={()=>setView('home')} onCreate={createPiece} onImport={importPiece} onDelete={deletePiece}/>;
   if(view==='prefs')   return <PreferencesScreen prefs={prefs} onUpdate={updatePrefs} onBack={()=>setView('home')}/>;
   if(view==='editor')  return <EditorScreen  library={library} setLibrary={setLibrary} piece={piece} displayKey={displayKey} setDisplayKey={setDisplayKey} displayMode={displayMode} setDisplayMode={setDisplayMode} onBack={()=>setView('library')} prefs={prefs}/>;
   return null;
