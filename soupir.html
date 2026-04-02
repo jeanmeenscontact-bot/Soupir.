@@ -167,7 +167,8 @@ function autoHarmonizeTriad(letter,acc,key,mode='maj'){
 
 // ─── PREFS SYSTEM ─────────────────────────────────────────────────────────────
 const DEFAULT_PREFS={minor:'m',dim:'°',aug:'+',maj7:'maj7',hdim:'ø',accentColor:'black',autoHarmonize:true,darkMode:false};
-function loadPrefs(){try{const s=localStorage.getItem('soupir_prefs');return s?{...DEFAULT_PREFS,...JSON.parse(s)}:DEFAULT_PREFS;}catch{return DEFAULT_PREFS;}}
+function loadPrefs(){try{const s=localStorage.getItem('soupir_prefs');if(!s)return DEFAULT_PREFS;const p={...DEFAULT_PREFS,...JSON.parse(s)};// Migration : ancienne valeur '−' (U+2212) → '-' (ASCII)
+if(p.minor==='\u2212')p.minor='-';return p;}catch{return DEFAULT_PREFS;}}
 function savePrefs(p){try{localStorage.setItem('soupir_prefs',JSON.stringify(p));}catch{}}
 function loadRecents(){try{return JSON.parse(localStorage.getItem('soupir_recents')||'[]');}catch{return[];}}
 function saveRecents(r){try{localStorage.setItem('soupir_recents',JSON.stringify(r));}catch{}}
@@ -190,7 +191,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='2.30';
+const APP_VERSION='2.34';
 const CHORD_FONT="'Barlow Semi Condensed','Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -1524,16 +1525,9 @@ function HomeScreen({library,onSelect,onNavigate}){
   return(
     <div style={{height:'100vh',display:'flex',flexDirection:'column',background:BG,overflowY:'auto'}}>
       {/* ── En-tête ── */}
-      <div style={{padding:'52px 24px 20px',display:'flex',alignItems:'flex-start',justifyContent:'space-between'}}>
-        <div style={{display:'flex',alignItems:'center',gap:10}}>
-          <SoupirLogo size={26}/>
-          <span style={{fontSize:24,fontWeight:900,letterSpacing:'-0.5px',color:INK,lineHeight:1}}>Soupir.</span>
-        </div>
-        <button onClick={()=>onNavigate('prefs')}
-          style={{background:'transparent',border:`1.5px solid ${BORDER}`,borderRadius:100,
-            padding:'6px 14px',fontSize:12,fontWeight:600,color:SUB,cursor:'pointer',fontFamily:'inherit',marginTop:4}}>
-          Préférences
-        </button>
+      <div style={{padding:'52px 24px 20px',display:'flex',alignItems:'center',gap:10}}>
+        <SoupirLogo size={26}/>
+        <span style={{fontSize:24,fontWeight:900,letterSpacing:'-0.5px',color:INK,lineHeight:1}}>Soupir.</span>
       </div>
 
       {/* ── Morceaux récents ── */}
@@ -1585,11 +1579,17 @@ function HomeScreen({library,onSelect,onNavigate}){
             cursor:'pointer',fontFamily:'inherit',textAlign:'center',width:'100%',transition:'all 0.15s'}}>
           Tous les morceaux
         </button>
+        <button onClick={()=>onNavigate('prefs')}
+          style={{background:'transparent',color:INK,border:`1.5px solid ${BORDER}`,
+            borderRadius:100,padding:'15px 32px',fontSize:15,fontWeight:700,
+            cursor:'pointer',fontFamily:'inherit',textAlign:'center',width:'100%',transition:'all 0.15s'}}>
+          Préférences
+        </button>
       </div>
 
       {/* ── Version ── */}
-      <div style={{padding:'8px 24px 36px',textAlign:'center',marginTop:'auto'}}>
-        <span style={{fontSize:11,fontWeight:600,color:'#C0BAB0',letterSpacing:'0.05em'}}>{APP_VERSION}</span>
+      <div style={{padding:'12px 24px 40px',textAlign:'center',marginTop:'auto'}}>
+        <span style={{fontSize:12,fontWeight:600,color:'#B0AAA0',letterSpacing:'0.08em'}}>v{APP_VERSION}</span>
       </div>
     </div>
   );
@@ -2520,7 +2520,7 @@ function parseIRealProHTML(html){
 // ─── PREFERENCES SCREEN ───────────────────────────────────────────────────────
 function PreferencesScreen({prefs,onUpdate,onBack}){
   const rows=[
-    {key:'minor',label:'Accord mineur',opts:[['m','Cm'],['−','C−']],desc:'Préfixe pour les accords mineurs'},
+    {key:'minor',label:'Accord mineur',opts:[['m','Cm'],['-','C-']],desc:'Préfixe pour les accords mineurs'},
     {key:'dim',label:'Accord diminué',opts:[['°','C°'],['dim','Cdim']],desc:'Notation des accords diminués'},
     {key:'maj7',label:'Septième majeure',opts:[['maj7','Cmaj7'],['Δ','CΔ']],desc:'Notation de la 7ème majeure'},
     {key:'hdim',label:'Demi-diminué',opts:[['ø','Cø'],['m7b5','Cm7b5']],desc:'Notation demi-diminué'},
@@ -3131,6 +3131,11 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
   const metroRef=useRef(null),beatRef=useRef(0);
   const barsHideRef=useRef(null);
   const undoStack=useRef([]);
+  const redoStack=useRef([]);
+  useEffect(()=>{undoStack.current=[];redoStack.current=[];},[piece.id]);
+  const gestureRef=useRef({si:null,mi:null,startX:0,startY:0,moved:false,dragging:false,longPressed:false,targetSi:null,targetMi:null,longPressTimer:null});
+  const doubleTapRef=useRef({});
+  const [dragVisual,setDragVisual]=useState(null); // {fromSi,fromMi,targetSi,targetMi}
   const [showPieceInfo,setShowPieceInfo]=useState(false);
   const [pdfExport,setPdfExport]=useState(false);
   const [selMode,setSelMode]=useState(false);
@@ -3256,12 +3261,23 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
   function saveUndo(){
     const snapshot=JSON.parse(JSON.stringify(cur));
     undoStack.current=[...undoStack.current.slice(-19),snapshot];
+    redoStack.current=[]; // toute nouvelle action efface le redo
   }
   function undo(){
     if(undoStack.current.length===0)return;
+    const snapshot=JSON.parse(JSON.stringify(cur));
+    redoStack.current=[...redoStack.current.slice(-19),snapshot];
     const prev=undoStack.current[undoStack.current.length-1];
     undoStack.current=undoStack.current.slice(0,-1);
     setLibrary(lib=>lib.map(p=>p.id!==piece.id?p:prev));
+  }
+  function redo(){
+    if(redoStack.current.length===0)return;
+    const snapshot=JSON.parse(JSON.stringify(cur));
+    undoStack.current=[...undoStack.current.slice(-19),snapshot];
+    const next=redoStack.current[redoStack.current.length-1];
+    redoStack.current=redoStack.current.slice(0,-1);
+    setLibrary(lib=>lib.map(p=>p.id!==piece.id?p:next));
   }
 
   // ── Sélection / Copier / Couper / Coller ──────────────────────────────────
@@ -3308,6 +3324,103 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
       })};
     }));
     setPasteMode(false);setPasteSheet(null);
+  }
+
+  // ── Double-tap : répétition % ──────────────────────────────────────────────
+  function setMeasureRepeat(si,mi){
+    saveUndo();
+    setLibrary(lib=>lib.map(p=>{
+      if(p.id!==piece.id)return p;
+      return{...p,sections:p.sections.map((s,sI)=>{
+        if(sI!==si)return s;
+        return{...s,measures:s.measures.map((mm,mI)=>{
+          if(mI!==mi)return mm;
+          const beats=getBeats(mm).map(b=>({...b,c:'%'}));
+          return{...mm,beats};
+        })};
+      })};
+    }));
+  }
+
+  // ── Drag & drop : réordonner les mesures ──────────────────────────────────
+  function reorderMeasure(fromSi,fromMi,toSi,toMi){
+    if(fromSi===toSi&&fromMi===toMi)return;
+    saveUndo();
+    setLibrary(lib=>lib.map(p=>{
+      if(p.id!==piece.id)return p;
+      const secs=p.sections.map(s=>({...s,measures:[...s.measures]}));
+      const moved=JSON.parse(JSON.stringify(secs[fromSi].measures[fromMi]));
+      secs[fromSi].measures.splice(fromMi,1);
+      if(secs[fromSi].measures.length===0)secs[fromSi].measures.push(mk([]));
+      let insertMi=toMi;
+      if(fromSi===toSi&&toMi>fromMi)insertMi--;
+      secs[toSi].measures.splice(insertMi,0,moved);
+      return{...p,sections:secs};
+    }));
+  }
+
+  // ── Handlers touch mesure (appui long + double-tap + drag) ────────────────
+  function mkMeasureTouch(si,mi){
+    if(!editMode)return{};
+    const key=`${si}-${mi}`;
+    function onTouchStart(e){
+      const t=e.touches[0];
+      const g=gestureRef.current;
+      g.si=si;g.mi=mi;g.startX=t.clientX;g.startY=t.clientY;
+      g.moved=false;g.dragging=false;g.longPressed=false;g.targetSi=si;g.targetMi=mi;
+      if(g.longPressTimer){clearTimeout(g.longPressTimer);g.longPressTimer=null;}
+      if(!selMode&&!pasteMode){
+        g.longPressTimer=setTimeout(()=>{
+          g.longPressTimer=null;g.longPressed=true;
+          setSelMode(true);setSelMeasures(new Set([key]));
+          setPicker(pk=>({...pk,visible:false}));setPasteMode(false);setDrawMode(false);
+        },500);
+      }
+    }
+    function onTouchMove(e){
+      const g=gestureRef.current;if(g.si!==si||g.mi!==mi)return;
+      const t=e.touches[0];
+      const dx=t.clientX-g.startX,dy=t.clientY-g.startY;
+      if(Math.sqrt(dx*dx+dy*dy)>8){
+        if(g.longPressTimer){clearTimeout(g.longPressTimer);g.longPressTimer=null;}
+        g.moved=true;
+        if(!selMode&&!pasteMode){
+          g.dragging=true;
+          const el=document.elementFromPoint(t.clientX,t.clientY);
+          const tgt=el&&el.closest('[data-mk]');
+          if(tgt){
+            const[tSi,tMi]=tgt.dataset.mk.split('-').map(Number);
+            g.targetSi=tSi;g.targetMi=tMi;
+            setDragVisual({fromSi:si,fromMi:mi,targetSi:tSi,targetMi:tMi});
+          }
+        }
+      }
+    }
+    function onTouchEnd(e){
+      const g=gestureRef.current;
+      if(g.longPressTimer){clearTimeout(g.longPressTimer);g.longPressTimer=null;}
+      if(g.si!==si||g.mi!==mi)return;
+      if(g.dragging){
+        e.preventDefault();
+        const{targetSi,targetMi}=g;
+        setDragVisual(null);g.dragging=false;
+        reorderMeasure(si,mi,targetSi,targetMi);
+        return;
+      }
+      setDragVisual(null);
+      if(!g.moved&&!g.longPressed&&!selMode&&!pasteMode){
+        const now=Date.now();
+        const last=doubleTapRef.current[key]||0;
+        if(now-last<350){
+          e.preventDefault();
+          doubleTapRef.current[key]=0;
+          setMeasureRepeat(si,mi);
+          return;
+        }
+        doubleTapRef.current[key]=now;
+      }
+    }
+    return{onTouchStart,onTouchMove,onTouchEnd};
   }
 
   function updateStaffSection(si,newSection){
@@ -3931,10 +4044,15 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                     const isGMSelSelected=selMode&&selMeasures.has(`${si}-${mi}`);
                     rendered.push(
                       <React.Fragment key={`${si}-${mi}-gm`}>
-                        <div style={{flex:2,position:'relative',display:'flex',
+                        <div data-mk={`${si}-${mi}`} {...mkMeasureTouch(si,mi)}
+                          style={{flex:2,position:'relative',display:'flex',
                             minWidth:0,overflow:'visible',
+                            opacity:dragVisual&&dragVisual.fromSi===si&&dragVisual.fromMi===mi?0.35:1,
                             background:editMode&&picker.visible&&picker.isGrande&&picker.si===si&&picker.mi===mi?'rgba(58,155,213,0.09)':'transparent',
-                            transition:'background 0.12s'}}>
+                            transition:'background 0.12s, opacity 0.1s'}}>
+                          {dragVisual&&dragVisual.targetSi===si&&dragVisual.targetMi===mi&&!(dragVisual.fromSi===si&&dragVisual.fromMi===mi)&&(
+                            <div style={{position:'absolute',inset:0,background:'rgba(58,155,213,0.18)',border:'2px solid rgba(58,155,213,0.7)',borderRadius:3,zIndex:20,pointerEvents:'none'}}/>
+                          )}
                           {isGMSelSelected&&<div style={{position:'absolute',inset:0,background:'rgba(58,155,213,0.22)',borderRadius:3,zIndex:15,pointerEvents:'none',border:'2px solid rgba(58,155,213,0.7)'}}/>}
                           {pasteMode&&<div style={{position:'absolute',inset:0,background:'rgba(80,200,100,0.06)',zIndex:15,pointerEvents:'none'}}/>}
                           {/* Badge + signes beat-0 + annotations — overlay flex en haut (grande mesure) */}
@@ -4061,8 +4179,14 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                     const isSplitCont=!!measure.split2;
                     rendered.push(
                       <React.Fragment key={`${si}-${mi}`}>
-                        <div style={{flex:1,position:'relative',display:'flex',flexDirection:'row',
-                          minWidth:0,overflow:'hidden'}}>
+                        <div data-mk={`${si}-${mi}`} {...mkMeasureTouch(si,mi)}
+                          style={{flex:1,position:'relative',display:'flex',flexDirection:'row',
+                          minWidth:0,overflow:'hidden',
+                          opacity:dragVisual&&dragVisual.fromSi===si&&dragVisual.fromMi===mi?0.35:1,
+                          transition:'opacity 0.1s'}}>
+                          {dragVisual&&dragVisual.targetSi===si&&dragVisual.targetMi===mi&&!(dragVisual.fromSi===si&&dragVisual.fromMi===mi)&&(
+                            <div style={{position:'absolute',inset:0,background:'rgba(58,155,213,0.18)',border:'2px solid rgba(58,155,213,0.7)',borderRadius:3,zIndex:20,pointerEvents:'none'}}/>
+                          )}
                           {measure.timeSig&&(
                             <div style={{position:'absolute',top:3,right:4,zIndex:6,
                               background:isDark?'#2A1A40':'#EDE0FF',color:isDark?'#C8A8FF':'#5A2A9A',
@@ -4091,8 +4215,15 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                   }
                   rendered.push(
                     <React.Fragment key={`${si}-${mi}`}>
-                      <div style={{flex:1,position:'relative',display:'flex',flexDirection:'row',
-                        minWidth:0,overflow:'hidden'}}>
+                      <div data-mk={`${si}-${mi}`} {...mkMeasureTouch(si,mi)}
+                        style={{flex:1,position:'relative',display:'flex',flexDirection:'row',
+                        minWidth:0,overflow:'hidden',
+                        opacity:dragVisual&&dragVisual.fromSi===si&&dragVisual.fromMi===mi?0.35:1,
+                        transition:'opacity 0.1s'}}>
+                        {/* Overlay drag cible */}
+                        {dragVisual&&dragVisual.targetSi===si&&dragVisual.targetMi===mi&&!(dragVisual.fromSi===si&&dragVisual.fromMi===mi)&&(
+                          <div style={{position:'absolute',inset:0,background:'rgba(58,155,213,0.18)',border:'2px solid rgba(58,155,213,0.7)',borderRadius:3,zIndex:20,pointerEvents:'none'}}/>
+                        )}
                         {/* Badge section intégré dans renderHalf via secBadge */}
                         {measure.label&&(
                           <div style={{position:'absolute',top:3,left:ci===0?28:4,zIndex:6,
@@ -4214,7 +4345,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
             background:metroOn&&beat===i?(i===0?TH.text:'#6B6560'):'#C0BAB0',
             transform:metroOn&&beat===i?'scale(1.35)':'scale(1)'}}/>))}
         </div>
-        <input type="number" value={bpm} min={40} max={300} onChange={e=>setBpm(Number(e.target.value))}
+        <input type="number" value={bpm} min={40} max={300} onChange={e=>{const v=Number(e.target.value);setBpm(v);setLibrary(lib=>lib.map(p=>p.id!==piece.id?p:{...p,bpm:v}));}}
           style={{width:30,background:'transparent',border:'none',color:TH.text,fontSize:11,fontWeight:700,textAlign:'center',outline:'none',fontFamily:'inherit'}}/>
         <button onClick={()=>setMetroOn(m=>!m)}
           style={{background:metroOn?TH.text:'transparent',border:`1.5px solid ${metroOn?TH.text:TH.btnBorder}`,
@@ -4791,9 +4922,9 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
               {LBL('Qualité', CHARM)}
               <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:5}}>
                 {[
-                  ['maj','M'],['dom7','7'],['maj7','Δ'],['maj6','6'],
+                  ['maj','M'],['dom7','7'],['maj7',prefs?.maj7==='Δ'?'Δ':'maj7'],['maj6','6'],
                   ['min','m'],['min7','m7'],['mMaj7',prefs?.minor==='-'?'−Δ':'mΔ'],['min6','m6'],
-                  ['dim',prefs?.dim==='°'?'°':'dim'],['hdim','ø'],['dim7','°7'],['aug',prefs?.aug==='+'?'+':'aug'],
+                  ['dim',prefs?.dim==='°'?'°':'dim'],['hdim',prefs?.hdim==='ø'?'ø':'m7b5'],['dim7',prefs?.dim==='°'?'°7':'dim7'],['aug',prefs?.aug==='+'?'+':'aug'],
                   ['sus4','sus4'],['sus2','sus2'],['5','5'],
                 ].map(([qid,qlbl])=>(
                   <button key={qid} onClick={()=>cpkQual(qid)}
@@ -5209,7 +5340,15 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
               padding:'4px 10px',fontSize:11,cursor:undoStack.current.length===0?'default':'pointer',
               fontFamily:'inherit',color:undoStack.current.length===0?'#C0BAB0':'#6B6560',fontWeight:600,
               flexShrink:0,opacity:undoStack.current.length===0?0.45:1,transition:'opacity 0.15s'}}>
-            ↩ Annuler
+            ↩
+          </button>
+          {/* ↪ Refaire */}
+          <button onClick={redo} disabled={redoStack.current.length===0}
+            style={{background:'transparent',border:'1.5px solid #D0CAC0',borderRadius:100,
+              padding:'4px 10px',fontSize:11,cursor:redoStack.current.length===0?'default':'pointer',
+              fontFamily:'inherit',color:redoStack.current.length===0?'#C0BAB0':'#6B6560',fontWeight:600,
+              flexShrink:0,opacity:redoStack.current.length===0?0.45:1,transition:'opacity 0.15s'}}>
+            ↪
           </button>
           <div style={{width:1,height:20,background:'#D0CAC0',flexShrink:0}}/>
           {/* Prev */}
@@ -5248,7 +5387,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
               <span style={{fontSize:14,lineHeight:1}}>+</span><span>Section</span>
             </button>
             {/* Sélect. */}
-            <button onClick={()=>{setSelMode(true);setSelMeasures(new Set());setPicker(pk=>({...pk,visible:false}));setPasteMode(false);}}
+            <button onClick={()=>{setSelMode(true);setSelMeasures(new Set());setPicker(pk=>({...pk,visible:false}));setPasteMode(false);setDrawMode(false);}}
               style={{background:'transparent',border:'1.5px solid #D0CAC0',borderRadius:100,
                 padding:'4px 11px',fontSize:11,cursor:'pointer',fontFamily:'inherit',
                 color:'#6B6560',fontWeight:600}}>
@@ -5256,7 +5395,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
             </button>
             {/* Coller */}
             {clipboard.length>0&&(
-              <button onClick={()=>{setPasteMode(true);setPicker(pk=>({...pk,visible:false}));}}
+              <button onClick={()=>{setPasteMode(true);setPicker(pk=>({...pk,visible:false}));setDrawMode(false);}}
                 style={{background:'#1A1A1A',border:'1.5px solid #1A1A1A',borderRadius:100,
                   padding:'4px 11px',fontSize:11,cursor:'pointer',fontFamily:'inherit',
                   color:'#F2EDE4',fontWeight:600}}>
