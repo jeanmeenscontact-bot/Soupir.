@@ -191,7 +191,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='2.36';
+const APP_VERSION='2.38';
 const CHORD_FONT="'Barlow Semi Condensed','Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -3114,6 +3114,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
   const [measureSheet,setMeasureSheet]=useState(null); // {si, mi} — structurel uniquement
   const [barlinePick,setBarlinePick]=useState(null);   // conservé pour grande mesure Sheet picker
   const [insertSheet,setInsertSheet]=useState(null);
+  const [sectionAddSheet,setSectionAddSheet]=useState(null); // {si} — choix Mesure/Portée/Tab
   const [currentPage,setCurrentPage]=useState(0);
   const [editMode,setEditMode]=useState(true); // true = édition, false = lecture
   const [barsVisible,setBarsVisible]=useState(true);
@@ -3339,6 +3340,41 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
     exitSel();
   }
 
+  // ── Insérer une mesure avant/après la sélection ───────────────────────────
+  function selectionBounds(){
+    const flat=[];
+    cur.sections.forEach((s,si)=>{if(!s.type||s.type==='grid')s.measures.forEach((_,mi)=>flat.push({si,mi}));});
+    const sel=flat.filter(({si,mi})=>selMeasures.has(`${si}-${mi}`));
+    if(!sel.length)return null;
+    return{first:sel[0],last:sel[sel.length-1]};
+  }
+  function insertBeforeSelection(){
+    const b=selectionBounds();if(!b)return;
+    const{si,mi}=b.first;
+    saveUndo();
+    setLibrary(lib=>lib.map(p=>{
+      if(p.id!==piece.id)return p;
+      return{...p,sections:p.sections.map((s,sI)=>{
+        if(sI!==si)return s;
+        const arr=[...s.measures];arr.splice(mi,0,mk([]));return{...s,measures:arr};
+      })};
+    }));
+    exitSel();
+  }
+  function insertAfterSelection(){
+    const b=selectionBounds();if(!b)return;
+    const{si,mi}=b.last;
+    saveUndo();
+    setLibrary(lib=>lib.map(p=>{
+      if(p.id!==piece.id)return p;
+      return{...p,sections:p.sections.map((s,sI)=>{
+        if(sI!==si)return s;
+        const arr=[...s.measures];arr.splice(mi+1,0,mk([]));return{...s,measures:arr};
+      })};
+    }));
+    exitSel();
+  }
+
   // ── Double-tap : mesure entière en répétition (% centré) ──────────────────
   function setMeasureRepeat(si,mi){
     saveUndo();
@@ -3385,15 +3421,30 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
         if(g.longPressTimer){clearTimeout(g.longPressTimer);g.longPressTimer=null;}
         g.moved=true;
       }
-      // Glissement après appui long : sélectionner les mesures survolées
+      // Glissement après appui long : sélection consécutive entre ancre et doigt
       if(g.swiping){
         e.preventDefault();
         const el=document.elementFromPoint(t.clientX,t.clientY);
         const tgt=el&&el.closest('[data-mk]');
         if(tgt){
           const[tSi,tMi]=tgt.dataset.mk.split('-').map(Number);
-          const tKey=`${tSi}-${tMi}`;
-          setSelMeasures(prev=>{if(prev.has(tKey))return prev;const n=new Set(prev);n.add(tKey);return n;});
+          // Construire la liste plate de toutes les mesures (si-mi) dans l'ordre
+          const flat=[];
+          cur.sections.forEach((s,sIdx)=>{
+            if(!s.type||s.type==='grid')
+              s.measures.forEach((_,mIdx)=>flat.push(`${sIdx}-${mIdx}`));
+          });
+          const anchorIdx=flat.indexOf(key);
+          const endIdx=flat.indexOf(`${tSi}-${tMi}`);
+          if(anchorIdx!==-1&&endIdx!==-1){
+            const lo=Math.min(anchorIdx,endIdx),hi=Math.max(anchorIdx,endIdx);
+            const range=new Set(flat.slice(lo,hi+1));
+            setSelMeasures(prev=>{
+              // Mettre à jour seulement si la plage a changé
+              if(prev.size===range.size&&[...range].every(k=>prev.has(k)))return prev;
+              return range;
+            });
+          }
         }
       }
     }
@@ -3960,7 +4011,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
     // pdfRPP : si fourni, on est en mode PDF → les filler rows se basent sur pdfRPP
     const effectiveRPP=pdfRPP!==null?pdfRPP:rowsPerPage;
     return(<>
-        {rows.map((row,ri)=>{
+        {rows.flatMap((row,ri)=>{
           if(row.rowType==='staff'){
             const item=row.cells[0];
             return(
@@ -4269,32 +4320,38 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                 });
                 return rendered;
               })()}
-              {/* Cellules fantômes fin de ligne — cliquables en mode édition */}
+              {/* Cellules fantômes fin de ligne */}
               {row.cells.length<GCOLS&&Array.from({length:GCOLS-row.cells.length}).map((_,pi)=>(
                 <React.Fragment key={`pad${pi}`}>
-                  {isLastOfSection?(
-                    <div
-                      onClick={()=>addMeasureAtEnd(lastRealSi)}
-                      onMouseEnter={e=>{e.currentTarget.style.background=isDark?'rgba(255,255,255,0.06)':'rgba(80,50,10,0.07)';e.currentTarget.style.borderColor=isDark?'rgba(200,180,150,0.35)':'rgba(140,100,40,0.45)';}}
-                      onMouseLeave={e=>{e.currentTarget.style.background=isDark?'rgba(255,255,255,0.02)':'rgba(80,50,10,0.025)';e.currentTarget.style.borderColor=isDark?'rgba(200,180,150,0.18)':'rgba(160,130,80,0.25)';}}
-                      style={{flex:1,minWidth:0,cursor:'pointer',
-                        margin:`${ROW_PAD}px 0`,
-                        background:isDark?'rgba(255,255,255,0.02)':'rgba(80,50,10,0.025)',
-                        border:`1.5px dashed ${isDark?'rgba(200,180,150,0.18)':'rgba(160,130,80,0.25)'}`,
-                        borderRadius:6,
-                        display:'flex',alignItems:'center',justifyContent:'center',
-                        transition:'background 0.12s,border-color 0.12s'}}>
-                      <span style={{fontSize:22,fontWeight:200,lineHeight:1,userSelect:'none',
-                        color:isDark?'rgba(200,180,150,0.3)':'rgba(120,90,40,0.28)'}}>+</span>
-                    </div>
-                  ):(
-                    <div style={{flex:1,minHeight:barH,minWidth:0}}/>
-                  )}
+                  <div style={{flex:1,minHeight:barH,minWidth:0}}/>
                   <div style={{width:20,flexShrink:0}}/>
                 </React.Fragment>
               ))}
             </div>
           );
+          // ── Strip "+" après la dernière ligne de chaque section grille ──────
+          const lastCell=row.cells[row.cells.length-1];
+          const isSecEnd=editMode&&!row.rowType&&lastCell&&!lastCell.isContinuation&&(()=>{
+            const sec=cur.sections[lastCell.si];
+            return sec&&(!sec.type||sec.type==='grid')&&lastCell.mi===sec.measures.length-1;
+          })();
+          if(isSecEnd){
+            return[rowEl,(
+              <div key={`secadd-${ri}`} style={{display:'flex',alignItems:'center',paddingLeft:8,paddingTop:2,paddingBottom:8}}>
+                <button onClick={()=>setSectionAddSheet({si:lastCell.si})}
+                  onTouchStart={e=>e.currentTarget.style.opacity='0.6'}
+                  onTouchEnd={e=>e.currentTarget.style.opacity='1'}
+                  style={{background:'transparent',border:`1.5px dashed ${isDark?'rgba(200,180,150,0.25)':'rgba(120,90,40,0.22)'}`,
+                    borderRadius:100,padding:'5px 18px',fontSize:11,cursor:'pointer',fontFamily:'inherit',
+                    color:isDark?'rgba(200,180,150,0.45)':'rgba(100,75,35,0.45)',
+                    fontWeight:600,display:'flex',alignItems:'center',gap:5,transition:'opacity 0.1s'}}>
+                  <span style={{fontSize:15,fontWeight:300,lineHeight:1}}>+</span>
+                  <span>Ajouter</span>
+                </button>
+              </div>
+            )];
+          }
+          return[rowEl];
         })}
         {/* Lignes vides pour remplir la page */}
         {Array.from({length:Math.max(0,effectiveRPP-rows.length)}).map((_,ei)=>{
@@ -5410,6 +5467,19 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
           {selMeasures.size} mesure{selMeasures.size>1?'s':''}
         </span>
         {[
+          {label:'↑ Insérer',fn:insertBeforeSelection,color:'#C8C0B8'},
+          {label:'↓ Insérer',fn:insertAfterSelection,color:'#C8C0B8'},
+        ].map(({label,fn,color})=>(
+          <button key={label} onClick={fn}
+            style={{background:'transparent',border:'none',color,fontSize:11,fontWeight:600,
+              cursor:'pointer',fontFamily:'inherit',padding:'4px 6px',borderRadius:8,transition:'background 0.1s'}}
+            onTouchStart={e=>e.currentTarget.style.background='rgba(255,255,255,0.08)'}
+            onTouchEnd={e=>e.currentTarget.style.background='transparent'}>
+            {label}
+          </button>
+        ))}
+        <div style={{width:1,height:18,background:'#3A3835'}}/>
+        {[
           {label:'Copier',fn:copySelected,color:'#F2EDE4'},
           {label:'Couper',fn:cutSelected,color:'#F2EDE4'},
           {label:'Supprimer',fn:deleteSelected,color:'#FF7060'},
@@ -5423,13 +5493,40 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
             {label}
           </button>
         ))}
-        <div style={{width:1,height:18,background:'#444',marginLeft:2}}/>
+        <div style={{width:1,height:18,background:'#3A3835',marginLeft:2}}/>
         <button onClick={exitSel}
           style={{background:'transparent',border:'none',color:'#7A7470',fontSize:16,
             cursor:'pointer',padding:'2px 6px',lineHeight:1,fontFamily:'inherit'}}>
           ✕
         </button>
       </div>
+    )}
+
+    {/* ── Sheet : Ajouter après la section ── */}
+    {sectionAddSheet&&(
+      <Sheet onClose={()=>setSectionAddSheet(null)}>
+        <div style={{padding:'16px 22px 4px'}}>
+          <div style={{fontSize:11,color:'#8A847C',fontWeight:600,marginBottom:12,textTransform:'uppercase',letterSpacing:0.8}}>
+            Ajouter
+          </div>
+          {[
+            {label:'Mesure',sub:'Dans cette section',icon:'□',action:()=>{addMeasureAtEnd(sectionAddSheet.si);setSectionAddSheet(null);}},
+            {label:'Nouvelle portée',sub:'Section de notation musicale',icon:'𝄞',action:()=>{setInsertSheet(sectionAddSheet.si+1);setSectionAddSheet(null);}},
+            {label:'Nouvelle tablature',sub:'Section de tablature guitare',icon:'TAB',action:()=>{insertSection(sectionAddSheet.si+1,'tab','Tablature');setSectionAddSheet(null);}},
+          ].map(({label,sub,icon,action})=>(
+            <button key={label} onClick={action}
+              style={{display:'flex',alignItems:'center',gap:14,width:'100%',padding:'13px 0',
+                background:'transparent',border:'none',borderBottom:'1px solid #E8E2DA',
+                cursor:'pointer',fontFamily:'inherit',textAlign:'left'}}>
+              <span style={{fontSize:18,width:28,textAlign:'center',color:'#6B6560',fontWeight:700,flexShrink:0}}>{icon}</span>
+              <div>
+                <div style={{fontSize:14,fontWeight:700,color:'#1A1A1A'}}>{label}</div>
+                <div style={{fontSize:11,color:'#8A847C',marginTop:2}}>{sub}</div>
+              </div>
+            </button>
+          ))}
+        </div>
+      </Sheet>
     )}
 
     {/* ── Paste Sheet ── */}
