@@ -191,7 +191,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='2.39';
+const APP_VERSION='2.40';
 const CHORD_FONT="'Barlow Semi Condensed','Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -1523,56 +1523,58 @@ function HomeScreen({library,onSelect,onNavigate}){
   const BG='#F2F0EB',INK='#1A1A1A',SUB='#8A847C',BORDER='#D0CAC0';
   const recents=loadRecents().map(id=>library.find(p=>p.id===id)).filter(Boolean).slice(0,3);
   return(
-    <div style={{height:'100vh',display:'flex',flexDirection:'column',background:BG,overflowY:'auto'}}>
-      {/* ── En-tête ── */}
-      <div style={{padding:'52px 24px 20px',display:'flex',alignItems:'center',gap:10}}>
-        <SoupirLogo size={26}/>
-        <span style={{fontSize:24,fontWeight:900,letterSpacing:'-0.5px',color:INK,lineHeight:1}}>Soupir.</span>
+    <div style={{height:'100vh',display:'flex',flexDirection:'column',background:BG,overflow:'hidden'}}>
+      {/* ── Zone scrollable (logo + recents) ── */}
+      <div style={{flex:1,overflowY:'auto',display:'flex',flexDirection:'column'}}>
+        {/* En-tête */}
+        <div style={{padding:'52px 24px 24px',display:'flex',alignItems:'center',gap:10}}>
+          <SoupirLogo size={26}/>
+          <span style={{fontSize:24,fontWeight:900,letterSpacing:'-0.5px',color:INK,lineHeight:1}}>Soupir.</span>
+        </div>
+        {/* Morceaux récents */}
+        {recents.length>0&&(
+          <div style={{padding:'0 24px 20px'}}>
+            <div style={{fontSize:11,fontWeight:700,color:SUB,textTransform:'uppercase',
+              letterSpacing:1.3,marginBottom:12}}>Récents</div>
+            {recents.map((p,i)=>(
+              <div key={p.id} onClick={()=>onSelect(p)} className="home-btn"
+                style={{animationDelay:`${i*0.06}s`,
+                  background:i===0?INK:'#FFFFFF',
+                  border:`1.5px solid ${i===0?INK:BORDER}`,
+                  borderRadius:16,padding:i===0?'18px 20px':'14px 18px',
+                  marginBottom:8,cursor:'pointer',
+                  display:'flex',alignItems:'center',justifyContent:'space-between',
+                  transition:'all 0.12s',gap:12}}>
+                <div style={{minWidth:0,flex:1}}>
+                  <div style={{fontSize:i===0?17:15,fontWeight:800,lineHeight:1.2,
+                    color:i===0?'#F2EDE4':INK,
+                    overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+                    {p.title}
+                  </div>
+                  {p.composer&&(
+                    <div style={{fontSize:12,color:i===0?'#C0B0A0':SUB,marginTop:3,
+                      overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+                      {p.composer}
+                    </div>
+                  )}
+                  <div style={{fontSize:11,color:i===0?'#7A7470':SUB,marginTop:i===0?5:3}}>
+                    {p.key} · {p.bpm} BPM · {p.timeSig||'4/4'}
+                  </div>
+                </div>
+                <span style={{fontSize:i===0?13:12,fontWeight:700,flexShrink:0,
+                  color:i===0?'#A09A90':'#C0BAB0',whiteSpace:'nowrap'}}>
+                  {i===0?'Reprendre →':'→'}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+        {/* Spacer pour centrer les boutons quand pas de recents */}
+        {recents.length===0&&<div style={{flex:1}}/>}
       </div>
 
-      {/* ── Morceaux récents ── */}
-      {recents.length>0&&(
-        <div style={{padding:'4px 24px 20px'}}>
-          <div style={{fontSize:11,fontWeight:700,color:SUB,textTransform:'uppercase',
-            letterSpacing:1.3,marginBottom:12}}>Récents</div>
-          {recents.map((p,i)=>(
-            <div key={p.id} onClick={()=>onSelect(p)} className="home-btn"
-              style={{animationDelay:`${i*0.06}s`,
-                background:i===0?INK:'#FFFFFF',
-                border:`1.5px solid ${i===0?INK:BORDER}`,
-                borderRadius:16,padding:i===0?'18px 20px':'14px 18px',
-                marginBottom:8,cursor:'pointer',
-                display:'flex',alignItems:'center',justifyContent:'space-between',
-                transition:'all 0.12s',gap:12}}>
-              <div style={{minWidth:0,flex:1}}>
-                <div style={{fontSize:i===0?17:15,fontWeight:800,lineHeight:1.2,
-                  color:i===0?'#F2EDE4':INK,
-                  overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
-                  {p.title}
-                </div>
-                {p.composer&&(
-                  <div style={{fontSize:12,color:i===0?'#C0B0A0':SUB,marginTop:3,
-                    overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
-                    {p.composer}
-                  </div>
-                )}
-                <div style={{fontSize:11,color:i===0?'#7A7470':SUB,marginTop:i===0?5:3}}>
-                  {p.key} · {p.bpm} BPM · {p.timeSig||'4/4'}
-                </div>
-              </div>
-              <span style={{fontSize:i===0?13:12,fontWeight:700,flexShrink:0,
-                color:i===0?'#A09A90':'#C0BAB0',whiteSpace:'nowrap'}}>
-                {i===0?'Reprendre →':'→'}
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* ── Actions ── */}
-      <div style={{padding:'0 24px 16px',display:'flex',flexDirection:'column',gap:10,
-        marginTop:recents.length===0?'auto':0}}>
-        {recents.length===0&&<div style={{height:60}}/>}
+      {/* ── Boutons — toujours visibles, centrés verticalement dans l'espace restant ── */}
+      <div style={{padding:'0 24px 16px',display:'flex',flexDirection:'column',gap:10,flexShrink:0}}>
         <button onClick={()=>onNavigate('library')}
           style={{background:INK,color:'#F2EDE4',border:'none',
             borderRadius:100,padding:'17px 32px',fontSize:16,fontWeight:700,
@@ -1587,8 +1589,8 @@ function HomeScreen({library,onSelect,onNavigate}){
         </button>
       </div>
 
-      {/* ── Version ── */}
-      <div style={{padding:'10px 24px 36px',textAlign:'center'}}>
+      {/* ── Version — toujours en bas ── */}
+      <div style={{padding:'8px 24px 32px',textAlign:'center',flexShrink:0}}>
         <span style={{fontSize:12,fontWeight:600,color:'#B0AAA0',letterSpacing:'0.08em'}}>v{APP_VERSION}</span>
       </div>
     </div>
@@ -3291,6 +3293,9 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
     if(tapIdx===-1)return;
     setSelMeasures(prev=>{
       if(prev.size===0)return new Set([key]);
+      // Taper une mesure déjà sélectionnée → on efface et on repart de zéro sur cette mesure
+      if(prev.has(key)){return new Set([key]);}
+      // Sinon → étendre la plage contiguë pour inclure la mesure tapée
       const indices=flat.map((k,i)=>prev.has(k)?i:-1).filter(i=>i>=0);
       const lo=Math.min(Math.min(...indices),tapIdx);
       const hi=Math.max(Math.max(...indices),tapIdx);
@@ -4082,7 +4087,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
            :rowMaxNFilled===3               ?Math.round(chordFsBase*0.87)
            :rowMaxNFilled===2               ?Math.round(chordFsBase*0.93)
            :chordFsBase;
-          return(
+          const rowEl=(
             <div key={ri} style={{height:rowH,flexShrink:0,display:'flex',alignItems:'stretch',position:'relative',
               overflow:'visible',
               marginTop:spacerMT,
@@ -4343,6 +4348,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
           );
           // ── Strip "+" après la dernière ligne de chaque section grille ──────
           const lastCell=row.cells[row.cells.length-1];
+
           const isSecEnd=editMode&&!row.rowType&&lastCell&&!lastCell.isContinuation&&(()=>{
             const sec=cur.sections[lastCell.si];
             return sec&&(!sec.type||sec.type==='grid')&&lastCell.mi===sec.measures.length-1;
