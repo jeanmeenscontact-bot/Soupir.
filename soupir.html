@@ -191,7 +191,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='2.34';
+const APP_VERSION='2.35';
 const CHORD_FONT="'Barlow Semi Condensed','Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -3133,9 +3133,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
   const undoStack=useRef([]);
   const redoStack=useRef([]);
   useEffect(()=>{undoStack.current=[];redoStack.current=[];},[piece.id]);
-  const gestureRef=useRef({si:null,mi:null,startX:0,startY:0,moved:false,dragging:false,longPressed:false,targetSi:null,targetMi:null,longPressTimer:null});
-  const doubleTapRef=useRef({});
-  const [dragVisual,setDragVisual]=useState(null); // {fromSi,fromMi,targetSi,targetMi}
+  const gestureRef=useRef({si:null,mi:null,startX:0,startY:0,moved:false,swiping:false,longPressed:false,longPressTimer:null});
   const [showPieceInfo,setShowPieceInfo]=useState(false);
   const [pdfExport,setPdfExport]=useState(false);
   const [selMode,setSelMode]=useState(false);
@@ -3326,40 +3324,21 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
     setPasteMode(false);setPasteSheet(null);
   }
 
-  // ── Double-tap : répétition % ──────────────────────────────────────────────
-  function setMeasureRepeat(si,mi){
+  // ── Supprimer les mesures sélectionnées ────────────────────────────────────
+  function deleteSelected(){
+    if(!selMeasures.size)return;
     saveUndo();
     setLibrary(lib=>lib.map(p=>{
       if(p.id!==piece.id)return p;
-      return{...p,sections:p.sections.map((s,sI)=>{
-        if(sI!==si)return s;
-        return{...s,measures:s.measures.map((mm,mI)=>{
-          if(mI!==mi)return mm;
-          const beats=getBeats(mm).map(b=>({...b,c:'%'}));
-          return{...mm,beats};
-        })};
+      return{...p,sections:p.sections.map((s,si)=>{
+        const kept=s.measures.filter((_,mi)=>!selMeasures.has(`${si}-${mi}`));
+        return{...s,measures:kept.length>0?kept:[mk([])]};
       })};
     }));
+    exitSel();
   }
 
-  // ── Drag & drop : réordonner les mesures ──────────────────────────────────
-  function reorderMeasure(fromSi,fromMi,toSi,toMi){
-    if(fromSi===toSi&&fromMi===toMi)return;
-    saveUndo();
-    setLibrary(lib=>lib.map(p=>{
-      if(p.id!==piece.id)return p;
-      const secs=p.sections.map(s=>({...s,measures:[...s.measures]}));
-      const moved=JSON.parse(JSON.stringify(secs[fromSi].measures[fromMi]));
-      secs[fromSi].measures.splice(fromMi,1);
-      if(secs[fromSi].measures.length===0)secs[fromSi].measures.push(mk([]));
-      let insertMi=toMi;
-      if(fromSi===toSi&&toMi>fromMi)insertMi--;
-      secs[toSi].measures.splice(insertMi,0,moved);
-      return{...p,sections:secs};
-    }));
-  }
-
-  // ── Handlers touch mesure (appui long + double-tap + drag) ────────────────
+  // ── Handlers touch mesure : appui long → selMode, glissement → sélection ──
   function mkMeasureTouch(si,mi){
     if(!editMode)return{};
     const key=`${si}-${mi}`;
@@ -3367,58 +3346,44 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
       const t=e.touches[0];
       const g=gestureRef.current;
       g.si=si;g.mi=mi;g.startX=t.clientX;g.startY=t.clientY;
-      g.moved=false;g.dragging=false;g.longPressed=false;g.targetSi=si;g.targetMi=mi;
+      g.moved=false;g.swiping=false;g.longPressed=false;
       if(g.longPressTimer){clearTimeout(g.longPressTimer);g.longPressTimer=null;}
-      if(!selMode&&!pasteMode){
+      // En selMode existant : tap simple ajoute/retire la mesure, pas de nouveau timer
+      if(selMode)return;
+      if(!pasteMode){
         g.longPressTimer=setTimeout(()=>{
-          g.longPressTimer=null;g.longPressed=true;
-          setSelMode(true);setSelMeasures(new Set([key]));
-          setPicker(pk=>({...pk,visible:false}));setPasteMode(false);setDrawMode(false);
-        },500);
+          g.longPressTimer=null;g.longPressed=true;g.swiping=true;
+          setSelMode(true);
+          setSelMeasures(new Set([key]));
+          setPicker(pk=>({...pk,visible:false}));
+          setPasteMode(false);setDrawMode(false);
+        },480);
       }
     }
     function onTouchMove(e){
-      const g=gestureRef.current;if(g.si!==si||g.mi!==mi)return;
+      const g=gestureRef.current;
       const t=e.touches[0];
       const dx=t.clientX-g.startX,dy=t.clientY-g.startY;
-      if(Math.sqrt(dx*dx+dy*dy)>8){
+      if(Math.sqrt(dx*dx+dy*dy)>6){
         if(g.longPressTimer){clearTimeout(g.longPressTimer);g.longPressTimer=null;}
         g.moved=true;
-        if(!selMode&&!pasteMode){
-          g.dragging=true;
-          const el=document.elementFromPoint(t.clientX,t.clientY);
-          const tgt=el&&el.closest('[data-mk]');
-          if(tgt){
-            const[tSi,tMi]=tgt.dataset.mk.split('-').map(Number);
-            g.targetSi=tSi;g.targetMi=tMi;
-            setDragVisual({fromSi:si,fromMi:mi,targetSi:tSi,targetMi:tMi});
-          }
+      }
+      // Glissement après appui long : sélectionner les mesures survolées
+      if(g.swiping){
+        e.preventDefault();
+        const el=document.elementFromPoint(t.clientX,t.clientY);
+        const tgt=el&&el.closest('[data-mk]');
+        if(tgt){
+          const[tSi,tMi]=tgt.dataset.mk.split('-').map(Number);
+          const tKey=`${tSi}-${tMi}`;
+          setSelMeasures(prev=>{if(prev.has(tKey))return prev;const n=new Set(prev);n.add(tKey);return n;});
         }
       }
     }
     function onTouchEnd(e){
       const g=gestureRef.current;
       if(g.longPressTimer){clearTimeout(g.longPressTimer);g.longPressTimer=null;}
-      if(g.si!==si||g.mi!==mi)return;
-      if(g.dragging){
-        e.preventDefault();
-        const{targetSi,targetMi}=g;
-        setDragVisual(null);g.dragging=false;
-        reorderMeasure(si,mi,targetSi,targetMi);
-        return;
-      }
-      setDragVisual(null);
-      if(!g.moved&&!g.longPressed&&!selMode&&!pasteMode){
-        const now=Date.now();
-        const last=doubleTapRef.current[key]||0;
-        if(now-last<350){
-          e.preventDefault();
-          doubleTapRef.current[key]=0;
-          setMeasureRepeat(si,mi);
-          return;
-        }
-        doubleTapRef.current[key]=now;
-      }
+      if(g.swiping){g.swiping=false;return;}
     }
     return{onTouchStart,onTouchMove,onTouchEnd};
   }
@@ -4047,12 +4012,8 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                         <div data-mk={`${si}-${mi}`} {...mkMeasureTouch(si,mi)}
                           style={{flex:2,position:'relative',display:'flex',
                             minWidth:0,overflow:'visible',
-                            opacity:dragVisual&&dragVisual.fromSi===si&&dragVisual.fromMi===mi?0.35:1,
                             background:editMode&&picker.visible&&picker.isGrande&&picker.si===si&&picker.mi===mi?'rgba(58,155,213,0.09)':'transparent',
-                            transition:'background 0.12s, opacity 0.1s'}}>
-                          {dragVisual&&dragVisual.targetSi===si&&dragVisual.targetMi===mi&&!(dragVisual.fromSi===si&&dragVisual.fromMi===mi)&&(
-                            <div style={{position:'absolute',inset:0,background:'rgba(58,155,213,0.18)',border:'2px solid rgba(58,155,213,0.7)',borderRadius:3,zIndex:20,pointerEvents:'none'}}/>
-                          )}
+                            transition:'background 0.12s'}}>
                           {isGMSelSelected&&<div style={{position:'absolute',inset:0,background:'rgba(58,155,213,0.22)',borderRadius:3,zIndex:15,pointerEvents:'none',border:'2px solid rgba(58,155,213,0.7)'}}/>}
                           {pasteMode&&<div style={{position:'absolute',inset:0,background:'rgba(80,200,100,0.06)',zIndex:15,pointerEvents:'none'}}/>}
                           {/* Badge + signes beat-0 + annotations — overlay flex en haut (grande mesure) */}
@@ -4181,12 +4142,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                       <React.Fragment key={`${si}-${mi}`}>
                         <div data-mk={`${si}-${mi}`} {...mkMeasureTouch(si,mi)}
                           style={{flex:1,position:'relative',display:'flex',flexDirection:'row',
-                          minWidth:0,overflow:'hidden',
-                          opacity:dragVisual&&dragVisual.fromSi===si&&dragVisual.fromMi===mi?0.35:1,
-                          transition:'opacity 0.1s'}}>
-                          {dragVisual&&dragVisual.targetSi===si&&dragVisual.targetMi===mi&&!(dragVisual.fromSi===si&&dragVisual.fromMi===mi)&&(
-                            <div style={{position:'absolute',inset:0,background:'rgba(58,155,213,0.18)',border:'2px solid rgba(58,155,213,0.7)',borderRadius:3,zIndex:20,pointerEvents:'none'}}/>
-                          )}
+                          minWidth:0,overflow:'hidden'}}>
                           {measure.timeSig&&(
                             <div style={{position:'absolute',top:3,right:4,zIndex:6,
                               background:isDark?'#2A1A40':'#EDE0FF',color:isDark?'#C8A8FF':'#5A2A9A',
@@ -4217,13 +4173,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                     <React.Fragment key={`${si}-${mi}`}>
                       <div data-mk={`${si}-${mi}`} {...mkMeasureTouch(si,mi)}
                         style={{flex:1,position:'relative',display:'flex',flexDirection:'row',
-                        minWidth:0,overflow:'hidden',
-                        opacity:dragVisual&&dragVisual.fromSi===si&&dragVisual.fromMi===mi?0.35:1,
-                        transition:'opacity 0.1s'}}>
-                        {/* Overlay drag cible */}
-                        {dragVisual&&dragVisual.targetSi===si&&dragVisual.targetMi===mi&&!(dragVisual.fromSi===si&&dragVisual.fromMi===mi)&&(
-                          <div style={{position:'absolute',inset:0,background:'rgba(58,155,213,0.18)',border:'2px solid rgba(58,155,213,0.7)',borderRadius:3,zIndex:20,pointerEvents:'none'}}/>
-                        )}
+                        minWidth:0,overflow:'hidden'}}>
                         {/* Badge section intégré dans renderHalf via secBadge */}
                         {measure.label&&(
                           <div style={{position:'absolute',top:3,left:ci===0?28:4,zIndex:6,
@@ -5293,23 +5243,9 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
       {selMode?(
         <>
           <span style={{fontSize:11,color:'#6B6560',fontWeight:600,flexShrink:0}}>
-            {selMeasures.size} mesure{selMeasures.size!==1?'s':''} sélectionnée{selMeasures.size!==1?'s':''}
+            ✦ Mode sélection — appuie long + glisse pour sélectionner
           </span>
           <div style={{flex:1}}/>
-          <button onClick={copySelected} disabled={selMeasures.size===0}
-            style={{background:'transparent',border:'1.5px solid #D0CAC0',borderRadius:100,
-              padding:'4px 12px',fontSize:11,cursor:selMeasures.size===0?'default':'pointer',fontFamily:'inherit',
-              color:selMeasures.size===0?'#C0BAB0':'#1A1A1A',fontWeight:600,flexShrink:0,
-              opacity:selMeasures.size===0?0.45:1}}>
-            Copier
-          </button>
-          <button onClick={cutSelected} disabled={selMeasures.size===0}
-            style={{background:'transparent',border:'1.5px solid #D0CAC0',borderRadius:100,
-              padding:'4px 12px',fontSize:11,cursor:selMeasures.size===0?'default':'pointer',fontFamily:'inherit',
-              color:selMeasures.size===0?'#C0BAB0':'#C0392B',fontWeight:600,flexShrink:0,
-              opacity:selMeasures.size===0?0.45:1}}>
-            Couper
-          </button>
           <button onClick={exitSel}
             style={{background:'transparent',border:'1.5px solid #D0CAC0',borderRadius:100,
               padding:'4px 12px',fontSize:11,cursor:'pointer',fontFamily:'inherit',
@@ -5406,6 +5342,41 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
         </>
       )}
     </div>
+
+    {/* ── Panneau flottant sélection ── */}
+    {selMode&&selMeasures.size>0&&(
+      <div style={{position:'fixed',bottom:70,left:'50%',transform:'translateX(-50%)',
+        display:'flex',alignItems:'center',gap:6,
+        background:isDark?'#2C2A28':'#1C1A18',
+        border:`1px solid ${isDark?'#4A4845':'#3A3835'}`,
+        borderRadius:20,padding:'10px 14px',
+        boxShadow:'0 8px 32px rgba(0,0,0,0.45)',
+        zIndex:130,userSelect:'none',whiteSpace:'nowrap'}}>
+        <span style={{fontSize:12,fontWeight:700,color:'#8A8480',paddingRight:6,borderRight:'1px solid #444'}}>
+          {selMeasures.size} mesure{selMeasures.size>1?'s':''}
+        </span>
+        {[
+          {label:'Copier',fn:copySelected,color:'#F2EDE4'},
+          {label:'Couper',fn:cutSelected,color:'#F2EDE4'},
+          {label:'Supprimer',fn:deleteSelected,color:'#FF7060'},
+        ].map(({label,fn,color})=>(
+          <button key={label} onClick={fn}
+            style={{background:'transparent',border:'none',color,fontSize:13,fontWeight:700,
+              cursor:'pointer',fontFamily:'inherit',padding:'4px 8px',borderRadius:8,
+              transition:'background 0.1s'}}
+            onTouchStart={e=>e.currentTarget.style.background='rgba(255,255,255,0.08)'}
+            onTouchEnd={e=>e.currentTarget.style.background='transparent'}>
+            {label}
+          </button>
+        ))}
+        <div style={{width:1,height:18,background:'#444',marginLeft:2}}/>
+        <button onClick={exitSel}
+          style={{background:'transparent',border:'none',color:'#7A7470',fontSize:16,
+            cursor:'pointer',padding:'2px 6px',lineHeight:1,fontFamily:'inherit'}}>
+          ✕
+        </button>
+      </div>
+    )}
 
     {/* ── Paste Sheet ── */}
     {pasteSheet&&(
