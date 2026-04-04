@@ -191,7 +191,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='2.45';
+const APP_VERSION='2.46';
 const CHORD_FONT="'Barlow Semi Condensed','Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -5611,7 +5611,19 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
             Ajouter
           </div>
           {[
-            {label:'Mesure',sub:'Dans cette section',icon:'□',action:()=>{addMeasureAtEnd(sectionAddSheet.si);setSectionAddSheet(null);}},
+            {label:'Mesure',sub:'Dans la section grille suivante',icon:'□',action:()=>{
+              const sIdx=sectionAddSheet.si;
+              const sec=cur.sections[sIdx];
+              if(!sec.type||sec.type==='grid'){
+                addMeasureAtEnd(sIdx);
+              } else {
+                // Portée ou tab : chercher la section grille qui suit
+                const nextGrid=cur.sections.findIndex((s,i)=>i>sIdx&&(!s.type||s.type==='grid'));
+                if(nextGrid>=0){addMeasureAtEnd(nextGrid);}
+                else{insertSection(sIdx+1,'grid','A');}
+              }
+              setSectionAddSheet(null);
+            }},
             {label:'Nouvelle portée',sub:'Section de notation musicale',icon:'𝄞',action:()=>{setInsertSheet(sectionAddSheet.si+1);setSectionAddSheet(null);}},
             {label:'Nouvelle tablature',sub:'Section de tablature guitare',icon:'TAB',action:()=>{insertSection(sectionAddSheet.si+1,'tab','Tablature');setSectionAddSheet(null);}},
           ].map(({label,sub,icon,action})=>(
