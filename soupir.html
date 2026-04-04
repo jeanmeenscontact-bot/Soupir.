@@ -191,7 +191,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='2.38';
+const APP_VERSION='2.39';
 const CHORD_FONT="'Barlow Semi Condensed','Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -1588,7 +1588,7 @@ function HomeScreen({library,onSelect,onNavigate}){
       </div>
 
       {/* ── Version ── */}
-      <div style={{padding:'12px 24px 40px',textAlign:'center',marginTop:'auto'}}>
+      <div style={{padding:'10px 24px 36px',textAlign:'center'}}>
         <span style={{fontSize:12,fontWeight:600,color:'#B0AAA0',letterSpacing:'0.08em'}}>v{APP_VERSION}</span>
       </div>
     </div>
@@ -3281,9 +3281,21 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
   }
 
   // ── Sélection / Copier / Couper / Coller ──────────────────────────────────
-  function toggleSel(si,mi){
+  // La sélection est toujours une plage contiguë.
+  // Taper une mesure étend ou contracte la plage entre le min et max actuels + la cible.
+  function extendSel(si,mi){
     const key=`${si}-${mi}`;
-    setSelMeasures(prev=>{const next=new Set(prev);next.has(key)?next.delete(key):next.add(key);return next;});
+    const flat=[];
+    cur.sections.forEach((s,sIdx)=>{if(!s.type||s.type==='grid')s.measures.forEach((_,mIdx)=>flat.push(`${sIdx}-${mIdx}`));});
+    const tapIdx=flat.indexOf(key);
+    if(tapIdx===-1)return;
+    setSelMeasures(prev=>{
+      if(prev.size===0)return new Set([key]);
+      const indices=flat.map((k,i)=>prev.has(k)?i:-1).filter(i=>i>=0);
+      const lo=Math.min(Math.min(...indices),tapIdx);
+      const hi=Math.max(Math.max(...indices),tapIdx);
+      return new Set(flat.slice(lo,hi+1));
+    });
   }
   function exitSel(){setSelMode(false);setSelMeasures(new Set());}
   function copySelected(){
@@ -3869,7 +3881,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
     const allIdem=beats.length>0&&beats.every(b=>b.c==='%');
     if(allIdem){
       return(
-        <div onClick={editMode?(e)=>{e.stopPropagation();if(selMode){toggleSel(si,mi);return;}if(pasteMode){setPasteSheet({si,mi});return;}openMeasurePicker(si,mi,half,e,0);}:undefined}
+        <div onClick={editMode?(e)=>{e.stopPropagation();if(selMode){extendSel(si,mi);return;}if(pasteMode){setPasteSheet({si,mi});return;}openMeasurePicker(si,mi,half,e,0);}:undefined}
           style={{flex:1,display:'flex',minWidth:0,position:'relative',alignItems:'center',justifyContent:'center',
             background:isSel?'rgba(58,155,213,0.09)':'transparent',transition:'background 0.12s',cursor:editMode?'pointer':'default'}}>
           {isSelModeSelected&&<div style={{position:'absolute',inset:0,background:'rgba(58,155,213,0.22)',borderRadius:3,zIndex:15,pointerEvents:'none',border:'2px solid rgba(58,155,213,0.7)'}}/>}
@@ -3946,7 +3958,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
             <div key={bi}
               onClick={editMode?(e)=>{
                 e.stopPropagation();
-                if(selMode){toggleSel(si,mi);return;}
+                if(selMode){extendSel(si,mi);return;}
                 if(pasteMode){setPasteSheet({si,mi});return;}
                 openMeasurePicker(si,mi,half,e,bi);
               }:undefined}
@@ -4173,7 +4185,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                               <div key={beat.key}
                                 onClick={editMode?(e)=>{
                                   e.stopPropagation();
-                                  if(selMode){toggleSel(si,mi);return;}
+                                  if(selMode){extendSel(si,mi);return;}
                                   if(pasteMode){setPasteSheet({si,mi});return;}
                                   openGrandeMeasurePicker(si,mi,cSi,cMi,e,bi);
                                 }:undefined}
