@@ -191,7 +191,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='2.42';
+const APP_VERSION='2.43';
 const CHORD_FONT="'Barlow Semi Condensed','Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -3907,7 +3907,9 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
     const beat0Signs=beats[0]?.s||[];
     const measureAnnotations=beats.map(b=>b.t||'').filter(Boolean).join(' · ');
     const hasVoltaBeat0=!!beats[0]?.v;
-    const hasTopOverlay=!!measureAnnotations||!!secBadge||beat0Signs.length>0;
+    const showTimeSigBadge=half==='a'&&!!mm.timeSig;
+    const showBreakIndicator=half==='a'&&editMode&&si>0&&!!cur.sections[si]?.breakBefore;
+    const hasTopOverlay=!!measureAnnotations||!!secBadge||beat0Signs.length>0||showTimeSigBadge||showBreakIndicator;
 
     // ── Mesure entière en répétition : un seul % centré ───────────────────
     const allIdem=beats.length>0&&beats.every(b=>b.c==='%');
@@ -3918,16 +3920,38 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
             background:isSel?'rgba(58,155,213,0.09)':'transparent',transition:'background 0.12s',cursor:editMode?'pointer':'default'}}>
           {isSelModeSelected&&<div style={{position:'absolute',inset:0,background:'rgba(58,155,213,0.22)',borderRadius:3,zIndex:15,pointerEvents:'none',border:'2px solid rgba(58,155,213,0.7)'}}/>}
           {pasteMode&&<div style={{position:'absolute',inset:0,background:'rgba(80,200,100,0.06)',zIndex:15,pointerEvents:'none'}}/>}
-          {secBadge&&(
-            <span
-              onClick={editMode?(e)=>{e.stopPropagation();setSectionRenameOverlay({si,name:secBadge});}:undefined}
-              style={{position:'absolute',top:2,left:1,fontSize:10,fontWeight:800,
-              background:isDark?'rgba(100,55,15,0.88)':'rgba(148,72,18,0.82)',
-              color:isDark?'#FFD4A0':'#FFE8C8',borderRadius:4,padding:'2px 7px',lineHeight:1.4,
-              letterSpacing:1.0,textTransform:'uppercase',
-              pointerEvents:editMode?'auto':'none',cursor:editMode?'pointer':'default',zIndex:20}}>
-              {secBadge}
-            </span>
+          {(showTimeSigBadge||showBreakIndicator||secBadge)&&(
+            <div style={{position:'absolute',top:2,left:1,display:'flex',alignItems:'center',gap:3,
+              pointerEvents:'none',zIndex:20,lineHeight:1}}>
+              {showTimeSigBadge&&(()=>{
+                const[tNum,tDen]=mm.timeSig.split('/');
+                return(
+                  <span style={{display:'inline-flex',flexDirection:'column',alignItems:'center',
+                    background:isDark?'rgba(55,50,210,0.72)':'rgba(45,55,200,0.80)',
+                    color:'#DDE4FF',borderRadius:4,padding:'2px 5px',lineHeight:1,gap:0}}>
+                    <span style={{fontSize:9,fontWeight:800,lineHeight:1.15}}>{tNum}</span>
+                    <div style={{width:10,height:1.2,background:'#DDE4FF',borderRadius:1,margin:'1px 0'}}/>
+                    <span style={{fontSize:9,fontWeight:800,lineHeight:1.15}}>{tDen}</span>
+                  </span>
+                );
+              })()}
+              {showBreakIndicator&&(
+                <span style={{fontSize:8,fontWeight:800,
+                  color:isDark?'#90B8FF':'#4060CC',
+                  background:isDark?'rgba(50,80,200,0.22)':'rgba(40,60,200,0.12)',
+                  borderRadius:3,padding:'1px 4px',lineHeight:1.4}}>↵</span>
+              )}
+              {secBadge&&(
+                <span onClick={editMode?(e)=>{e.stopPropagation();setSectionRenameOverlay({si,name:secBadge});}:undefined}
+                  style={{fontSize:10,fontWeight:800,
+                  background:isDark?'rgba(100,55,15,0.88)':'rgba(148,72,18,0.82)',
+                  color:isDark?'#FFD4A0':'#FFE8C8',borderRadius:4,padding:'2px 7px',lineHeight:1.4,
+                  letterSpacing:1.0,textTransform:'uppercase',
+                  pointerEvents:editMode?'auto':'none',cursor:editMode?'pointer':'default'}}>
+                  {secBadge}
+                </span>
+              )}
+            </div>
           )}
           <span style={{fontSize:Math.round(chFs*1.35),fontWeight:300,fontStyle:'italic',
             color:isDark?'#7A7068':'#C0B09A',letterSpacing:'0.04em',lineHeight:1,fontFamily:CHORD_FONT,
@@ -3949,6 +3973,26 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
           <div style={{position:'absolute',top:hasVoltaBeat0?VOLTA_H+2:2,left:1,right:1,
             display:'flex',alignItems:'center',gap:4,
             pointerEvents:'none',zIndex:7,lineHeight:1,overflow:'hidden'}}>
+            {/* Badge signature rythmique — fraction avec trait, pill bleu-indigo */}
+            {showTimeSigBadge&&(()=>{
+              const[tNum,tDen]=mm.timeSig.split('/');
+              return(
+                <span style={{flexShrink:0,display:'inline-flex',flexDirection:'column',alignItems:'center',
+                  background:isDark?'rgba(55,50,210,0.72)':'rgba(45,55,200,0.80)',
+                  color:'#DDE4FF',borderRadius:4,padding:'2px 5px',lineHeight:1,gap:0,pointerEvents:'none'}}>
+                  <span style={{fontSize:9,fontWeight:800,lineHeight:1.15}}>{tNum}</span>
+                  <div style={{width:10,height:1.2,background:'#DDE4FF',borderRadius:1,margin:'1px 0'}}/>
+                  <span style={{fontSize:9,fontWeight:800,lineHeight:1.15}}>{tDen}</span>
+                </span>
+              );
+            })()}
+            {/* Indicateur saut de ligne avant section */}
+            {showBreakIndicator&&(
+              <span style={{flexShrink:0,fontSize:8,fontWeight:800,
+                color:isDark?'#90B8FF':'#4060CC',
+                background:isDark?'rgba(50,80,200,0.22)':'rgba(40,60,200,0.12)',
+                borderRadius:3,padding:'1px 4px',lineHeight:1.4,pointerEvents:'none'}}>↵</span>
+            )}
             {secBadge&&(
               <span
                 onClick={editMode?(e)=>{e.stopPropagation();setSectionRenameOverlay({si,name:secBadge});}:undefined}
@@ -4298,7 +4342,6 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                         <div data-mk={`${si}-${mi}`} {...mkMeasureTouch(si,mi)}
                           style={{flex:1,position:'relative',display:'flex',flexDirection:'row',
                           minWidth:0,overflow:'visible'}}>
-                          <TimeSigFraction ts={measure.timeSig} rowH={rowH} dark={isDark}/>
 
                           {isSplitCont?(
                             <>
@@ -4336,8 +4379,6 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                             color:'#B0A898',fontSize:9,pointerEvents:'none',lineHeight:1,
                             fontWeight:700}}>⇕{measure.rowSpacer===1?'S':measure.rowSpacer===2?'M':'L'}</div>
                         )}
-                        <TimeSigFraction ts={measure.timeSig} rowH={rowH} dark={isDark}/>
-
                         {isSplit?(
                           <>
                             {renderHalf(measure,'a',si,mi,num,sectionStart?sectionName:null,rowChFs)}
@@ -4664,25 +4705,6 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
               onBlur={e=>{if(e.target.value.trim()&&e.target.value.trim()!==sectionRenameOverlay.name){renameSectionDirect(sectionRenameOverlay.si,e.target.value.trim());}}}
               style={{width:'100%',padding:'10px 14px',border:'1.5px solid #D0CAC0',borderRadius:12,
                 fontSize:15,fontFamily:'inherit',background:'#FAF8F4',color:'#1A1A1A',outline:'none'}}/>
-            {/* Toggle saut de ligne avant cette section */}
-            {sectionRenameOverlay.si>0&&(
-              <div style={{marginTop:16,display:'flex',alignItems:'center',justifyContent:'space-between',
-                padding:'10px 14px',background:'#F4F0EA',borderRadius:12,border:'1.5px solid #D0CAC0'}}>
-                <span style={{fontSize:13,fontWeight:600,color:'#3A2A18'}}>↵ Début de ligne</span>
-                <button
-                  onClick={()=>{
-                    const cur2=cur.sections[sectionRenameOverlay.si];
-                    setSectionBreakBefore(sectionRenameOverlay.si,!cur2.breakBefore);
-                  }}
-                  style={{background:cur.sections[sectionRenameOverlay.si]?.breakBefore?'#1A1A1A':'transparent',
-                    color:cur.sections[sectionRenameOverlay.si]?.breakBefore?'#F2EDE4':'#1A1A1A',
-                    border:'1.5px solid #1A1A1A',borderRadius:100,padding:'5px 16px',
-                    fontSize:12,fontWeight:700,cursor:'pointer',fontFamily:'inherit',
-                    transition:'all 0.12s'}}>
-                  {cur.sections[sectionRenameOverlay.si]?.breakBefore?'Activé':'Désactivé'}
-                </button>
-              </div>
-            )}
           </div>
         </Sheet>
       )}
@@ -5309,6 +5331,22 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                           outline:`1.5px solid ${active?ACstr:BC}`}}>{s}</button>);
                     })}
                   </div>
+                  {/* Saut de ligne avant section — visible uniquement sur la 1ère mesure d'une section (pas la 1ère) */}
+                  {picker.mi===0&&picker.si>0&&(()=>{
+                    const hasBreak=!!cur.sections[picker.si]?.breakBefore;
+                    return(
+                      <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:10}}>
+                        <span style={{fontSize:11,color:BC,flex:1}}>↵ Saut avant la section</span>
+                        <button onClick={()=>setSectionBreakBefore(picker.si,!hasBreak)}
+                          style={{...B,height:30,borderRadius:8,padding:'0 14px',fontSize:11,fontWeight:700,
+                            background:hasBreak?'#1A3A7A':'transparent',
+                            color:hasBreak?'#90B8FF':IC,
+                            outline:`1.5px solid ${hasBreak?'#2A5A9A':BC}`}}>
+                          {hasBreak?'Activé':'Désactivé'}
+                        </button>
+                      </div>
+                    );
+                  })()}
                   {strBtn('Supprimer cette mesure','×',()=>handleMeasureAction(picker.si,picker.mi,'deleteMeasure'),true)}
                 </>);
               })()}
