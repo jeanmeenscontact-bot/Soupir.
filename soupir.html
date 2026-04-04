@@ -191,7 +191,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='2.43';
+const APP_VERSION='2.44';
 const CHORD_FONT="'Barlow Semi Condensed','Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -3540,8 +3540,6 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
   function computeRows(sections){
     const rows=[];let row=[];let mCount=0;
     sections.forEach((section,si)=>{
-      // Saut de ligne forcé avant la section (breakBefore)
-      if(section.breakBefore&&si>0&&row.length>0){rows.push({cells:row,rowType:'measures'});row=[];}
       if(section.type==='staff'){
         if(row.length>0){rows.push({cells:row,rowType:'measures'});row=[];}
         rows.push({cells:[{type:'staff',si,section}],rowType:'staff'});
@@ -3732,13 +3730,6 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
   }
 
 
-  function setSectionBreakBefore(si,val){
-    saveUndo();
-    setLibrary(lib=>lib.map(p=>p.id!==piece.id?p:{...p,
-      sections:p.sections.map((s,sI)=>sI!==si?s:{...s,breakBefore:val})
-    }));
-  }
-
   function updateBarline(si,mi,side,type){
     saveUndo();
     setLibrary(lib=>lib.map(p=>p.id!==piece.id?p:{...p,
@@ -3908,8 +3899,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
     const measureAnnotations=beats.map(b=>b.t||'').filter(Boolean).join(' · ');
     const hasVoltaBeat0=!!beats[0]?.v;
     const showTimeSigBadge=half==='a'&&!!mm.timeSig;
-    const showBreakIndicator=half==='a'&&editMode&&si>0&&!!cur.sections[si]?.breakBefore;
-    const hasTopOverlay=!!measureAnnotations||!!secBadge||beat0Signs.length>0||showTimeSigBadge||showBreakIndicator;
+    const hasTopOverlay=!!measureAnnotations||!!secBadge||beat0Signs.length>0||showTimeSigBadge;
 
     // ── Mesure entière en répétition : un seul % centré ───────────────────
     const allIdem=beats.length>0&&beats.every(b=>b.c==='%');
@@ -3920,7 +3910,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
             background:isSel?'rgba(58,155,213,0.09)':'transparent',transition:'background 0.12s',cursor:editMode?'pointer':'default'}}>
           {isSelModeSelected&&<div style={{position:'absolute',inset:0,background:'rgba(58,155,213,0.22)',borderRadius:3,zIndex:15,pointerEvents:'none',border:'2px solid rgba(58,155,213,0.7)'}}/>}
           {pasteMode&&<div style={{position:'absolute',inset:0,background:'rgba(80,200,100,0.06)',zIndex:15,pointerEvents:'none'}}/>}
-          {(showTimeSigBadge||showBreakIndicator||secBadge)&&(
+          {(showTimeSigBadge||secBadge)&&(
             <div style={{position:'absolute',top:2,left:1,display:'flex',alignItems:'center',gap:3,
               pointerEvents:'none',zIndex:20,lineHeight:1}}>
               {showTimeSigBadge&&(()=>{
@@ -3935,12 +3925,6 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                   </span>
                 );
               })()}
-              {showBreakIndicator&&(
-                <span style={{fontSize:8,fontWeight:800,
-                  color:isDark?'#90B8FF':'#4060CC',
-                  background:isDark?'rgba(50,80,200,0.22)':'rgba(40,60,200,0.12)',
-                  borderRadius:3,padding:'1px 4px',lineHeight:1.4}}>↵</span>
-              )}
               {secBadge&&(
                 <span onClick={editMode?(e)=>{e.stopPropagation();setSectionRenameOverlay({si,name:secBadge});}:undefined}
                   style={{fontSize:10,fontWeight:800,
@@ -3986,14 +3970,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                 </span>
               );
             })()}
-            {/* Indicateur saut de ligne avant section */}
-            {showBreakIndicator&&(
-              <span style={{flexShrink:0,fontSize:8,fontWeight:800,
-                color:isDark?'#90B8FF':'#4060CC',
-                background:isDark?'rgba(50,80,200,0.22)':'rgba(40,60,200,0.12)',
-                borderRadius:3,padding:'1px 4px',lineHeight:1.4,pointerEvents:'none'}}>↵</span>
-            )}
-            {secBadge&&(
+{secBadge&&(
               <span
                 onClick={editMode?(e)=>{e.stopPropagation();setSectionRenameOverlay({si,name:secBadge});}:undefined}
                 style={{fontSize:10,fontWeight:800,flexShrink:0,
@@ -4164,6 +4141,14 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
            :rowMaxNFilled===3               ?Math.round(chordFsBase*0.87)
            :rowMaxNFilled===2               ?Math.round(chordFsBase*0.93)
            :chordFsBase;
+          // ── Section end : "+" après la dernière mesure ─────────────────────
+          const secEndLastCell=row.cells[row.cells.length-1];
+          const isSecEnd=editMode&&row.rowType==='measures'&&secEndLastCell&&!secEndLastCell.isContinuation&&(()=>{
+            const sec=cur.sections[secEndLastCell.si];
+            return sec&&(!sec.type||sec.type==='grid')&&secEndLastCell.mi===sec.measures.length-1;
+          })();
+          const plusBtnColor=isDark?'rgba(200,180,150,0.35)':'rgba(100,75,35,0.35)';
+          const plusBtnBorder=isDark?'rgba(200,180,150,0.18)':'rgba(100,75,35,0.16)';
           const rowEl=(
             <div key={ri} style={{height:rowH,flexShrink:0,display:'flex',alignItems:'stretch',position:'relative',
               overflow:'visible',
@@ -4397,37 +4382,57 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                 });
                 return rendered;
               })()}
-              {/* Cellules fantômes fin de ligne */}
+              {/* Cellules fantômes fin de ligne — avec "+" en première position si fin de section */}
               {row.cells.length<GCOLS&&Array.from({length:GCOLS-row.cells.length}).map((_,pi)=>(
-                <React.Fragment key={`pad${pi}`}>
-                  <div style={{flex:1,minHeight:barH,minWidth:0}}/>
-                  <div style={{width:20,flexShrink:0}}/>
-                </React.Fragment>
+                pi===0&&isSecEnd?(
+                  <React.Fragment key={`pad${pi}`}>
+                    <div style={{flex:1,minHeight:barH,minWidth:0,display:'flex',alignItems:'center',justifyContent:'center'}}
+                      onClick={()=>addMeasureAtEnd(secEndLastCell.si)}
+                      onTouchStart={e=>e.currentTarget.style.opacity='0.55'}
+                      onTouchEnd={e=>e.currentTarget.style.opacity='1'}>
+                      <span style={{color:plusBtnColor,fontSize:22,fontWeight:300,lineHeight:1,
+                        border:`1.5px dashed ${plusBtnBorder}`,borderRadius:8,
+                        padding:'3px 16px',userSelect:'none',cursor:'pointer',display:'block'}}>+</span>
+                    </div>
+                    <div style={{width:20,flexShrink:0}}/>
+                  </React.Fragment>
+                ):(
+                  <React.Fragment key={`pad${pi}`}>
+                    <div style={{flex:1,minHeight:barH,minWidth:0}}/>
+                    <div style={{width:20,flexShrink:0}}/>
+                  </React.Fragment>
+                )
               ))}
             </div>
           );
-          // ── Strip "+" après la dernière ligne de chaque section grille ──────
-          const lastCell=row.cells[row.cells.length-1];
-
-          const isSecEnd=editMode&&row.rowType==='measures'&&lastCell&&!lastCell.isContinuation&&(()=>{
-            const sec=cur.sections[lastCell.si];
-            return sec&&(!sec.type||sec.type==='grid')&&lastCell.mi===sec.measures.length-1;
-          })();
-          if(isSecEnd){
-            return[rowEl,(
-              <div key={`secadd-${ri}`} style={{display:'flex',alignItems:'center',paddingLeft:8,paddingTop:2,paddingBottom:8}}>
-                <button onClick={()=>setSectionAddSheet({si:lastCell.si})}
-                  onTouchStart={e=>e.currentTarget.style.opacity='0.6'}
-                  onTouchEnd={e=>e.currentTarget.style.opacity='1'}
-                  style={{background:'transparent',border:`1.5px dashed ${isDark?'rgba(200,180,150,0.25)':'rgba(120,90,40,0.22)'}`,
-                    borderRadius:100,padding:'5px 18px',fontSize:11,cursor:'pointer',fontFamily:'inherit',
-                    color:isDark?'rgba(200,180,150,0.45)':'rgba(100,75,35,0.45)',
-                    fontWeight:600,display:'flex',alignItems:'center',gap:5,transition:'opacity 0.1s'}}>
-                  <span style={{fontSize:15,fontWeight:300,lineHeight:1}}>+</span>
-                  <span>Ajouter</span>
-                </button>
+          // ── "+" ligne pleine → col 0 → sheet Mesure/Portée/Tab ──────────────
+          if(isSecEnd&&row.cells.length>=GCOLS){
+            const plusRow=(
+              <div key={`secadd-${ri}`} style={{height:Math.round(rowH*0.42),flexShrink:0,display:'flex',
+                alignItems:'stretch',overflow:'visible'}}>
+                {/* Barre gauche alignée avec la grille */}
+                <div style={{width:10,flexShrink:0}}/>
+                {/* Cellule "+" — prend flex:1 comme une mesure normale */}
+                <div style={{flex:1,minWidth:0,display:'flex',alignItems:'center',justifyContent:'center',
+                  cursor:'pointer'}}
+                  onClick={()=>setSectionAddSheet({si:secEndLastCell.si})}
+                  onTouchStart={e=>e.currentTarget.style.opacity='0.55'}
+                  onTouchEnd={e=>e.currentTarget.style.opacity='1'}>
+                  <span style={{color:plusBtnColor,fontSize:22,fontWeight:300,lineHeight:1,
+                    border:`1.5px dashed ${plusBtnBorder}`,borderRadius:8,
+                    padding:'2px 16px',userSelect:'none',display:'block'}}>+</span>
+                </div>
+                <div style={{width:20,flexShrink:0}}/>
+                {/* Cellules fantômes pour les colonnes restantes */}
+                {Array.from({length:GCOLS-1}).map((_,pi)=>(
+                  <React.Fragment key={`pp${pi}`}>
+                    <div style={{flex:1,minWidth:0}}/>
+                    <div style={{width:20,flexShrink:0}}/>
+                  </React.Fragment>
+                ))}
               </div>
-            )];
+            );
+            return[rowEl,plusRow];
           }
           return[rowEl];
         })}
@@ -5331,23 +5336,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
                           outline:`1.5px solid ${active?ACstr:BC}`}}>{s}</button>);
                     })}
                   </div>
-                  {/* Saut de ligne avant section — visible uniquement sur la 1ère mesure d'une section (pas la 1ère) */}
-                  {picker.mi===0&&picker.si>0&&(()=>{
-                    const hasBreak=!!cur.sections[picker.si]?.breakBefore;
-                    return(
-                      <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:10}}>
-                        <span style={{fontSize:11,color:BC,flex:1}}>↵ Saut avant la section</span>
-                        <button onClick={()=>setSectionBreakBefore(picker.si,!hasBreak)}
-                          style={{...B,height:30,borderRadius:8,padding:'0 14px',fontSize:11,fontWeight:700,
-                            background:hasBreak?'#1A3A7A':'transparent',
-                            color:hasBreak?'#90B8FF':IC,
-                            outline:`1.5px solid ${hasBreak?'#2A5A9A':BC}`}}>
-                          {hasBreak?'Activé':'Désactivé'}
-                        </button>
-                      </div>
-                    );
-                  })()}
-                  {strBtn('Supprimer cette mesure','×',()=>handleMeasureAction(picker.si,picker.mi,'deleteMeasure'),true)}
+{strBtn('Supprimer cette mesure','×',()=>handleMeasureAction(picker.si,picker.mi,'deleteMeasure'),true)}
                 </>);
               })()}
 
