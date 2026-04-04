@@ -191,7 +191,7 @@ function applyPrefs(chord,prefs){
 }
 
 // ─── VERSION ──────────────────────────────────────────────────────────────────
-const APP_VERSION='2.35';
+const APP_VERSION='2.36';
 const CHORD_FONT="'Barlow Semi Condensed','Barlow Condensed',sans-serif";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -3134,6 +3134,7 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
   const redoStack=useRef([]);
   useEffect(()=>{undoStack.current=[];redoStack.current=[];},[piece.id]);
   const gestureRef=useRef({si:null,mi:null,startX:0,startY:0,moved:false,swiping:false,longPressed:false,longPressTimer:null});
+  const doubleTapRef=useRef({});
   const [showPieceInfo,setShowPieceInfo]=useState(false);
   const [pdfExport,setPdfExport]=useState(false);
   const [selMode,setSelMode]=useState(false);
@@ -3338,6 +3339,22 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
     exitSel();
   }
 
+  // ── Double-tap : mesure entière en répétition (% centré) ──────────────────
+  function setMeasureRepeat(si,mi){
+    saveUndo();
+    setLibrary(lib=>lib.map(p=>{
+      if(p.id!==piece.id)return p;
+      return{...p,sections:p.sections.map((s,sI)=>{
+        if(sI!==si)return s;
+        return{...s,measures:s.measures.map((mm,mI)=>{
+          if(mI!==mi)return mm;
+          const beats=getBeats(mm).map(b=>({...b,c:'%'}));
+          return{...mm,beats};
+        })};
+      })};
+    }));
+  }
+
   // ── Handlers touch mesure : appui long → selMode, glissement → sélection ──
   function mkMeasureTouch(si,mi){
     if(!editMode)return{};
@@ -3384,6 +3401,18 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
       const g=gestureRef.current;
       if(g.longPressTimer){clearTimeout(g.longPressTimer);g.longPressTimer=null;}
       if(g.swiping){g.swiping=false;return;}
+      // Double-tap : mesure en répétition (seulement hors selMode/pasteMode, sans mouvement)
+      if(!g.moved&&!g.longPressed&&!selMode&&!pasteMode){
+        const now=Date.now();
+        const last=doubleTapRef.current[key]||0;
+        if(now-last<350){
+          e.preventDefault();
+          doubleTapRef.current[key]=0;
+          setMeasureRepeat(si,mi);
+          return;
+        }
+        doubleTapRef.current[key]=now;
+      }
     }
     return{onTouchStart,onTouchMove,onTouchEnd};
   }
@@ -3784,6 +3813,31 @@ function EditorScreen({library,setLibrary,piece,displayKey,setDisplayKey,display
     const measureAnnotations=beats.map(b=>b.t||'').filter(Boolean).join(' · ');
     const hasVoltaBeat0=!!beats[0]?.v;
     const hasTopOverlay=!!measureAnnotations||!!secBadge||beat0Signs.length>0;
+
+    // ── Mesure entière en répétition : un seul % centré ───────────────────
+    const allIdem=beats.length>0&&beats.every(b=>b.c==='%');
+    if(allIdem){
+      return(
+        <div onClick={editMode?(e)=>{e.stopPropagation();if(selMode){toggleSel(si,mi);return;}if(pasteMode){setPasteSheet({si,mi});return;}openMeasurePicker(si,mi,half,e,0);}:undefined}
+          style={{flex:1,display:'flex',minWidth:0,position:'relative',alignItems:'center',justifyContent:'center',
+            background:isSel?'rgba(58,155,213,0.09)':'transparent',transition:'background 0.12s',cursor:editMode?'pointer':'default'}}>
+          {isSelModeSelected&&<div style={{position:'absolute',inset:0,background:'rgba(58,155,213,0.22)',borderRadius:3,zIndex:15,pointerEvents:'none',border:'2px solid rgba(58,155,213,0.7)'}}/>}
+          {pasteMode&&<div style={{position:'absolute',inset:0,background:'rgba(80,200,100,0.06)',zIndex:15,pointerEvents:'none'}}/>}
+          {secBadge&&(
+            <span style={{position:'absolute',top:2,left:1,fontSize:10,fontWeight:800,
+              background:isDark?'rgba(100,55,15,0.88)':'rgba(148,72,18,0.82)',
+              color:isDark?'#FFD4A0':'#FFE8C8',borderRadius:4,padding:'2px 7px',lineHeight:1.4,
+              letterSpacing:1.0,textTransform:'uppercase',pointerEvents:'none',zIndex:7}}>
+              {secBadge}
+            </span>
+          )}
+          <span style={{fontSize:Math.round(chFs*1.35),fontWeight:300,fontStyle:'italic',
+            color:isDark?'#7A7068':'#C0B09A',letterSpacing:'0.04em',lineHeight:1,fontFamily:CHORD_FONT,
+            userSelect:'none'}}>%</span>
+        </div>
+      );
+    }
+
     return(
       <div style={{flex:1,display:'flex',minWidth:0,position:'relative',
         background:isSel?'rgba(58,155,213,0.09)':'transparent',
